@@ -9,7 +9,7 @@ const express = require('express');
 
 const MAX_BYTES = 20 * 1024 * 1024; // per file
 const TYPES = { 'application/pdf': 'pdf', 'image/jpeg': 'photo', 'image/png': 'photo', 'image/webp': 'photo' };
-const DAILY_ESTIMATES = Number(process.env.CLAUDE_DAILY_LIMIT || 40); // per business, to keep the API bill predictable
+const DAILY_ESTIMATES = Number(process.env.CLAUDE_DAILY_LIMIT || 40); // Claude requests per business per day, to keep the API bill predictable
 const MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-5-5';
 const API = (process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/$/, '');
 
@@ -100,48 +100,70 @@ Reply with JSON only (no other text), in exactly this shape:
       questions: (Array.isArray(j.questions) ? j.questions : []).slice(0, 30).map((x) => str(x, 300)).filter(Boolean) };
   }
 
-  async function askClaude(file, job, notes, productNames) {
-    const block = file.kind === 'pdf'
-      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: file.data.toString('base64') } }
-      : { type: 'image', source: { type: 'base64', media_type: file.mime, data: file.data.toString('base64') } };
+  // One call to the Claude Messages API. Every call is logged in claude_requests (usage per business).
+  async function callClaude(req, jobId, kind, messages, maxTokens) {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 240000);
+    const logUse = (ok, usage) => pool.query(
+      'INSERT INTO claude_requests (business_id, job_id, user_id, kind, input_tokens, output_tokens, ok) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [req.user.business_id, jobId, req.user.id, kind, usage ? usage.input_tokens : null, usage ? usage.output_tokens : null, ok]).catch(() => {});
     let r;
     try {
       r = await fetch(`${API}/v1/messages`, {
         method: 'POST', signal: ctl.signal,
         headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({ model: MODEL, max_tokens: 16000,
-          messages: [{ role: 'user', content: [block, { type: 'text', text: PROMPT(job, notes, productNames) }] }] }),
+        body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, messages }),
       });
     } catch (e) {
+      await logUse(false);
       throw new Error(e.name === 'AbortError' ? 'Claude took too long to answer. Try a smaller file or fewer pages.' : 'Could not reach Claude. Try again in a minute.');
     } finally { clearTimeout(timer); }
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
+      await logUse(false);
       const msg = (data.error && data.error.message) || `error ${r.status}`;
       if (r.status === 401) throw new Error('The Claude API key is not valid. Check ANTHROPIC_API_KEY in Render.');
       if (r.status === 429 || r.status === 529) throw new Error('Claude is busy right now. Try again in a minute.');
       throw new Error('Claude could not read this file: ' + msg);
     }
-    const out = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n');
-    return { ...parseEstimate(out), usage: data.usage || null, model: data.model || MODEL };
+    await logUse(true, data.usage);
+    return { text: (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n'), usage: data.usage || null, model: data.model || MODEL };
+  }
+  const fileBlock = (file) => (file.kind === 'pdf'
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: file.data.toString('base64') } }
+    : { type: 'image', source: { type: 'base64', media_type: file.mime, data: file.data.toString('base64') } });
+
+  // Claude must be set up on the server AND switched on for this business; and each business has a daily limit.
+  async function claudeReady(req) {
+    if (!process.env.ANTHROPIC_API_KEY) fail(400, 'Claude is not set up yet. The platform administrator needs to add ANTHROPIC_API_KEY in Render → Environment.');
+    const b = await pool.query('SELECT ai_enabled FROM businesses WHERE id=$1', [req.user.business_id]);
+    if (!b.rows[0] || !b.rows[0].ai_enabled) fail(403, 'Claude is not turned on for this business. Ask the platform administrator to turn it on.');
+    const used = await pool.query(
+      `SELECT count(*)::int AS n FROM claude_requests WHERE business_id=$1 AND ok AND created_at > now() - interval '1 day'`, [req.user.business_id]);
+    if (used.rows[0].n >= DAILY_ESTIMATES) fail(429, `This business has used its ${DAILY_ESTIMATES} Claude requests for today. Try again tomorrow.`);
+  }
+  async function sourceFile(req, job) {
+    const r = await pool.query(`SELECT id, kind, name, mime, data FROM job_files WHERE id=$1 AND job_id=$2`, [req.params.fid, job.id]);
+    const file = r.rows[0] || fail(404, 'File not found');
+    if (!['pdf', 'photo'].includes(file.kind)) fail(400, 'Choose a PDF or a photo');
+    if (file.kind === 'photo' && file.data.length > 3.7 * 1024 * 1024) fail(400, 'That photo is too large for Claude (about 3.7 MB max). Retake it or attach it again.');
+    return file;
+  }
+
+  async function askClaude(req, file, job, notes, productNames) {
+    const r = await callClaude(req, job.id, 'estimate',
+      [{ role: 'user', content: [fileBlock(file), { type: 'text', text: PROMPT(job, notes, productNames) }] }], 16000);
+    return { ...parseEstimate(r.text), usage: r.usage, model: r.model };
   }
 
   app.post('/api/jobs/:id/files/:fid/estimate', ...J, wrap(async (req, res) => {
-    if (!process.env.ANTHROPIC_API_KEY) fail(400, 'Estimating with Claude is not set up yet. The platform administrator needs to add ANTHROPIC_API_KEY in Render → Environment.');
+    await claudeReady(req);
     const job = await jobOf(req);
-    const r = await pool.query(`SELECT id, kind, name, mime, data FROM job_files WHERE id=$1 AND job_id=$2`, [req.params.fid, job.id]);
-    const file = r.rows[0] || fail(404, 'File not found');
-    if (!['pdf', 'photo'].includes(file.kind)) fail(400, 'Choose a PDF or a photo to estimate from');
-    if (file.kind === 'photo' && file.data.length > 3.7 * 1024 * 1024) fail(400, 'That photo is too large for Claude (about 3.7 MB max). Retake it or attach it again.');
-    const used = await pool.query(
-      `SELECT count(*)::int AS n FROM job_files WHERE business_id=$1 AND kind='estimate' AND created_at > now() - interval '1 day'`, [req.user.business_id]);
-    if (used.rows[0].n >= DAILY_ESTIMATES) fail(429, `This business has used its ${DAILY_ESTIMATES} Claude estimates for today. Try again tomorrow.`);
+    const file = await sourceFile(req, job);
     const notes = text(req.body.notes, 'Notes', { required: false, max: 1000 });
     const prods = await pool.query(`SELECT name FROM products WHERE business_id=$1 AND active AND NOT is_rental ORDER BY name LIMIT 400`, [req.user.business_id]);
     let est;
-    try { est = await askClaude(file, job, notes, prods.rows.map((p) => p.name)); } catch (e) { fail(502, e.message); }
+    try { est = await askClaude(req, file, job, notes, prods.rows.map((p) => p.name)); } catch (e) { fail(502, e.message); }
     if (!est.materials.length) fail(502, 'Claude did not find any materials in this file. Add a note about what to estimate and try again.');
     est.notes = notes || null;
     est.source_name = file.name;
@@ -153,5 +175,55 @@ Reply with JSON only (no other text), in exactly this shape:
     await log(pool, job.id, req.user, `Claude estimated materials from ${file.name}: ${est.materials.length} line(s)`);
     notify(req.user.business_id, { type: 'job', id: job.id });
     res.json({ id: ins.rows[0].id, name, estimate: est });
+  }));
+
+  // ---------- Ask Claude anything about a plan or photo (with follow-up questions) ----------
+  const ASK_INTRO = (job) => `You are helping a contractor with a job.
+Job: #${job.job_number} ${job.name}${job.description ? ` — ${job.description}` : ''}${job.job_address ? ` (site: ${job.job_address})` : ''}
+The attached file is a plan, blueprint, drawing, spec sheet or job-site photo for this job.
+Answer the contractor's request below. Be practical and specific: give measurements, counts and quantities, and show how you got them.
+Say plainly when something can't be read or you had to assume it. Keep it easy to read on a phone: short headings, short bullet lists, no long paragraphs.
+
+Contractor's request: `;
+  app.post('/api/jobs/:id/files/:fid/ask', ...J, wrap(async (req, res) => {
+    await claudeReady(req);
+    const job = await jobOf(req);
+    const file = await sourceFile(req, job);
+    const question = text(req.body.question, 'Question', { max: 2000 });
+    // A follow-up continues an earlier conversation about the same file.
+    let rec = null, thread = [];
+    if (req.body.answer_id) {
+      const r = await pool.query(`SELECT id, estimate FROM job_files WHERE id=$1 AND job_id=$2 AND kind='answer' AND source_file_id=$3`,
+        [req.body.answer_id, job.id, file.id]);
+      rec = r.rows[0] || fail(404, 'That conversation was not found');
+      thread = (rec.estimate && rec.estimate.thread) || [];
+      if (thread.length >= 20) fail(400, 'This conversation is long. Start a new question so Claude stays quick.');
+    }
+    const messages = [];
+    thread.forEach((t, i) => {
+      messages.push({ role: 'user', content: i === 0 ? [fileBlock(file), { type: 'text', text: ASK_INTRO(job) + t.q }] : t.q });
+      messages.push({ role: 'assistant', content: t.a });
+    });
+    messages.push({ role: 'user', content: thread.length ? question : [fileBlock(file), { type: 'text', text: ASK_INTRO(job) + question }] });
+    let out;
+    try { out = await callClaude(req, job.id, 'ask', messages, 8000); } catch (e) { fail(502, e.message); }
+    const answer = out.text.trim() || 'Claude did not return an answer. Try asking a different way.';
+    thread.push({ q: question, a: answer, at: new Date().toISOString(), by: req.user.name, model: out.model });
+    const data = { source_name: file.name, thread };
+    let id;
+    if (rec) {
+      await pool.query('UPDATE job_files SET estimate=$1 WHERE id=$2', [JSON.stringify(data), rec.id]);
+      id = rec.id;
+    } else {
+      const name = `Claude: ${question.replace(/\s+/g, ' ').slice(0, 80)}${question.length > 80 ? '…' : ''}`;
+      const ins = await pool.query(
+        `INSERT INTO job_files (job_id, business_id, kind, name, mime, size_bytes, estimate, source_file_id, created_by)
+         VALUES ($1,$2,'answer',$3,'application/json',0,$4,$5,$6) RETURNING id`,
+        [job.id, req.user.business_id, name, JSON.stringify(data), file.id, req.user.id]);
+      id = ins.rows[0].id;
+    }
+    await log(pool, job.id, req.user, `Asked Claude about ${file.name}: ${question.slice(0, 120)}${question.length > 120 ? '…' : ''}`);
+    notify(req.user.business_id, { type: 'job', id: job.id });
+    res.json({ id, source_file_id: file.id, ...data });
   }));
 };
