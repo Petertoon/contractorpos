@@ -124,3 +124,25 @@ module.exports = function emailReceipts(app, h) {
   }));
 };
 module.exports.configured = configured;
+
+// Sends any email through Resend (used for job quotes and statements). Throws an Error with a plain message on failure.
+async function sendMail({ fromName, to, subject, html, text, replyTo, idem }) {
+  if (!configured()) throw new Error('Email is not set up on this server yet (RESEND_API_KEY).');
+  let resp, body;
+  try {
+    resp = await fetch(API_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json',
+        ...(idem ? { 'Idempotency-Key': String(idem).slice(0, 256) } : {}) },
+      body: JSON.stringify({ from: `${String(fromName || 'ContractorPOS').replace(/["<>\r\n]/g, '').slice(0, 60)} <${FROM()}>`,
+        to: [to], subject, html, text, ...(replyTo ? { reply_to: replyTo } : {}) }),
+    });
+    body = await resp.json().catch(() => ({}));
+  } catch (e) { throw new Error('Could not reach the email service. Try again.'); }
+  if (!resp.ok) { console.error('Email failed', resp.status, body); throw new Error('The email service said: ' + (body.message || resp.status)); }
+  return body;
+}
+module.exports.sendMail = sendMail;
+module.exports.EMAIL_RE = EMAIL_RE;
+module.exports.esc = esc;
+module.exports.money = money;
