@@ -520,6 +520,12 @@ ALTER TABLE job_crews DROP CONSTRAINT IF EXISTS job_crews_billing_check;
 ALTER TABLE job_crews ADD CONSTRAINT job_crews_billing_check CHECK (billing IN ('included','extra','costplus'));
 UPDATE job_crews SET charge_cents = amount_cents WHERE billing = 'extra' AND charge_cents = 0;
 
+-- Column colors chosen by the company (empty = the standard dark look): header lettering, column background, cards, card lettering.
+ALTER TABLE job_columns ADD COLUMN IF NOT EXISTS text_color TEXT;
+ALTER TABLE job_columns ADD COLUMN IF NOT EXISTS bg_color TEXT;
+ALTER TABLE job_columns ADD COLUMN IF NOT EXISTS card_color TEXT;
+ALTER TABLE job_columns ADD COLUMN IF NOT EXISTS card_text_color TEXT;
+
 -- Sending a job's quote/statement to the customer: a private link (/j#<token>) and email tracking.
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS share_token TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS jobs_share_token ON jobs(share_token) WHERE share_token IS NOT NULL;
