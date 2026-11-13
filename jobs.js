@@ -19,7 +19,7 @@ const PERIODS = { half_day: 'Half day', day: 'Day', week: 'Week', month: 'Month'
 const usd = (c) => (c < 0 ? '-' : '') + '$' + (Math.abs(c) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
 module.exports = function setupJobs(app, deps) {
-  const { pool, wrap, fail, text, cents, requireLogin, requireBusiness, requireRole, barcodeVariants } = deps;
+  const { pool, wrap, fail, text, cents, requireLogin, requireBusiness, requireRole, barcodeVariants, publicOrigin, token } = deps;
   const biz = [requireLogin, requireBusiness];
   const isManager = (u) => ['admin', 'owner', 'manager'].includes(u.role);
   const needManager = (u) => { if (!isManager(u)) fail(403, 'Only an owner or manager can do this'); };
@@ -654,6 +654,125 @@ module.exports = function setupJobs(app, deps) {
       await log(db, job.id, req.user, `Crew removed: ${crewText(c)}${c.billing !== 'included' && c.charge_cents ? ' (its charge was taken off the ticket)' : ''}`);
     });
     notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
+
+  // ---------- sending the quote / statement to the customer (WhatsApp, text, email) ----------
+  // Each job gets a private link (/j#<token>) the customer can open without logging in.
+  async function shareInfo(req, id) {
+    await pool.query('UPDATE jobs SET share_token=$1 WHERE id=$2 AND business_id=$3 AND share_token IS NULL', [token(16), id, req.user.business_id]);
+    const { job, cols } = await loadJob(pool, id, req.user.business_id);
+    const b = (await pool.query('SELECT name FROM businesses WHERE id=$1', [req.user.business_id])).rows[0];
+    let email = null, phone = job.customer_phone;
+    if (job.customer_id) {
+      const c = (await pool.query('SELECT email, phone FROM customers WHERE id=$1 AND business_id=$2', [job.customer_id, req.user.business_id])).rows[0];
+      if (c) { email = c.email; phone = phone || c.phone; }
+    }
+    const kind = docKind(job, cols);
+    return { job, kind, url: `${publicOrigin(req)}/j#${job.share_token}`, business_name: b.name, phone, email: email || job.statement_emailed_to };
+  }
+  // A job in the first column with nothing paid is a quote; after that it's a job statement (an invoice once it's closed).
+  const docKind = (job, cols) => (job.is_closed ? 'invoice' : (job.column_index <= 0 && !job.paid_cents ? 'quote' : 'statement'));
+  const DOC = { quote: 'quote', statement: 'job statement', invoice: 'final invoice' };
+
+  app.post('/api/jobs/:id/share', ...J, wrap(async (req, res) => {
+    const s = await shareInfo(req, req.params.id);
+    const j = s.job;
+    const owed = s.kind === 'statement' && j.balance_cents > 0 ? `, balance due ${usd(j.balance_cents)}` : '';
+    const message = `${s.business_name}: your ${DOC[s.kind]} for ${j.name} (job #${j.job_number}), total ${usd(j.total_cents)}${owed}. View it here: ${s.url}`;
+    res.json({ url: s.url, kind: s.kind, doc: DOC[s.kind], message, phone: s.phone, email: s.email,
+      job: { id: j.id, job_number: j.job_number, name: j.name, total_cents: j.total_cents, balance_cents: j.balance_cents, statement_emailed_to: j.statement_emailed_to } });
+  }));
+
+  // What the customer sees at /j#<token>: no login, and nothing internal (no history, no crews' costs, no notes about who did what).
+  async function publicJob(t) {
+    if (!/^[0-9a-f]{32}$/.test(String(t || ''))) fail(404, 'Not found');
+    const r = await pool.query('SELECT id, business_id FROM jobs WHERE share_token=$1', [t]);
+    if (!r.rows[0]) fail(404, 'Not found');
+    const { job, cols } = await loadJob(pool, r.rows[0].id, r.rows[0].business_id);
+    const b = (await pool.query('SELECT name, logo_url FROM businesses WHERE id=$1', [job.business_id])).rows[0];
+    const loc = (await pool.query('SELECT name, address, phone FROM locations WHERE id=$1', [job.location_id])).rows[0] || {};
+    const items = await pool.query('SELECT name, qty, unit_cents, taxable, kind FROM job_items WHERE job_id=$1 ORDER BY id', [job.id]);
+    const pays = await pool.query('SELECT method, amount_cents, check_number, created_at FROM job_payments WHERE job_id=$1 AND NOT voided ORDER BY id', [job.id]);
+    const kind = docKind(job, cols);
+    return { kind, doc: DOC[kind], business_name: b.name, logo_url: b.logo_url, location_name: loc.name, location_address: loc.address, location_phone: loc.phone,
+      job_number: job.job_number, name: job.name, description: job.description, customer_name: job.customer_name, job_address: job.job_address,
+      po_number: job.po_number, start_date: job.start_date, status: cols[job.column_index] ? cols[job.column_index].name : null, created_at: job.created_at,
+      quoted_cents: job.quoted_cents, extras_cents: job.extras_cents, tax_rate: job.tax_rate, tax_exempt: job.tax_exempt, tax_cents: job.tax_cents,
+      subtotal_cents: job.subtotal_cents, discount_cents: job.discount_cents, discount_note: job.discount_note, total_cents: job.total_cents,
+      paid_cents: job.paid_cents, balance_cents: job.balance_cents, closed_at: job.closed_at,
+      items: items.rows.map((i) => ({ name: i.name, qty: i.qty, unit_cents: i.unit_cents, taxable: i.taxable, kind: i.kind })),
+      payments: pays.rows.map((p) => ({ method: METHOD_NAMES[p.method] || p.method, amount_cents: p.amount_cents, check_number: p.check_number, date: p.created_at })) };
+  }
+  app.get('/api/public/job/:token', wrap(async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json(await publicJob(req.params.token));
+  }));
+
+  app.post('/api/jobs/:id/email', ...J, wrap(async (req, res) => {
+    const mail = require('./email');
+    if (!mail.configured()) fail(400, 'Email is not set up on this server yet (RESEND_API_KEY).');
+    const to = String(req.body.email || '').trim().toLowerCase();
+    if (!mail.EMAIL_RE.test(to) || to.length > 200) fail(400, 'That email address does not look right');
+    const s = await shareInfo(req, req.params.id);
+    if (s.job.statement_email_count >= 50) fail(429, 'This job has already been emailed 50 times.');
+    const p = await publicJob(s.job.share_token);
+    const bz = (await pool.query(
+      `SELECT b.receipt_reply_email, (SELECT email FROM users WHERE business_id=b.id AND role='owner' AND active ORDER BY id LIMIT 1) AS owner_email
+         FROM businesses b WHERE b.id=$1`, [req.user.business_id])).rows[0];
+    const { esc, money } = mail;
+    const Doc = p.doc.charAt(0).toUpperCase() + p.doc.slice(1);
+    const note = text(req.body.note, 'Message', { required: false, max: 1000 });
+    const row = (l, r, bold) => `<tr><td style="padding:3px 8px 3px 0;${bold ? 'font-weight:700;font-size:17px' : 'color:#555'}">${l}</td><td align="right" style="padding:3px 0;white-space:nowrap;${bold ? 'font-weight:700;font-size:17px' : ''}">${r}</td></tr>`;
+    const lines = [`<tr><td style="padding:6px 0;border-bottom:1px solid #eee">Quoted price</td><td align="right" style="padding:6px 0;border-bottom:1px solid #eee">${money(p.quoted_cents)}</td></tr>`]
+      .concat(p.items.slice(0, 150).map((it) => `<tr><td style="padding:6px 0;border-bottom:1px solid #eee">${esc(it.name)}${it.qty !== 1 ? `<div style="color:#777;font-size:13px">${it.qty} × ${money(it.unit_cents)}</div>` : ''}</td>
+        <td align="right" valign="top" style="padding:6px 0;border-bottom:1px solid #eee;white-space:nowrap">${money(it.qty * it.unit_cents)}</td></tr>`)).join('');
+    const html = `<!doctype html><html><body style="margin:0;background:#f2f2f0;font-family:Arial,Helvetica,sans-serif;color:#1d1d1b">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f0;padding:24px 10px"><tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#fff;border-radius:10px;padding:24px"><tr><td>
+  ${p.logo_url ? `<img src="${esc(p.logo_url)}" alt="" style="max-height:60px;max-width:200px;display:block;margin:0 auto 10px">` : ''}
+  <div style="text-align:center;font-size:20px;font-weight:700">${esc(p.business_name)}</div>
+  <div style="text-align:center;color:#666;font-size:14px;margin-top:4px">${esc(p.location_address || '')}${p.location_phone ? '<br>' + esc(p.location_phone) : ''}</div>
+  <div style="margin-top:18px;font-size:18px;font-weight:700">${Doc} · Job #${p.job_number}</div>
+  <div style="color:#555;font-size:14px;margin-top:4px"><b>${esc(p.name)}</b>${p.description ? ' — ' + esc(p.description) : ''}${p.customer_name ? '<br>For: ' + esc(p.customer_name) : ''}${p.job_address ? '<br>Job site: ' + esc(p.job_address) : ''}${p.po_number ? '<br>PO: ' + esc(p.po_number) : ''}</div>
+  ${note ? `<div style="margin-top:14px;padding:12px;background:#f6f6f3;border-radius:8px;white-space:pre-wrap">${esc(note)}</div>` : ''}
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;font-size:15px">${lines}</table>
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;font-size:15px">
+    ${row('Subtotal', money(p.subtotal_cents))}
+    ${row(p.tax_exempt ? 'Sales tax (exempt)' : `Sales tax (${Number(p.tax_rate)}%)`, money(p.tax_cents))}
+    ${p.discount_cents ? row('Discount' + (p.discount_note ? ` (${esc(p.discount_note)})` : ''), '−' + money(p.discount_cents)) : ''}
+    ${row('Total', money(p.total_cents), true)}
+    ${p.paid_cents ? row('Paid so far', money(p.paid_cents)) : ''}
+    ${p.kind !== 'quote' ? row('Balance due', money(p.balance_cents), true) : ''}
+  </table>
+  <div style="text-align:center;margin-top:22px"><a href="${esc(s.url)}" style="display:inline-block;background:#1f8f4e;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700">View or print your ${esc(p.doc)}</a></div>
+  <div style="text-align:center;margin-top:20px;color:#888;font-size:13px">Questions? Just reply to this email.</div>
+</td></tr></table>
+<div style="color:#999;font-size:12px;margin-top:12px">Sent for ${esc(p.business_name)} by ContractorPOS</div>
+</td></tr></table></body></html>`;
+    const textBody = [p.business_name, `${Doc} · Job #${p.job_number}: ${p.name}`, note ? '\n' + note + '\n' : '',
+      `Total: ${money(p.total_cents)}`, p.paid_cents ? `Paid so far: ${money(p.paid_cents)}` : '', p.kind !== 'quote' ? `Balance due: ${money(p.balance_cents)}` : '',
+      '', `View or print it here: ${s.url}`].filter((x) => x !== '').join('\n');
+    try {
+      await mail.sendMail({ fromName: p.business_name, to, subject: `Your ${p.doc} from ${p.business_name} - Job #${p.job_number} - ${money(p.total_cents)}`,
+        html, text: textBody, replyTo: bz.receipt_reply_email || bz.owner_email, idem: `job-${s.job.id}-${s.job.statement_email_count + 1}-${to}` });
+    } catch (e) { fail(502, e.message); }
+    await pool.query('UPDATE jobs SET statement_emailed_to=$1, statement_email_count=statement_email_count+1 WHERE id=$2', [to, s.job.id]);
+    let saved = false;
+    if (s.job.customer_id) {
+      const u = await pool.query(`UPDATE customers SET email=$1 WHERE id=$2 AND business_id=$3 AND (email IS NULL OR email='')`, [to, s.job.customer_id, req.user.business_id]);
+      saved = u.rowCount > 0;
+    }
+    await log(pool, s.job.id, req.user, `Emailed the ${p.doc} to ${to}`);
+    notify(req.user.business_id, { type: 'job', id: s.job.id });
+    res.json({ ok: true, to, saved_to_customer: saved });
+  }));
+  // Logs when a quote/statement was sent by WhatsApp or text (the browser opens the app; this just records it).
+  app.post('/api/jobs/:id/sent', ...J, wrap(async (req, res) => {
+    const how = { whatsapp: 'WhatsApp', text: 'text message' }[req.body.how] || fail(400, 'Unknown way of sending');
+    const s = await shareInfo(req, req.params.id);
+    await log(pool, s.job.id, req.user, `Sent the ${DOC[s.kind]} by ${how}${req.body.to ? ' to ' + text(req.body.to, 'To', { required: false, max: 60 }) : ''}`);
+    notify(req.user.business_id, { type: 'job', id: s.job.id });
     res.json({ ok: true });
   }));
 
