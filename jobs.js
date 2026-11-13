@@ -6,7 +6,7 @@ const crypto = require('crypto');
 
 const BLUE = '#3b82f6', GOLD = '#e0a526', GREEN = '#22c55e', GRAY = '#94a3b8';
 const DEFAULT_COLUMNS = [
-  { name: 'Quoting', color: '#2f4fd8', buttons: [['Quoting', BLUE], ['Submitted', GOLD], ['On Hold', GRAY]] },
+  { name: 'Quoting', color: '#2f4fd8', buttons: [['Quoting', BLUE], ['Submitted', GOLD], ['On Hold', GRAY, 'bottom']] },
   { name: 'Scheduled', color: '#2e8b3e', buttons: [['Ready', GREEN], ['Reschedule', GRAY]] },
   { name: 'In Progress', color: '#c9921a', buttons: [['Working', BLUE]] },
   { name: 'Completed', color: '#7a3cc4', buttons: [['Final Check', BLUE], ['Punch List', GOLD], ['Approve', GREEN]] },
@@ -56,6 +56,8 @@ module.exports = function setupJobs(app, deps) {
     enabled: !!(b && b.enabled),
     action: b && b.action === 'next' ? 'next' : 'mark',
     color: /^#[0-9a-fA-F]{6}$/.test((b && b.color) || '') ? b.color : BLUE,
+    // Where a card with this status sits in the column: top, middle (default) or bottom.
+    place: ['top', 'bottom'].includes(b && b.place) ? b.place : 'middle',
   }));
   const cleanColor = (c, fallback) => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : fallback);
 
@@ -71,7 +73,7 @@ module.exports = function setupJobs(app, deps) {
         for (const [i, c] of DEFAULT_COLUMNS.entries()) {
           await t.query('INSERT INTO job_columns (business_id, name, color, position, buttons) VALUES ($1,$2,$3,$4,$5)',
             [businessId, c.name, c.color, i + 1,
-              JSON.stringify(c.buttons.map(([label, color]) => ({ label, enabled: true, action: 'mark', color })))]);
+              JSON.stringify(c.buttons.map(([label, color, place]) => ({ label, enabled: true, action: 'mark', color, place: place || 'middle' })))]);
         }
       });
       r = await db.query(sql, [businessId]);
