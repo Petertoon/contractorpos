@@ -107,7 +107,9 @@
   .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
   .presets button { padding: 5px 10px; font-size: 13px; }
   .btnset { border: 1px solid var(--jline); border-radius: 9px; padding: 8px 10px; margin-top: 8px; }
-  .btnset .row { display: grid; grid-template-columns: auto 1fr 140px 52px; gap: 8px; align-items: center; }
+  .btnset .row { display: grid; grid-template-columns: auto 1fr 52px; gap: 8px; align-items: center; }
+  .btnset .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+  .btnset .row2 label { margin: 0; font-size: 12.5px; color: var(--jmuted); } .btnset .row2 select { margin-top: 2px; }
   .btnset input[type=color] { padding: 2px; height: 38px; }
   .collist div { display: flex; align-items: center; gap: 6px; padding: 7px 0; border-bottom: 1px solid var(--jline); }
   .collist div b { flex: 1; }
@@ -183,7 +185,7 @@
     .pane { overflow: visible; } .ticket { overflow-x: hidden; } .addrow input:first-child { min-width: 0; } .results { max-height: 250px; overflow-y: auto; }
     table.lines { font-size: 14px; } table.lines th:nth-child(3), table.lines td:nth-child(3) { display: none; }
     table.lines td, table.lines th { padding: 8px 3px; } .qbtn { padding: 2px 7px; }
-    .prow { grid-template-columns: 90px 1fr 1fr 30px; } .btnset .row { grid-template-columns: auto 1fr 52px; } .btnset .row select { grid-column: 2 / 3; }
+    .prow { grid-template-columns: 90px 1fr 1fr 30px; } .btnset .row2 { grid-template-columns: 1fr; }
     #board { min-height: auto; } .col { min-width: 82vw; }
   }
 
@@ -321,12 +323,23 @@ function card(j, c, i) {
     ${btns.length ? `<div class="chips">${btns.map((b) => `<button class="chip ${j.status_label === b.label ? 'on' : ''}" style="--b:${b.color || '#3b82f6'}" data-btn="${b.k}" data-jid="${j.id}">${esc(b.label)}</button>`).join('')}</div>` : ''}
   </div>`;
 }
+// Cards sort themselves: by where their status button says (top, middle, bottom), then high priority first,
+// then the longest in the column first (the order the server sends).
+const PLACE_RANK = { top: 0, middle: 1, bottom: 2 };
+function sortCards(list, c) {
+  const rank = (j) => {
+    const b = (c.buttons || []).find((x) => x.enabled && x.label === j.status_label);
+    return PLACE_RANK[(b && b.place) || 'middle'];
+  };
+  return list.map((j, i) => ({ j, i })).sort((a, b) => rank(a.j) - rank(b.j)
+    || (b.j.priority === 'high') - (a.j.priority === 'high') || a.i - b.i).map((x) => x.j);
+}
 function renderBoard() {
   const shown = jobs.filter(matches);
   $('#counts').innerHTML = `<span>${shown.length} Total</span>` +
     cols.map((c) => `<span style="--c:${c.color}">${shown.filter((j) => j.column_id === c.id).length} ${esc(c.name)}</span>`).join('');
   $('#board').innerHTML = cols.map((c, i) => {
-    const list = shown.filter((j) => j.column_id === c.id);
+    const list = sortCards(shown.filter((j) => j.column_id === c.id), c);
     const nb = (c.buttons || []).filter((b) => b.enabled).length;
     return `<section class="col" data-col="${c.id}" style="--c:${c.color}">
       <div class="colhead"><div><b>${i + 1}. ${esc(c.name.toUpperCase())}</b><small>${list.length} Job${list.length === 1 ? '' : 's'} • ${nb} Button${nb === 1 ? '' : 's'}</small></div>
@@ -785,11 +798,15 @@ function columnSettings(id) {
     ${b.map((x, k) => `<div class="btnset"><div class="row">
       <label class="check" style="margin:0"><input type="checkbox" name="en${k}" ${x.enabled ? 'checked' : ''}> ${k + 1}</label>
       <input name="lb${k}" maxlength="24" value="${esc(x.label)}" placeholder="Button ${k + 1} name">
-      <select name="ac${k}"><option value="mark">Just mark</option><option value="next" ${x.action === 'next' ? 'selected' : ''}>Mark + move</option></select>
-      <input name="co${k}" type="color" value="${x.color || '#3b82f6'}" title="Button color"></div></div>`).join('')}
+      <input name="co${k}" type="color" value="${x.color || '#3b82f6'}" title="Button color"></div>
+      <div class="row2">
+        <label>When pressed<select name="ac${k}"><option value="mark">Just mark</option><option value="next" ${x.action === 'next' ? 'selected' : ''}>Mark + move to next column</option></select></label>
+        <label>Card goes to<select name="pl${k}"><option value="top" ${x.place === 'top' ? 'selected' : ''}>⬆ Top of column</option><option value="middle" ${!x.place || x.place === 'middle' ? 'selected' : ''}>Middle</option><option value="bottom" ${x.place === 'bottom' ? 'selected' : ''}>⬇ Bottom of column</option></select></label>
+      </div></div>`).join('')}
+    <div class="muted" style="font-size:12.5px;margin-top:6px">Cards sort themselves by the button they're marked with: top, then middle (also cards with no button pressed), then bottom. High-priority jobs come first within each group.</div>
     <label style="margin-top:14px">Card preview</label><div id="prev"></div>
     <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="saveCol">Save</button></div>`);
-  const read = () => [0, 1, 2].map((k) => ({ label: f['lb' + k].value.trim(), enabled: f['en' + k].checked && !!f['lb' + k].value.trim(), action: f['ac' + k].value, color: f['co' + k].value }))
+  const read = () => [0, 1, 2].map((k) => ({ label: f['lb' + k].value.trim(), enabled: f['en' + k].checked && !!f['lb' + k].value.trim(), action: f['ac' + k].value, color: f['co' + k].value, place: f['pl' + k].value }))
     .filter((x) => x.label);
   const prev = () => {
     $('#prev').innerHTML = `<div class="jc" style="--c:${f.color.value};cursor:default"><div class="t"><span>#1045</span>Johnson Remodel</div><div class="d">${esc(f.name.value)}</div>
@@ -804,7 +821,8 @@ function columnSettings(id) {
 }
 function workflowSetup() {
   openModal(`<h2>Workflow setup</h2><p class="muted" style="margin:0 0 8px">Columns run left to right. Jobs move one column at a time. The last column is where finished, fully paid jobs close.</p>
-    <div class="collist">${cols.map((c, i) => `<div><i style="--c:${c.color}"></i><b>${i + 1}. ${esc(c.name)}</b>
+    <div class="collist">${cols.map((c, i) => `<div><i style="--c:${c.color}"></i><b>${i + 1}. ${esc(c.name)}
+      <small class="muted" style="display:block;font-weight:500;font-size:12.5px">${(c.buttons || []).filter((x) => x.enabled).map((x) => esc(x.label) + (x.place === 'top' ? ' ⬆' : x.place === 'bottom' ? ' ⬇' : '')).join(' · ') || 'No buttons'}</small></b>
       ${i > 0 && i < cols.length - 1 ? `<button type="button" class="dk" data-up="${c.id}" title="Move left">↑</button>` : ''}
       ${i < cols.length - 2 ? `<button type="button" class="dk" data-down="${c.id}" title="Move right">↓</button>` : ''}
       <button type="button" class="dk" data-edit="${c.id}">⚙</button>
