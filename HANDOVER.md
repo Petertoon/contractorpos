@@ -1,7 +1,7 @@
-[HANDOVER (3).md](https://github.com/user-attachments/files/34820540/HANDOVER.3.md)
+[HANDOVER (4).md](https://github.com/user-attachments/files/34825673/HANDOVER.4.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-13 · Current version: **ContractorPOS v1.5.0** (split from MultiPOS v1.10 + job board)
+Last updated: 2026-11-13 · Current version: **ContractorPOS v1.7.0** (split from MultiPOS v1.10 + job board)
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -281,3 +281,27 @@ Customize column → each button has **"Card goes to: ⬆ Top / Middle / ⬇ Bot
 Cards in a column sort automatically: top group, then middle (including cards with no button pressed), then bottom; within each
 group high-priority jobs first, then the job that has been in the column longest. Workflow setup lists each column's buttons with ⬆/⬇.
 New boards start with "On Hold" set to bottom; existing boards start with every button at Middle.
+
+---
+
+## 16. Send the quote / statement (ContractorPOS v1.6)
+
+Job ticket → **📤 Send** → WhatsApp, Text or Email (same tools as checkout receipts), plus "Preview what they'll see" and "Copy link".
+- Each job gets a private link `/j#<share_token>` (public page `public/j.html`, API `GET /api/public/job/:token`, no login).
+  It shows only what the customer should see: business, job info, quoted price, items/charges/rentals, tax, discount, total,
+  payments received, balance. No history, no crews' internal costs, no staff names.
+- The document is named by where the job is: **Quote** (first column, nothing paid), **Job statement** (after that), **Invoice** (closed).
+  Print uses the same name.
+- WhatsApp and Text open the app with an editable message and the link; the phone number comes from the job/customer.
+- Email goes through Resend (`RESEND_API_KEY`), with an optional note, reply-to = the business; it saves the email on the customer
+  if they had none. Max 50 emails per job. `jobs.statement_emailed_to` / `statement_email_count`.
+- Every send is logged in the job history ("Emailed the quote to …", "Sent the quote by WhatsApp to …").
+
+---
+
+## 17. Column colors (ContractorPOS v1.7)
+
+Customize column → **Colors**: header background + header letters, column background, card background + card letters, with
+ready-made sets (Standard dark, Light cards, Blue, Green, Yellow, Orange, Red, Purple) and a live preview of the column.
+Stored on `job_columns`: `color` (header), `text_color`, `bg_color`, `card_color`, `card_text_color` (empty = standard dark look).
+The job ticket takes its column's colors (colored top bar, tinted background, colored pane edges), so it's obvious which phase you're in.
