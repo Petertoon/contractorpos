@@ -59,6 +59,19 @@
   .thead { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--c, #0f172a); color: var(--ht, #fff); border-bottom: 1px solid var(--jline); flex-wrap: wrap; }
   .thead .colchip { background: rgba(0,0,0,.28); color: inherit; border: 1px solid rgba(255,255,255,.35); }
   .thead .chip:not(.on) { background: rgba(11,18,32,.88); }
+  /* The middle "Job ticket" panel takes the column's card colors, so what's on the ticket stands out from the
+     information panels on the left and right. Neutral see-through shades keep it readable on light or dark colors. */
+  #tLines { background: var(--cardbg, var(--jpanel)); color: var(--cardtx, var(--jink)); }
+  #tLines h3, #tLines .muted, #tLines table.lines th, #tLines .crewhead .sum, #tLines .crewhead .tog, #tLines .phase h4 small,
+  #tLines .crow .who small, #tLines .frow .fname small, #tLines .crewtot { color: inherit; opacity: .72; }
+  #tLines table.lines th, #tLines table.lines td { border-color: rgba(127,127,127,.32); }
+  #tLines tr.quote td { background: rgba(127,127,127,.14); }
+  #tLines .crewbox { background: rgba(127,127,127,.10); border-color: rgba(127,127,127,.32); }
+  #tLines .crow, #tLines .frow { background: rgba(127,127,127,.14); color: inherit; }
+  #tLines .qbtn { background: rgba(127,127,127,.28); color: inherit; }
+  #tLines .xbtn { color: #e5484d; }
+  #tLines .crow .amt small.inc, #tLines .crow .amt small.ext, #tLines .crow .amt small.cp { display: inline-block; background: #1d2a45; padding: 1px 6px; border-radius: 4px; margin-top: 2px; opacity: 1; }
+  #tLines a:not(.fact a) { color: inherit; }
   .thead .flag { box-shadow: 0 0 0 1px rgba(255,255,255,.4); }
   .ticket { background: var(--colbg, var(--jbg)); }
   .ticket .pane { border-top: 4px solid var(--c, transparent); }
