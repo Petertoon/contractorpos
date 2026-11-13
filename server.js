@@ -1607,7 +1607,7 @@ app.post('/api/sales/:id/void', ...managers, wrap(async (req, res) => {
 }));
 
 // ---------- Jobs add-on: contractor job board (see jobs.js) ----------
-const jobsApi = require('./jobs')(app, { pool, wrap, fail, text, cents, requireLogin, requireBusiness, requireRole, barcodeVariants });
+const jobsApi = require('./jobs')(app, { pool, wrap, fail, text, cents, requireLogin, requireBusiness, requireRole, barcodeVariants, publicOrigin, token });
 require('./jobfiles')(app, { pool, wrap, fail, text, ...jobsApi });
 
 // ---------- QuickBooks Online (see qbo.js) ----------
