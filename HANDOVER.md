@@ -1,6 +1,7 @@
+[HANDOVER (2).md](https://github.com/user-attachments/files/34815359/HANDOVER.2.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-13 · Current version: **ContractorPOS v1.3.0** (split from MultiPOS v1.10 + job board)
+Last updated: 2026-11-13 · Current version: **ContractorPOS v1.4.0** (split from MultiPOS v1.10 + job board)
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -255,3 +256,19 @@ the current phase always shows, with "+ Add crew to <phase>".
   Up-charges go to Job Income in QuickBooks like any extra charge.
 - **✓ Done** marks a crew finished (greyed out). Board cards show the crews working in the job's current phase (not done).
 - Table `job_crews`; `job_items.crew_id` links an up-charge line to its crew. Every change is in the job history.
+
+---
+
+## 14. Claude add-on: on/off per business + Ask Claude (ContractorPOS v1.4)
+
+- **Per business:** platform admin → Businesses → **✨ Claude on/off** (`businesses.ai_enabled`, off by default). The button also shows
+  how many Claude requests the business made this month. When off, the Claude buttons are hidden and the server refuses Claude requests.
+  Both are needed: `ANTHROPIC_API_KEY` on Render AND the business switched on.
+- **Ask Claude window** (job ticket → "✨ Ask Claude about a plan or photo", or "✨ Ask Claude" on a file): pick a PDF/photo (or attach one
+  right there), type what you want (idea buttons: materials list, square footage, electrical count, check for missing info, scope of work,
+  dirt work & concrete), then **✨ Ask Claude** (a written answer) or **📋 Materials list for the ticket** (the estimate from section 12).
+- Answers are saved on the job as 💬 conversations (`job_files` kind `answer`, the Q&A in `estimate.thread`). Open one to read it and
+  **ask follow-ups** (the file is sent again with the earlier questions and answers; up to 20 per conversation), or turn it into a
+  materials list. Answers show headings, bold, lists and tables.
+- Every Claude call is logged in `claude_requests` (business, job, user, kind ask/estimate, tokens, ok) — for usage and billing.
+  `CLAUDE_DAILY_LIMIT` (default 40) now counts all Claude requests per business per day.
