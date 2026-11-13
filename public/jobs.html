@@ -142,6 +142,14 @@
   .spin { display: inline-block; width: 18px; height: 18px; border: 3px solid #8b6cff; border-right-color: transparent; border-radius: 50%; animation: sp 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
   @keyframes sp { to { transform: rotate(360deg); } }
   .clip { color: var(--jmuted); font-size: 12.5px; }
+  .chat { max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .chat .q { align-self: flex-end; background: #24345a; border-radius: 10px 10px 2px 10px; padding: 8px 12px; max-width: 85%; white-space: pre-wrap; }
+  .chat .a { background: #0f1729; border: 1px solid var(--jline); border-radius: 10px 10px 10px 2px; padding: 6px 14px; line-height: 1.45; font-size: 15px; }
+  .chat .a h4 { margin: 10px 0 4px; font-size: 15px; color: #c9b8ff; } .chat .a p { margin: 6px 0; } .chat .a ul, .chat .a ol { margin: 4px 0; padding-left: 22px; }
+  .chat .a code { background: #22304d; padding: 0 4px; border-radius: 4px; }
+  table.mdt { border-collapse: collapse; margin: 6px 0; font-size: 14px; display: block; overflow-x: auto; }
+  table.mdt th, table.mdt td { border: 1px solid var(--jline); padding: 4px 8px; text-align: left; }
+  table.mdt th { background: #1d2a45; }
   .crewbox { background: #16213a; border: 1px solid var(--jline); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
   .crewhead { display: flex; align-items: center; gap: 10px; cursor: pointer; }
   .crewhead b { font-size: 15px; } .crewhead .sum { flex: 1; color: #c3cee6; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -230,7 +238,7 @@
       <div class="filebtns">
         <button class="dk" id="pdfBtn">📄 Attach PDF</button>
         <button class="dk" id="photoBtn">📷 Add photo</button>
-        <button class="ai" id="aiBtn">✨ Estimate materials with Claude</button>
+        <button class="ai" id="aiBtn" hidden>✨ Ask Claude about a plan or photo</button>
       </div>
       <input type="file" id="pdfFile" accept="application/pdf,.pdf" multiple hidden>
       <input type="file" id="photoFile" accept="image/*" multiple hidden>
@@ -506,7 +514,7 @@ function renderTicket() {
       if (!confirm(`Remove ${c.trade}${c.name ? ' (' + c.name + ')' : ''} from this job?${c.billing !== 'included' ? ' Its charge comes off the ticket.' : ''}`)) return;
       return run(async () => { await api(`/api/jobs/${j.id}/crews/${c.id}`, undefined, 'DELETE'); toast('Crew removed'); await refreshTicket(); }); }
     const fv = e.target.closest('[data-fview]');
-    if (fv) return showEstimate(files.find((x) => x.id === Number(fv.dataset.fview)));
+    if (fv) { const f = files.find((x) => x.id === Number(fv.dataset.fview)); return f.kind === 'answer' ? showAnswer(f) : showEstimate(f); }
     const fe = e.target.closest('[data-fest]');
     if (fe) return estimateDialog(Number(fe.dataset.fest));
     const fd = e.target.closest('[data-fdel]');
@@ -915,6 +923,11 @@ const fileUrl = (f) => `/api/jobs/${f.job_id}/files/${f.id}`;
 const kb = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
 function fileRow(f) {
   const by = `${shortDate(f.created_at)}${f.created_by_name ? ' · ' + esc(f.created_by_name) : ''}`;
+  if (f.kind === 'answer') {
+    const n = (f.estimate && f.estimate.thread || []).length;
+    return `<div class="frow est"><span class="ficon">💬</span><div class="fname"><b>${esc(f.name)}</b><small>${n} question${n === 1 ? '' : 's'} about ${esc((f.estimate && f.estimate.source_name) || 'a file')} · ${by}</small></div>
+      <div class="fact"><button data-fview="${f.id}">Open</button><button class="xbtn" data-fdel="${f.id}" title="Remove">×</button></div></div>`;
+  }
   if (f.kind === 'estimate') {
     const n = (f.estimate && f.estimate.materials || []).length;
     return `<div class="frow est"><span class="ficon">✨</span><div class="fname"><b>${esc(f.name)}</b><small>${n} material${n === 1 ? '' : 's'} · ${by}</small></div>
@@ -922,7 +935,7 @@ function fileRow(f) {
   }
   return `<div class="frow">${f.kind === 'photo' ? `<a href="${fileUrl(f)}" target="_blank" rel="noopener"><img class="fthumb" src="${fileUrl(f)}" alt="" loading="lazy"></a>` : '<span class="ficon">📄</span>'}
     <div class="fname"><b>${esc(f.name)}</b><small>${f.kind === 'pdf' ? 'PDF' : 'Photo'} · ${kb(f.size_bytes)} · ${by}</small></div>
-    <div class="fact"><a href="${fileUrl(f)}" target="_blank" rel="noopener">Open</a><button class="estb" data-fest="${f.id}" title="Estimate materials from this file">✨ Estimate</button>
+    <div class="fact"><a href="${fileUrl(f)}" target="_blank" rel="noopener">Open</a>${aiOn() ? `<button class="estb" data-fest="${f.id}" title="Ask Claude about this file">✨ Ask Claude</button>` : ''}
       <button class="xbtn" data-fdel="${f.id}" title="Remove">×</button></div></div>`;
 }
 async function uploadFile(file, kind) {
@@ -957,44 +970,110 @@ $('#pdfBtn').onclick = () => { afterUpload = null; $('#pdfFile').click(); };
 $('#photoBtn').onclick = () => { afterUpload = null; $('#photoFile').click(); };
 $('#pdfFile').onchange = () => run(async () => { const r = await uploadPicked($('#pdfFile'), 'pdf'); if (afterUpload && r[0]) afterUpload(r[0].id); });
 $('#photoFile').onchange = () => run(async () => { const r = await uploadPicked($('#photoFile'), 'photo'); if (afterUpload && r[0]) afterUpload(r[0].id); });
-$('#aiBtn').onclick = () => estimateDialog();
+$('#aiBtn').onclick = () => claudeDialog();
 
-function estimateDialog(fileId) {
-  if (!me.features || !me.features.ai_estimates) {
-    openModal(`<h2>✨ Estimate with Claude</h2><p>Claude can read a blueprint, plan or photo and list the materials needed, which you can add to this job.</p>
-      <p class="muted">This isn't turned on yet. The platform administrator adds an <b>ANTHROPIC_API_KEY</b> (from console.anthropic.com) in Render → Environment.</p>
-      <div class="actions"><button type="button" class="primary" onclick="closeModal()">OK</button></div>`);
-    return;
-  }
+const aiOn = () => !!(me && me.features && me.features.ai_estimates);
+const ASK_IDEAS = ['Make a materials list', 'What is the square footage of each room?', 'List the electrical outlets, switches and fixtures',
+  'Check the plans for anything missing or unclear', 'Write a scope of work I can use in the quote', 'What will the dirt work and concrete need?'];
+// The Ask Claude window: pick a plan or photo, tell Claude what you want.
+function claudeDialog(fileId, text) {
+  if (!aiOn()) { toast('Claude is not turned on for this business', 'bad'); return; }
   const src = files.filter((f) => f.kind === 'pdf' || f.kind === 'photo');
-  const f = openModal(`<h2>✨ Estimate materials with Claude</h2>
-    <p class="muted" style="margin:0">Claude reads the plan or photo and lists the materials, with quantities. You review it before anything is added to the job.</p>
+  const f = openModal(`<h2>✨ Ask Claude</h2>
+    <p class="muted" style="margin:0">Pick a blueprint, plan or photo and tell Claude what you want. The answer is saved on this job, and you can ask follow-up questions.</p>
     <label>Plan, blueprint or photo</label>
     ${src.length ? `<select name="fid">${src.map((x) => `<option value="${x.id}" ${x.id === fileId ? 'selected' : ''}>${x.kind === 'pdf' ? '📄' : '📷'} ${esc(x.name)}</option>`).join('')}</select>`
-      : '<div class="muted">No plans or photos on this job yet.</div>'}
+      : '<div class="muted">No plans or photos on this job yet. Attach one first:</div>'}
     <div class="presets"><button type="button" class="dk" id="eNewPdf">📄 Attach a PDF</button><button type="button" class="dk" id="eNewPhoto">📷 Take / pick a photo</button></div>
-    <label>What should Claude estimate? (optional)</label>
-    <textarea name="notes" rows="3" maxlength="1000" placeholder="e.g. Framing and drywall for the addition only. Walls are 9 ft. Use 5/8&quot; drywall on the ceiling."></textarea>
-    <div class="err" id="eErr"></div>
-    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="eGo" ${src.length ? '' : 'disabled'}>✨ Estimate</button></div>`);
-  const pickNew = (input) => { afterUpload = (id) => estimateDialog(id); closeModal(); $(input).click(); };
+    <label>What do you want Claude to do with it?</label>
+    <textarea name="q" rows="4" maxlength="2000" placeholder="e.g. How many sheets of drywall for the addition? Walls are 9 ft.">${esc(text || '')}</textarea>
+    <div class="presets" id="ideas">${ASK_IDEAS.map((x) => `<button type="button" class="dk" data-idea="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+    <div class="actions" style="flex-wrap:wrap">
+      <button type="button" class="dk" onclick="closeModal()">Cancel</button>
+      <button type="button" class="dk" id="eList" ${src.length ? '' : 'disabled'} title="A list of materials with quantities that you can add to the job ticket">📋 Materials list for the ticket</button>
+      <button class="primary" id="eAsk" ${src.length ? '' : 'disabled'}>✨ Ask Claude</button></div>`);
+  const pickNew = (input) => { const q = f.q.value; afterUpload = (id) => claudeDialog(id, q); closeModal(); $(input).click(); };
   $('#eNewPdf').onclick = () => pickNew('#pdfFile');
   $('#eNewPhoto').onclick = () => pickNew('#photoFile');
-  $('#eGo').onclick = async () => {
-    const fid = Number(f.fid.value), notes = f.notes.value, src1 = files.find((x) => x.id === fid);
-    openModal(`<h2>✨ Claude is reading ${esc(src1 ? src1.name : 'the plans')}</h2>
-      <p><span class="spin"></span>Working out the materials… this usually takes 30 seconds to 2 minutes for a set of plans.</p>
-      <p class="muted">You can leave this open. The estimate is saved to the job when it's done.</p>`);
-    try {
-      const r = await api(`/api/jobs/${cur.id}/files/${fid}/estimate`, { notes });
-      await refreshTicket();
-      showEstimate(files.find((x) => x.id === r.id) || { id: r.id, name: r.name, estimate: r.estimate, job_id: cur.id });
-    } catch (e) {
-      openModal(`<h2>Estimate didn't finish</h2><p>${esc(e.message)}</p>
-        <div class="actions"><button type="button" class="dk" onclick="closeModal()">Close</button><button class="primary" id="eRetry">Try again</button></div>`);
-      $('#eRetry').onclick = () => estimateDialog(fid);
-    }
+  $('#ideas').onclick = (e) => { const b = e.target.closest('[data-idea]'); if (b) { f.q.value = b.dataset.idea; f.q.focus(); } };
+  $('#eAsk').onclick = () => {
+    if (!f.q.value.trim()) { f.q.focus(); toast('Type what you want Claude to do', 'bad'); return; }
+    if (/^make a materials list$/i.test(f.q.value.trim())) return runEstimate(Number(f.fid.value), '');
+    runAsk(Number(f.fid.value), f.q.value);
   };
+  $('#eList').onclick = () => runEstimate(Number(f.fid.value), f.q.value);
+}
+const estimateDialog = (fid) => claudeDialog(fid);
+function working(src, what) {
+  openModal(`<h2>✨ Claude is reading ${esc(src ? src.name : 'the file')}</h2>
+    <p><span class="spin"></span>${what} This usually takes 30 seconds to 2 minutes for a set of plans.</p>
+    <p class="muted">You can leave this open. The answer is saved to the job when it's done.</p>`);
+}
+function failed(e, retry) {
+  openModal(`<h2>Claude didn't finish</h2><p>${esc(e.message)}</p>
+    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Close</button><button class="primary" id="eRetry">Try again</button></div>`);
+  $('#eRetry').onclick = retry;
+}
+async function runEstimate(fid, notes) {
+  working(files.find((x) => x.id === fid), 'Working out the materials…');
+  try {
+    const r = await api(`/api/jobs/${cur.id}/files/${fid}/estimate`, { notes });
+    await refreshTicket();
+    showEstimate(files.find((x) => x.id === r.id) || { id: r.id, name: r.name, estimate: r.estimate, job_id: cur.id });
+  } catch (e) { failed(e, () => claudeDialog(fid, notes)); }
+}
+async function runAsk(fid, question, answerId) {
+  working(files.find((x) => x.id === fid), 'Working on your request…');
+  try {
+    const r = await api(`/api/jobs/${cur.id}/files/${fid}/ask`, { question, answer_id: answerId || undefined });
+    await refreshTicket();
+    showAnswer(files.find((x) => x.id === r.id) || { id: r.id, kind: 'answer', name: 'Claude', source_file_id: fid, estimate: r });
+  } catch (e) { failed(e, () => (answerId ? showAnswer(files.find((x) => x.id === answerId), question) : claudeDialog(fid, question))); }
+}
+// Shows Claude's answers (simple formatting: headings, bold, lists, tables).
+function mdLite(t) {
+  const lines = String(t || '').split('\n'); let html = '', list = null, table = null;
+  const inline = (x) => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
+  const close = () => {
+    if (list) { html += `</${list}>`; list = null; }
+    if (table) { html += '<table class="mdt">' + table.map((r, i) => `<tr>${r.map((c) => `<${i ? 'td' : 'th'}>${inline(c)}</${i ? 'td' : 'th'}>`).join('')}</tr>`).join('') + '</table>'; table = null; }
+  };
+  for (const raw of lines) {
+    const l = raw.trimEnd(); let m;
+    if (/^\s*\|/.test(l)) {
+      if (list) { html += `</${list}>`; list = null; }
+      const cells = l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+      if (cells.every((c) => /^:?-{2,}:?$/.test(c))) continue;
+      (table = table || []).push(cells); continue;
+    }
+    if ((m = /^\s*[-*•]\s+(.*)/.exec(l))) { if (table) close(); if (list !== 'ul') { close(); html += '<ul>'; list = 'ul'; } html += `<li>${inline(m[1])}</li>`; continue; }
+    if ((m = /^\s*\d+[.)]\s+(.*)/.exec(l))) { if (table) close(); if (list !== 'ol') { close(); html += '<ol>'; list = 'ol'; } html += `<li>${inline(m[1])}</li>`; continue; }
+    close();
+    if ((m = /^#{1,6}\s+(.*)/.exec(l))) html += `<h4>${inline(m[1])}</h4>`;
+    else if (/^-{3,}$/.test(l.trim())) html += '<hr>';
+    else if (l.trim()) html += `<p>${inline(l)}</p>`;
+  }
+  close();
+  return html;
+}
+function showAnswer(f, draft) {
+  if (!f || !f.estimate) return;
+  const th = f.estimate.thread || [];
+  const fid = f.source_file_id;
+  const srcOk = files.some((x) => x.id === fid);
+  const dlg = openModal(`<h2>💬 ${esc(f.name)}</h2>
+    <p class="muted" style="margin:0 0 8px">About ${esc(f.estimate.source_name || 'a file')}${srcOk ? '' : ' (that file was removed, so no more follow-ups)'}</p>
+    <div class="chat">${th.map((t) => `<div class="q"><b>${esc(t.by || 'You')}:</b> ${esc(t.q)}</div><div class="a">${mdLite(t.a)}</div>`).join('')}</div>
+    ${srcOk && aiOn() ? `<label>Ask a follow-up</label><textarea name="q" rows="2" maxlength="2000" placeholder="e.g. Now do the same for the garage">${esc(draft || '')}</textarea>` : ''}
+    <p class="muted" style="font-size:12.5px">Answers by Claude. Check measurements and quantities before ordering or quoting.</p>
+    <div class="actions" style="flex-wrap:wrap"><button type="button" class="dk" onclick="closeModal()">Close</button>
+      ${srcOk && aiOn() ? `<button type="button" class="dk" id="aList">📋 Materials list for the ticket</button><button class="primary" id="aAsk">Ask follow-up</button>` : ''}</div>`);
+  dlg.classList.add('wide');
+  const chat = dlg.querySelector('.chat'); chat.scrollTop = chat.scrollHeight;
+  if (!(srcOk && aiOn())) return;
+  $('#aAsk').onclick = () => { if (!dlg.q.value.trim()) { dlg.q.focus(); return; } runAsk(fid, dlg.q.value, f.id); };
+  // A materials list from this conversation: uses what was asked as the instructions.
+  $('#aList').onclick = () => runEstimate(fid, [...th.map((t) => t.q), dlg.q.value].filter(Boolean).join('. ').slice(0, 1000));
 }
 // Words in a name, for matching Claude's material names to your products.
 const words = (s) => String(s || '').toLowerCase().replace(/(\d)\s*x\s*(\d)/g, '$1x$2').split(/[^a-z0-9/".x]+/).filter((w) => w.length > 1 || /\d/.test(w));
@@ -1132,6 +1211,7 @@ function tick() { $('#clock').textContent = new Date().toLocaleString([], { week
   isMgr = ['admin', 'owner', 'manager'].includes(me.user.role);
   rentalsOn = !!me.business.rentals_enabled;
   $('#rentalBtn').hidden = !rentalsOn;
+  $('#aiBtn').hidden = !aiOn();
   $('#setupBtn').hidden = !isMgr; $('#manageLink').hidden = !isMgr;
   tick(); setInterval(tick, 30000);
   await loadBoard();
