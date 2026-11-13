@@ -1,6 +1,6 @@
 {
   "name": "contractorpos",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Contractor point of sale: job board, job tickets with progress payments, inventory, rentals, QuickBooks",
   "main": "server.js",
   "scripts": {
