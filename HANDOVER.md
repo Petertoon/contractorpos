@@ -1,7 +1,7 @@
-[HANDOVER (2).md](https://github.com/user-attachments/files/34815359/HANDOVER.2.md)
+[HANDOVER (3).md](https://github.com/user-attachments/files/34820540/HANDOVER.3.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-13 · Current version: **ContractorPOS v1.4.0** (split from MultiPOS v1.10 + job board)
+Last updated: 2026-11-13 · Current version: **ContractorPOS v1.5.0** (split from MultiPOS v1.10 + job board)
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -272,3 +272,12 @@ the current phase always shows, with "+ Add crew to <phase>".
   materials list. Answers show headings, bold, lists and tables.
 - Every Claude call is logged in `claude_requests` (business, job, user, kind ask/estimate, tokens, ok) — for usage and billing.
   `CLAUDE_DAILY_LIMIT` (default 40) now counts all Claude requests per business per day.
+
+---
+
+## 15. Cards sort by importance (ContractorPOS v1.5)
+
+Customize column → each button has **"Card goes to: ⬆ Top / Middle / ⬇ Bottom"** (stored as `place` in the column's `buttons` JSON).
+Cards in a column sort automatically: top group, then middle (including cards with no button pressed), then bottom; within each
+group high-priority jobs first, then the job that has been in the column longest. Workflow setup lists each column's buttons with ⬆/⬇.
+New boards start with "On Hold" set to bottom; existing boards start with every button at Middle.
