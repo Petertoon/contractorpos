@@ -26,21 +26,22 @@
 
   /* board */
   #board { display: flex; gap: 10px; padding: 10px 14px 18px; overflow-x: auto; align-items: flex-start; min-height: calc(100vh - 110px); }
-  .col { flex: 1 1 0; min-width: 250px; background: var(--jpanel); border-radius: 10px; display: flex; flex-direction: column; max-height: calc(100vh - 125px); }
+  .col { flex: 1 1 0; min-width: 250px; background: var(--colbg, var(--jpanel)); color: var(--cardtx, var(--jink)); border-radius: 10px; display: flex; flex-direction: column; max-height: calc(100vh - 125px); }
   .col.drop { outline: 2px dashed #8cb4ff; }
-  .colhead { background: var(--c); border-radius: 10px 10px 0 0; padding: 10px 12px; display: flex; align-items: center; gap: 8px; }
+  .colhead { background: var(--c); color: var(--ht, #fff); border-radius: 10px 10px 0 0; padding: 10px 12px; display: flex; align-items: center; gap: 8px; }
   .colhead div { flex: 1; }
   .colhead b { display: block; font-size: 16px; letter-spacing: .02em; }
   .colhead small { opacity: .9; font-size: 12.5px; }
-  .gear { background: transparent; color: #fff; padding: 4px 6px; font-size: 18px; }
+  .gear { background: transparent; color: inherit; padding: 4px 6px; font-size: 18px; }
   .cards { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
-  .empty { color: var(--jmuted); text-align: center; padding: 16px 0; font-size: 14px; }
-  .jc { background: var(--jcard); border-radius: 9px; border-left: 4px solid var(--c); padding: 9px 10px 10px; cursor: pointer; position: relative; }
-  .jc:hover { background: #1d2a45; }
+  .empty { color: inherit; opacity: .6; text-align: center; padding: 16px 0; font-size: 14px; }
+  .jc { background: var(--cardbg, var(--jcard)); color: var(--cardtx, var(--jink)); border-radius: 9px; border-left: 4px solid var(--c); padding: 9px 10px 10px; cursor: pointer; position: relative; }
+  .jc:hover { filter: brightness(1.1); }
   .jc.dragging { opacity: .4; }
   .jc .t { font-weight: 800; font-size: 15px; padding-right: 26px; }
-  .jc .t span { color: var(--jmuted); font-weight: 700; margin-right: 6px; }
-  .jc .d { color: #c3cee6; font-size: 13.5px; line-height: 1.35; }
+  .jc .t span { opacity: .65; font-weight: 700; margin-right: 6px; }
+  .jc .d { opacity: .85; font-size: 13.5px; line-height: 1.35; }
+  .jc .muted, .jc .clip { color: inherit; opacity: .7; }
   .jc .m { font-size: 13.5px; line-height: 1.45; font-variant-numeric: tabular-nums; }
   .jc .owed { color: var(--red); font-weight: 800; }
   .jc .ok { color: #34d399; font-weight: 800; }
@@ -54,10 +55,15 @@
   .nx:hover { background: #2f4170; }
 
   /* job ticket (opens over the board) */
-  .ticket { position: fixed; inset: 0; background: var(--jbg); z-index: 40; display: flex; flex-direction: column; }
-  .thead { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #0f172a; border-bottom: 1px solid var(--jline); flex-wrap: wrap; }
+  .ticket { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; }
+  .thead { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--c, #0f172a); color: var(--ht, #fff); border-bottom: 1px solid var(--jline); flex-wrap: wrap; }
+  .thead .colchip { background: rgba(0,0,0,.28); color: inherit; border: 1px solid rgba(255,255,255,.35); }
+  .thead .chip:not(.on) { background: rgba(11,18,32,.88); }
+  .thead .flag { box-shadow: 0 0 0 1px rgba(255,255,255,.4); }
+  .ticket { background: var(--colbg, var(--jbg)); }
+  .ticket .pane { border-top: 4px solid var(--c, transparent); }
   .thead .tt { font-size: 20px; font-weight: 800; }
-  .thead .tt span { color: var(--jmuted); margin-right: 6px; }
+  .thead .tt span { opacity: .7; margin-right: 6px; }
   .colchip { background: var(--c); color: #fff; padding: 4px 10px; border-radius: 7px; font-weight: 800; font-size: 13px; }
   .tgrid { flex: 1; display: grid; grid-template-columns: 330px 1fr 360px; gap: 10px; padding: 10px 14px; min-height: 0; }
   .pane { background: var(--jpanel); border-radius: 10px; padding: 12px; overflow-y: auto; min-height: 0; min-width: 0; }
@@ -111,6 +117,12 @@
   .btnset .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
   .btnset .row2 label { margin: 0; font-size: 12.5px; color: var(--jmuted); } .btnset .row2 select { margin-top: 2px; }
   .btnset input[type=color] { padding: 2px; height: 38px; }
+  .colors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .colors div { background: #0f1729; border: 1px solid var(--jline); border-radius: 8px; padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .colors span { width: 100%; font-weight: 700; font-size: 13px; }
+  .colors small { width: 100%; color: var(--jmuted); font-size: 11.5px; }
+  .colors input[type=color] { width: 46px; height: 34px; padding: 2px; }
+  #themes button { padding: 5px 10px; font-size: 12.5px; }
   .collist div { display: flex; align-items: center; gap: 6px; padding: 7px 0; border-bottom: 1px solid var(--jline); }
   .collist div b { flex: 1; }
   .collist i { width: 14px; height: 14px; border-radius: 4px; background: var(--c); display: inline-block; }
@@ -144,6 +156,7 @@
   .spin { display: inline-block; width: 18px; height: 18px; border: 3px solid #8b6cff; border-right-color: transparent; border-radius: 50%; animation: sp 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
   @keyframes sp { to { transform: rotate(360deg); } }
   .clip { color: var(--jmuted); font-size: 12.5px; }
+  .modal .sendgrid button.wa { background: #25d366; color: #06290f; }
   .chat { max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
   .chat .q { align-self: flex-end; background: #24345a; border-radius: 10px 10px 2px 10px; padding: 8px 12px; max-width: 85%; white-space: pre-wrap; }
   .chat .a { background: #0f1729; border: 1px solid var(--jline); border-radius: 10px 10px 10px 2px; padding: 6px 14px; line-height: 1.45; font-size: 15px; }
@@ -311,7 +324,7 @@ function card(j, c, i) {
   if (j.crews_now) extra.push(`👷 ${esc(j.crews_now)}`); else if (j.crew) extra.push(`👷 ${esc(j.crew)}`);
   if (j.file_count) extra.push(`<span class="clip">📎 ${j.file_count} file${j.file_count === 1 ? '' : 's'}</span>`);
   if (i > 0 && !last) extra.push(`<span class="muted">In ${esc(c.name)} since ${shortDate(j.column_entered_at)}</span>`);
-  return `<div class="jc" draggable="true" data-job="${j.id}" style="--c:${c.color}">
+  return `<div class="jc" draggable="true" data-job="${j.id}">
     <div class="t"><span>#${j.job_number}</span>${esc(j.name)}</div>
     ${j.priority === 'high' ? '<div class="flag">⚑ High</div>' : ''}
     ${!last && next ? `<button class="nx" data-next="${j.id}" title="Move to ${esc(next.name)}">›</button>` : ''}
@@ -326,6 +339,9 @@ function card(j, c, i) {
 // Cards sort themselves: by where their status button says (top, middle, bottom), then high priority first,
 // then the longest in the column first (the order the server sends).
 const PLACE_RANK = { top: 0, middle: 1, bottom: 2 };
+// A column's colors as CSS settings (empty ones fall back to the standard dark look).
+const colVars = (c) => `--c:${c.color};` + [['--ht', c.text_color], ['--colbg', c.bg_color], ['--cardbg', c.card_color], ['--cardtx', c.card_text_color]]
+  .filter(([, v]) => v).map(([k, v]) => `${k}:${v};`).join('');
 function sortCards(list, c) {
   const rank = (j) => {
     const b = (c.buttons || []).find((x) => x.enabled && x.label === j.status_label);
@@ -341,7 +357,7 @@ function renderBoard() {
   $('#board').innerHTML = cols.map((c, i) => {
     const list = sortCards(shown.filter((j) => j.column_id === c.id), c);
     const nb = (c.buttons || []).filter((b) => b.enabled).length;
-    return `<section class="col" data-col="${c.id}" style="--c:${c.color}">
+    return `<section class="col" data-col="${c.id}" style="${colVars(c)}">
       <div class="colhead"><div><b>${i + 1}. ${esc(c.name.toUpperCase())}</b><small>${list.length} Job${list.length === 1 ? '' : 's'} • ${nb} Button${nb === 1 ? '' : 's'}</small></div>
         ${isMgr ? `<button class="gear" data-gear="${c.id}" title="Column settings">⚙</button>` : ''}</div>
       <div class="cards">${list.map((j) => card(j, c, i)).join('') || '<div class="empty">No jobs</div>'}</div></section>`;
@@ -480,6 +496,7 @@ function renderTicket() {
   const locked = j.is_closed;
   const btns = (c.buttons || []).map((b, k) => ({ ...b, k })).filter((b) => b.enabled);
   const i = j.column_index;
+  $('#ticket').setAttribute('style', colVars(c));
   $('#tHead').innerHTML = `<button class="dk" onclick="closeTicket()">← Board</button>
     <div class="tt"><span>#${j.job_number}</span>${esc(j.name)}</div>
     <span class="colchip" style="--c:${c.color}">${esc(c.name)}</span>
@@ -490,6 +507,7 @@ function renderTicket() {
     ${i < j.columns_count - 1 ? `<button class="dk" id="tNext">Move to next ›</button>` : ''}
     <button class="dk" id="tCrews">👷 Crews (${j.crews.length})</button>
     <button class="dk" onclick="editDetails()">Edit details</button>
+    <button class="dk" onclick="sendJob()">📤 Send</button>
     <button class="dk" onclick="printTicket()">🖨 Print</button>`;
   $('#tHead').onclick = (e) => {
     const b = e.target.closest('[data-tbtn]');
@@ -788,12 +806,30 @@ function finishDialog() {
 }
 
 // ---------- column settings (buttons per column) & workflow setup ----------
+// The standard (dark) look, and ready-made color sets for a column.
+const STD = { text_color: '#ffffff', bg_color: '#131c2e', card_color: '#18233a', card_text_color: '#e8eefc' };
+const THEMES = [
+  { name: 'Standard dark' },
+  { name: 'Light cards', card_color: '#ffffff', card_text_color: '#111827', bg_color: '#dfe5ee' },
+  { name: 'Blue', color: '#1d4ed8', bg_color: '#dbeafe', card_color: '#ffffff', card_text_color: '#1e3a8a' },
+  { name: 'Green', color: '#15803d', bg_color: '#dcfce7', card_color: '#ffffff', card_text_color: '#14532d' },
+  { name: 'Yellow', color: '#facc15', text_color: '#111827', bg_color: '#fef9c3', card_color: '#ffffff', card_text_color: '#713f12' },
+  { name: 'Orange', color: '#ea580c', bg_color: '#ffedd5', card_color: '#ffffff', card_text_color: '#7c2d12' },
+  { name: 'Red', color: '#dc2626', bg_color: '#fee2e2', card_color: '#ffffff', card_text_color: '#7f1d1d' },
+  { name: 'Purple', color: '#7e22ce', bg_color: '#f3e8ff', card_color: '#ffffff', card_text_color: '#3b0764' },
+];
 function columnSettings(id) {
   const c = cols.find((x) => x.id === id); if (!c) return;
   const b = [0, 1, 2].map((k) => (c.buttons || [])[k] || { label: '', enabled: false, action: 'mark', color: '#3b82f6' });
   const f = openModal(`<h2>Customize column</h2>
-    <div class="two"><div><label>Column name</label><input name="name" required maxlength="40" value="${esc(c.name)}"></div>
-      <div><label>Color</label><input name="color" type="color" value="${c.color}" style="height:44px;padding:3px"></div></div>
+    <label>Column name</label><input name="name" required maxlength="40" value="${esc(c.name)}">
+    <label style="margin-top:14px">Colors</label>
+    <div class="colors">
+      <div><span>Header</span><input name="color" type="color" value="${c.color}" title="Header background"><input name="text_color" type="color" value="${c.text_color || STD.text_color}" title="Header lettering"><small>background · letters</small></div>
+      <div><span>Column</span><input name="bg_color" type="color" value="${c.bg_color || STD.bg_color}" title="Column background"><small>background</small></div>
+      <div><span>Cards</span><input name="card_color" type="color" value="${c.card_color || STD.card_color}" title="Card background"><input name="card_text_color" type="color" value="${c.card_text_color || STD.card_text_color}" title="Card lettering"><small>background · letters</small></div>
+    </div>
+    <div class="presets" id="themes">${THEMES.map((t, k) => `<button type="button" class="dk" data-theme="${k}" style="background:${t.card_color || STD.card_color};color:${t.card_text_color || STD.card_text_color};border-left:6px solid ${t.color || c.color}">${esc(t.name)}</button>`).join('')}</div>
     <label style="margin-top:16px">Card buttons</label><div class="muted" style="font-size:13px">Turn on up to three buttons and name them. "Mark + move" also sends the job to the next column.</div>
     ${b.map((x, k) => `<div class="btnset"><div class="row">
       <label class="check" style="margin:0"><input type="checkbox" name="en${k}" ${x.enabled ? 'checked' : ''}> ${k + 1}</label>
@@ -808,14 +844,29 @@ function columnSettings(id) {
     <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="saveCol">Save</button></div>`);
   const read = () => [0, 1, 2].map((k) => ({ label: f['lb' + k].value.trim(), enabled: f['en' + k].checked && !!f['lb' + k].value.trim(), action: f['ac' + k].value, color: f['co' + k].value, place: f['pl' + k].value }))
     .filter((x) => x.label);
+  // Which optional colors were set (unset ones keep the standard look and follow future changes to it).
+  const custom = { text_color: c.text_color, bg_color: c.bg_color, card_color: c.card_color, card_text_color: c.card_text_color };
+  ['text_color', 'bg_color', 'card_color', 'card_text_color'].forEach((k) => f[k].addEventListener('input', () => { custom[k] = f[k].value; }));
+  $('#themes').onclick = (e) => {
+    const b = e.target.closest('[data-theme]'); if (!b) return;
+    const t = THEMES[Number(b.dataset.theme)];
+    if (t.color) f.color.value = t.color;
+    for (const k of Object.keys(custom)) { custom[k] = t[k] || null; f[k].value = t[k] || STD[k]; }
+    prev();
+  };
   const prev = () => {
-    $('#prev').innerHTML = `<div class="jc" style="--c:${f.color.value};cursor:default"><div class="t"><span>#1045</span>Johnson Remodel</div><div class="d">${esc(f.name.value)}</div>
-      <div class="chips">${read().filter((x) => x.enabled).map((x, i) => `<span class="chip ${i === 0 ? 'on' : ''}" style="--b:${x.color}">${esc(x.label)}</span>`).join('') || '<span class="muted" style="font-size:13px">No buttons</span>'}</div></div>`;
+    const look = { color: f.color.value, ...Object.fromEntries(Object.entries(custom).map(([k, v]) => [k, v ? f[k].value : null])) };
+    $('#prev').innerHTML = `<section class="col" style="${colVars(look)};max-height:none;min-width:0">
+      <div class="colhead"><div><b>${esc(f.name.value.toUpperCase())}</b><small>2 Jobs • ${read().filter((x) => x.enabled).length} Buttons</small></div><span class="gear">⚙</span></div>
+      <div class="cards"><div class="jc" style="cursor:default"><div class="t"><span>#1045</span>Johnson Remodel</div><div class="d">Kitchen &amp; Bath</div>
+      <div class="m">Total: $28,500.00</div><div class="m">Balance: <span class="owed">$8,500.00</span></div>
+      <div class="chips">${read().filter((x) => x.enabled).map((x, i) => `<span class="chip ${i === 0 ? 'on' : ''}" style="--b:${x.color}">${esc(x.label)}</span>`).join('') || '<span class="muted" style="font-size:13px">No buttons</span>'}</div></div></div></section>`;
   };
   f.oninput = prev; f.onchange = prev; prev();
   $('#saveCol').onclick = () => run(async () => {
     if (!f.reportValidity()) return;
-    await api('/api/job-columns/' + id, { name: f.name.value, color: f.color.value, buttons: read() }, 'PUT');
+    await api('/api/job-columns/' + id, { name: f.name.value, color: f.color.value, buttons: read(),
+      ...Object.fromEntries(Object.entries(custom).map(([k, v]) => [k, v ? f[k].value : ''])) }, 'PUT');
     closeModal(); toast('Column saved'); await loadBoard();
   });
 }
@@ -1173,12 +1224,85 @@ function showEstimate(f) {
   });
 }
 
+// ---------- send the quote / statement: WhatsApp, text, email ----------
+// The customer gets a private link to a page with the quote (or statement / invoice) they can view and print.
+async function sendJob(how) {
+  let s;
+  try { s = await api(`/api/jobs/${cur.id}/share`, {}); } catch (e) { toast(e.message, 'bad'); return; }
+  const Doc = s.doc.charAt(0).toUpperCase() + s.doc.slice(1);
+  const emailOk = !!(me.features && me.features.email_receipts);
+  const head = `<h2>📤 Send the ${esc(s.doc)}</h2>
+    <div class="summary"><div><span>${esc(Doc)} · job #${s.job.job_number} ${esc(s.job.name)}</span><b>${usd(s.job.total_cents)}</b></div>
+      ${s.kind !== 'quote' ? `<div><span>Balance due</span><b>${usd(s.job.balance_cents)}</b></div>` : ''}</div>`;
+  if (!how) {
+    const f = openModal(`${head}
+      <p class="muted" style="margin:10px 0 0">The customer gets a link to their ${esc(s.doc)}, which they can open on their phone and print.</p>
+      <div class="sendgrid"><button type="button" class="wa" data-how="wa">🟢 WhatsApp</button><button type="button" class="dk" data-how="sms">💬 Text</button>
+        <button type="button" class="dk" data-how="email">✉️ Email</button></div>
+      <div class="presets" style="justify-content:center"><button type="button" class="dk" id="sOpen">👁 Preview what they'll see</button><button type="button" class="dk" id="sCopy">📋 Copy link</button></div>
+      <div class="actions"><button type="button" class="dk" onclick="closeModal()">Close</button></div>`);
+    f.onclick = (e) => { const b = e.target.closest('[data-how]'); if (b) sendJob(b.dataset.how); };
+    $('#sOpen').onclick = () => window.open(s.url, '_blank', 'noopener');
+    $('#sCopy').onclick = async () => { try { await navigator.clipboard.writeText(s.url); toast('Link copied'); } catch (e) { prompt('Copy this link:', s.url); } };
+    return;
+  }
+  const back = `<button type="button" class="dk" id="sBack">‹ Back</button>`;
+  if (how === 'wa') {
+    const f = openModal(`${head}
+      <label>Customer's WhatsApp number</label><input name="to" type="tel" inputmode="tel" value="${esc(s.phone || '')}" placeholder="(512) 555-1234">
+      <div class="muted" style="font-size:13px;margin-top:4px">US numbers need no country code. Leave blank to pick a contact in WhatsApp. Opens in ${waMode() === 'app' ? 'the WhatsApp Desktop app' : 'your WhatsApp Web tab'} (change this on the checkout screen).</div>
+      <label>Message</label><textarea name="msg" rows="4">${esc(s.message)}</textarea>
+      <div class="err" id="sErr"></div>
+      <div class="actions">${back}<button class="primary" id="sGo">Open WhatsApp</button></div>`);
+    $('#sGo').onclick = () => {
+      const raw = f.to.value.trim(), num = waNumber(raw);
+      if (raw && (num.length < 8 || num.length > 15)) { $('#sErr').textContent = 'That phone number does not look right'; return; }
+      sendToWhatsApp(num, f.msg.value);
+      api(`/api/jobs/${cur.id}/sent`, { how: 'whatsapp', to: raw }).then(refreshTicket).catch(() => {});
+      closeModal();
+    };
+  } else if (how === 'sms') {
+    const f = openModal(`${head}
+      <label>Customer's cell number</label><input name="to" type="tel" inputmode="tel" value="${esc(s.phone || '')}" placeholder="(512) 555-1234">
+      <div class="muted" style="font-size:13px;margin-top:4px">Opens the Messages app on this device with the message ready; tap Send. Works on phones and tablets (on a Windows PC it needs Phone Link).</div>
+      <label>Message</label><textarea name="msg" rows="4">${esc(s.message)}</textarea>
+      <div class="err" id="sErr"></div>
+      <div class="actions">${back}<button class="primary" id="sGo">Open Messages</button></div>`);
+    $('#sGo').onclick = () => {
+      let num = f.to.value.replace(/[^\d+]/g, ''); const digits = num.replace(/\D/g, '');
+      if (digits.length === 10 && !num.startsWith('+')) num = '+1' + digits;
+      if (num && (digits.length < 10 || digits.length > 15)) { $('#sErr').textContent = 'That phone number does not look right'; return; }
+      launchLink(`sms:${num}?&body=${encodeURIComponent(f.msg.value)}`);
+      api(`/api/jobs/${cur.id}/sent`, { how: 'text', to: f.to.value.trim() }).then(refreshTicket).catch(() => {});
+      closeModal();
+    };
+  } else {
+    const f = openModal(`${head}
+      ${emailOk ? '' : '<div class="lockmsg">Email isn\'t set up on this server yet (RESEND_API_KEY in Render). WhatsApp and text still work.</div>'}
+      <label>Customer's email</label><input name="to" type="email" inputmode="email" value="${esc(s.email || '')}" placeholder="name@example.com">
+      <label>Add a note (optional)</label><textarea name="note" rows="3" maxlength="1000" placeholder="e.g. Thanks for meeting with us. This quote is good for 30 days."></textarea>
+      <div class="muted" style="font-size:13px;margin-top:4px">The ${esc(s.doc)} is emailed right away with a link to view and print it. Replies go to your business email.</div>
+      <div class="err" id="sErr"></div>
+      <div class="actions">${back}<button class="primary" id="sGo" ${emailOk ? '' : 'disabled'}>Send email</button></div>`);
+    $('#sGo').onclick = async () => {
+      const to = f.to.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(to)) { $('#sErr').textContent = 'That email address does not look right'; f.to.focus(); return; }
+      $('#sGo').disabled = true; $('#sGo').textContent = 'Sending…';
+      try {
+        const r = await api(`/api/jobs/${cur.id}/email`, { email: to, note: f.note.value });
+        closeModal(); toast(`${Doc} emailed to ${r.to}${r.saved_to_customer ? ' (saved to the customer)' : ''}`); await refreshTicket();
+      } catch (e) { $('#sErr').textContent = e.message; $('#sGo').disabled = false; $('#sGo').textContent = 'Send email'; }
+    };
+  }
+  $('#sBack').onclick = () => sendJob();
+}
+
 // ---------- printed statement / invoice ----------
 function printTicket() {
   const j = cur, b = me.business;
   $('#printArea').innerHTML = `<div class="head"><div>${b.logo_url ? `<img src="${esc(b.logo_url)}" style="height:50px"><br>` : ''}<h1>${esc(b.name)}</h1>
       ${j.location ? `<div>${esc(j.location.address || '')}</div><div>${esc(j.location.phone || '')}</div>` : ''}</div>
-    <div style="text-align:right"><h1>Job #${j.job_number}</h1><div>${new Date().toLocaleDateString()}</div><div>Status: ${esc(j.column ? j.column.name : '')}</div></div></div>
+    <div style="text-align:right"><h1>${j.is_closed ? 'Invoice' : (j.column_index <= 0 && !j.paid_cents ? 'Quote' : 'Job statement')} · Job #${j.job_number}</h1><div>${new Date().toLocaleDateString()}</div><div>Status: ${esc(j.column ? j.column.name : '')}</div></div></div>
     <hr><div><b>${esc(j.name)}</b>${j.description ? ' — ' + esc(j.description) : ''}</div>
     ${j.customer_name ? `<div>Customer: ${esc(j.customer_name)} ${esc(j.customer_phone || '')}</div>` : ''}
     ${j.job_address ? `<div>Job site: ${esc(j.job_address)}</div>` : ''}${j.po_number ? `<div>PO #: ${esc(j.po_number)}</div>` : ''}
