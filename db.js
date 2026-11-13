@@ -519,6 +519,24 @@ ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS charge_cents INT NOT NULL DEFAULT
 ALTER TABLE job_crews DROP CONSTRAINT IF EXISTS job_crews_billing_check;
 ALTER TABLE job_crews ADD CONSTRAINT job_crews_billing_check CHECK (billing IN ('included','extra','costplus'));
 UPDATE job_crews SET charge_cents = amount_cents WHERE billing = 'extra' AND charge_cents = 0;
+
+-- Claude add-on: switched on per business by the platform admin. Every request is logged (for usage and billing).
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE TABLE IF NOT EXISTS claude_requests (
+  id SERIAL PRIMARY KEY,
+  business_id INT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  job_id INT REFERENCES jobs(id) ON DELETE SET NULL,
+  user_id INT REFERENCES users(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL,
+  input_tokens INT,
+  output_tokens INT,
+  ok BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS claude_requests_business ON claude_requests(business_id, created_at);
+-- 'answer' = Claude's answers to questions about a plan or photo (a saved conversation).
+ALTER TABLE job_files DROP CONSTRAINT IF EXISTS job_files_kind_check;
+ALTER TABLE job_files ADD CONSTRAINT job_files_kind_check CHECK (kind IN ('pdf','photo','estimate','answer'));
 `;
 
 async function init() {
