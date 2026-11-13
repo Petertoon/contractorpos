@@ -1,7 +1,7 @@
-[HANDOVER (4).md](https://github.com/user-attachments/files/34825673/HANDOVER.4.md)
+[HANDOVER (5).md](https://github.com/user-attachments/files/34826641/HANDOVER.5.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-13 · Current version: **ContractorPOS v1.7.0** (split from MultiPOS v1.10 + job board)
+Last updated: 2026-11-13 · Current version: **ContractorPOS v1.7.1** (split from MultiPOS v1.10 + job board)
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -305,3 +305,5 @@ Customize column → **Colors**: header background + header letters, column back
 ready-made sets (Standard dark, Light cards, Blue, Green, Yellow, Orange, Red, Purple) and a live preview of the column.
 Stored on `job_columns`: `color` (header), `text_color`, `bg_color`, `card_color`, `card_text_color` (empty = standard dark look).
 The job ticket takes its column's colors (colored top bar, tinted background, colored pane edges), so it's obvious which phase you're in.
+The middle **Job ticket** panel (what's on the ticket) uses the column's card colors; the left (add items) and right (totals, payments,
+details) panels stay dark because they're information, not ticket lines.
