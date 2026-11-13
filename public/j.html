@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Your quote</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f2f2f0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1d1d1b; padding: 16px 10px 40px; }
+  .doc { max-width: 640px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 24px 22px; box-shadow: 0 2px 14px rgba(0,0,0,.06); }
+  .head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .biz img { max-height: 56px; max-width: 200px; display: block; margin-bottom: 6px; }
+  .biz b { font-size: 20px; display: block; }
+  .biz div, .muted { color: #666; font-size: 14px; }
+  .title { text-align: right; }
+  .title h1 { margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: .04em; }
+  .title div { color: #555; font-size: 14px; }
+  .badge { display: inline-block; margin-top: 6px; padding: 3px 10px; border-radius: 99px; font-size: 13px; font-weight: 700; background: #e7f6ec; color: #1a7a42; }
+  .badge.owe { background: #fdecea; color: #b3261e; }
+  .job { margin-top: 18px; padding: 12px 14px; background: #f6f6f3; border-radius: 8px; font-size: 15px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 15px; font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-size: 12px; text-transform: uppercase; color: #777; border-bottom: 2px solid #ddd; padding: 6px 4px; }
+  td { padding: 8px 4px; border-bottom: 1px solid #eee; vertical-align: top; }
+  .num { text-align: right; white-space: nowrap; }
+  td small { color: #777; display: block; }
+  .tot { margin-left: auto; width: 100%; max-width: 320px; margin-top: 12px; font-variant-numeric: tabular-nums; }
+  .tot div { display: flex; justify-content: space-between; padding: 3px 0; }
+  .tot .b { font-weight: 800; font-size: 18px; border-top: 2px solid #1d1d1b; margin-top: 4px; padding-top: 6px; }
+  h3 { margin: 22px 0 0; font-size: 14px; text-transform: uppercase; color: #555; letter-spacing: .04em; }
+  .foot { text-align: center; color: #888; font-size: 13px; margin-top: 24px; }
+  .noprint { text-align: center; margin-top: 16px; }
+  .noprint button { font: inherit; font-weight: 700; padding: 12px 22px; border-radius: 8px; border: 0; background: #1f8f4e; color: #fff; cursor: pointer; }
+  @media print { body { background: #fff; padding: 0; } .doc { box-shadow: none; padding: 0; max-width: none; } .noprint { display: none; } }
+  @media (max-width: 520px) { .title { text-align: left; } .doc { padding: 18px 14px; } }
+</style>
+</head>
+<body>
+<div class="doc" id="d">Loading…</div>
+<div class="noprint"><button onclick="print()">Print or save as PDF</button></div>
+<script>
+// Customer view of a job's quote / statement: /j#<private code> from the WhatsApp, text or email message. No login needed.
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const usd = (c) => (c < 0 ? '-' : '') + '$' + (Math.abs(c || 0) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const day = (d) => (d ? new Date(String(d).length === 10 ? d + 'T12:00:00' : d).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' }) : '');
+window.addEventListener('hashchange', () => location.reload());
+(async () => {
+  const r = await fetch('/api/public/job/' + encodeURIComponent(location.hash.slice(1)));
+  if (!r.ok) throw new Error('not found');
+  const j = await r.json();
+  const Doc = { quote: 'Quote', statement: 'Job statement', invoice: 'Invoice' }[j.kind];
+  document.title = `${Doc} · Job #${j.job_number} · ${j.business_name}`;
+  const badge = j.kind === 'quote' ? '' : j.balance_cents > 0
+    ? `<span class="badge owe">Balance due ${usd(j.balance_cents)}</span>` : '<span class="badge">Paid in full</span>';
+  $('#d').innerHTML = `<div class="head">
+      <div class="biz">${j.logo_url ? `<img src="${esc(j.logo_url)}" alt="">` : ''}<b>${esc(j.business_name)}</b>
+        <div>${esc(j.location_address || '')}</div><div>${esc(j.location_phone || '')}</div></div>
+      <div class="title"><h1>${Doc}</h1><div>Job #${j.job_number}</div><div>${day(new Date())}</div>${badge}</div></div>
+    <div class="job"><b>${esc(j.name)}</b>${j.description ? `<br>${esc(j.description).replace(/\n/g, '<br>')}` : ''}
+      ${j.customer_name ? `<br>For: ${esc(j.customer_name)}` : ''}${j.job_address ? `<br>Job site: ${esc(j.job_address)}` : ''}
+      ${j.po_number ? `<br>PO #: ${esc(j.po_number)}` : ''}${j.start_date ? `<br>Start: ${day(j.start_date)}` : ''}
+      ${j.status && j.kind !== 'quote' ? `<br>Status: ${esc(j.status)}` : ''}</div>
+    <table><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th></tr></thead><tbody>
+      <tr><td><b>${j.kind === 'quote' ? 'Quoted price' : 'Contract price (as quoted)'}</b></td><td></td><td></td><td class="num">${usd(j.quoted_cents)}</td></tr>
+      ${j.items.map((i) => `<tr><td>${esc(i.name)}${i.taxable ? ' <small style="display:inline">(T)</small>' : ''}</td><td class="num">${i.qty}</td><td class="num">${usd(i.unit_cents)}</td><td class="num">${usd(i.qty * i.unit_cents)}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="tot">
+      <div><span>Subtotal</span><span>${usd(j.subtotal_cents)}</span></div>
+      <div><span>Sales tax${j.tax_exempt ? ' (exempt)' : ` ${Number(j.tax_rate)}%`}</span><span>${usd(j.tax_cents)}</span></div>
+      ${j.discount_cents ? `<div><span>Discount${j.discount_note ? ` (${esc(j.discount_note)})` : ''}</span><span>−${usd(j.discount_cents)}</span></div>` : ''}
+      <div class="b"><span>Total</span><span>${usd(j.total_cents)}</span></div>
+      ${j.paid_cents ? `<div><span>Paid so far</span><span>${usd(j.paid_cents)}</span></div>` : ''}
+      ${j.kind !== 'quote' ? `<div class="b"><span>Balance due</span><span>${usd(j.balance_cents)}</span></div>` : ''}
+    </div>
+    ${j.payments.length ? `<h3>Payments received</h3><table><tbody>${j.payments.map((p) => `<tr><td>${day(p.date)}</td><td>${esc(p.method)}${p.check_number ? ' #' + esc(p.check_number) : ''}</td><td class="num">${usd(p.amount_cents)}</td></tr>`).join('')}</tbody></table>` : ''}
+    ${j.items.some((i) => i.taxable) ? '<div class="muted" style="margin-top:10px;font-size:12.5px">(T) = taxable</div>' : ''}
+    <div class="foot">${j.kind === 'quote' ? 'Thank you for the opportunity. Please contact us with any questions.' : 'Thank you for your business!'}</div>`;
+})().catch(() => { $('#d').innerHTML = '<div style="text-align:center"><h1>Not found</h1><p>Check the link in your message.</p></div>'; });
+</script>
+</body>
+</html>
