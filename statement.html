@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Account statement</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #000; background: #fff; margin: 0; font-size: 14px; }
+  .page { max-width: 760px; margin: 0 auto; padding: 28px 24px; }
+  .top { display: flex; justify-content: space-between; gap: 20px; }
+  h1 { margin: 0; font-size: 22px; } h2 { margin: 0; font-size: 18px; text-align: right; }
+  .box { border: 1px solid #000; padding: 10px 12px; margin-top: 18px; display: flex; justify-content: space-between; gap: 20px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  th, td { border-bottom: 1px solid #ccc; padding: 6px 4px; text-align: left; }
+  th { font-size: 12px; text-transform: uppercase; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .void td { color: #999; text-decoration: line-through; }
+  .due { font-size: 20px; font-weight: 800; }
+  .noprint { text-align: center; margin: 16px; } .noprint button { font: 15px system-ui; padding: 10px 18px; }
+  @media print { .noprint { display: none; } }
+</style>
+</head>
+<body>
+<div class="page" id="p">Loading…</div>
+<div class="noprint"><button onclick="print()">Print</button> <button onclick="close()">Close</button></div>
+<script src="/app.js"></script>
+<script>
+// Charge account statement: /statement?id=<customer id>
+(async () => {
+  const id = new URLSearchParams(location.search).get('id');
+  const [me, c] = await Promise.all([api('/api/me'), api('/api/customers/' + encodeURIComponent(id))]);
+  // Running balance, oldest first.
+  const rows = c.activity.slice().reverse();
+  let bal = 0;
+  const lines = rows.map((a) => {
+    if (!a.voided) bal += a.kind === 'charge' ? a.amount_cents : -a.amount_cents;
+    return `<tr class="${a.voided ? 'void' : ''}"><td>${new Date(a.created_at).toLocaleDateString()}</td>
+      <td>${a.kind === 'charge' ? `Sale #${a.ref_id}${a.po_number ? ' · PO ' + esc(a.po_number) : ''}${a.job_address ? '<div style="font-size:12px">' + esc(a.job_address) + '</div>' : ''}`
+        : `Payment, thank you (${esc(PAY_NAMES[a.method] || a.method)}${a.check_number ? ' #' + esc(a.check_number) : ''})`}${a.voided ? ' (void)' : ''}</td>
+      <td class="n">${a.kind === 'charge' ? money(a.amount_cents) : ''}</td><td class="n">${a.kind === 'payment' ? money(a.amount_cents) : ''}</td>
+      <td class="n">${balText(bal)}</td></tr>`;
+  }).reverse();
+  document.title = `Statement · ${c.name}`;
+  $('#p').innerHTML = `<div class="top"><div><h1>${esc(me.business.name)}</h1></div><div><h2>ACCOUNT STATEMENT</h2>
+      <div style="text-align:right">${new Date().toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}</div></div></div>
+    <div class="box"><div><b>${esc(c.name)}</b>${c.company ? '<br>' + esc(c.company) : ''}${c.address ? '<br>' + esc(c.address) : ''}${c.phone ? '<br>' + esc(c.phone) : ''}</div>
+      <div style="text-align:right">${c.balance_cents < 0 ? 'Credit on account' : 'Balance due'}<div class="due">${money(Math.abs(c.balance_cents))}</div>${c.credit_limit_cents != null ? `Credit limit ${money(c.credit_limit_cents)}` : ''}</div></div>
+    <table><thead><tr><th>Date</th><th>Description</th><th class="n">Charges</th><th class="n">Payments</th><th class="n">Balance</th></tr></thead>
+      <tbody>${lines.join('') || '<tr><td colspan="5">No account activity.</td></tr>'}</tbody></table>
+    <p style="margin-top:24px">Please include your name with your payment. Thank you for your business!</p>`;
+})().catch((e) => { $('#p').textContent = e.message; });
+</script>
+</body>
+</html>

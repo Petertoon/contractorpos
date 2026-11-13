@@ -1,0 +1,1223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ContractorPOS Checkout</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { height: 100vh; display: flex; flex-direction: column; }
+  .wrap { flex: 1; display: grid; grid-template-columns: 1fr 340px; gap: 14px; padding: 14px; min-height: 0; }
+  .left { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .scanbar { display: flex; gap: 10px; }
+  .scanbar input { font-size: 18px; padding: 12px 14px; }
+  .scanbar button { white-space: nowrap; }
+  .cart { background: var(--panel); border-radius: var(--radius); flex: 1; overflow: auto; min-height: 180px; }
+  .cart table { width: 100%; border-collapse: collapse; }
+  .cart th { position: sticky; top: 0; background: #fafbf9; text-align: left; font-size: 13px; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .cart td { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  .cart td.num, .cart th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .cart tr.flash td { animation: flash 1.2s; }
+  @keyframes flash { from { background: #d9f2e2; } to { background: transparent; } }
+  .qty { display: inline-flex; align-items: center; gap: 4px; }
+  .qty button { padding: 4px 10px; font-size: 18px; line-height: 1; }
+  .qty span { min-width: 28px; text-align: center; font-weight: 700; }
+  .del { background: transparent; color: var(--danger); font-size: 18px; padding: 4px 8px; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tabs button { background: #fff; border: 1px solid var(--line); }
+  .tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; max-height: 36vh; overflow: auto; align-items: start; }
+  .tile { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 10px; text-align: left; min-height: 70px; }
+  .tile b { display: block; font-size: 15px; }
+  .tile img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; display: block; margin-bottom: 6px; background: #f1f3ef; }
+  .itemcell { display: flex; align-items: center; gap: 10px; }
+  .cthumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex: none; background: #f1f3ef; }
+  .tile span { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tile:active { transform: scale(.98); }
+  .right { display: flex; flex-direction: column; gap: 12px; }
+  .totals { background: var(--panel); border-radius: var(--radius); padding: 16px; }
+  .totals .row { display: flex; justify-content: space-between; padding: 4px 0; font-variant-numeric: tabular-nums; }
+  .totals .grand { font-size: 30px; font-weight: 800; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 10px; }
+  .pay { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pay button { padding: 18px 10px; font-size: 18px; }
+  .pay .cash { background: var(--accent); color: #fff; }
+  .pay .card { background: var(--card); color: #fff; }
+  .pay .wide { grid-column: span 2; padding: 12px; font-size: 15px; }
+  .pay .half { padding: 12px; font-size: 15px; }
+  .pay .split { background: #f2e6ff; color: #5b2a86; }
+  .paysum { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0 10px; }
+  .paysum div { display: flex; flex-direction: column; }
+  .paysum b { font-size: 30px; font-variant-numeric: tabular-nums; }
+  .paysum .due { visibility: hidden; text-align: right; } .paysum .due.show { visibility: visible; }
+  .paysum .due b { color: #c0392b; }
+  .paidrow { display: flex; justify-content: space-between; align-items: center; background: #eef7f1; border-radius: 8px; padding: 6px 10px; margin-bottom: 6px; }
+  .paidrow .del { padding: 2px 8px; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px; }
+  .seg button:disabled { opacity: .4; }
+  .salebar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .salebar .spacer { flex: 1; }
+  .chip { background: #fff; border: 1px solid var(--line); padding: 7px 12px; font-size: 14px; border-radius: 99px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip.set { background: #eaf4ff; border-color: #9cc3f0; color: #174a83; }
+  .chip.acct { background: #fff4d6; border-color: #e9c46a; color: #6b4c00; }
+  .chip.fee { background: #f4f5f3; }
+  .chip.quote { background: #f2e6ff; color: #5b2a86; border-color: #d9c2ef; }
+  .seg3 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .seg3.two { grid-template-columns: 1fr 1fr; }
+  .seg3 button { background: #fff; border: 1px solid var(--line); padding: 9px; }
+  .seg3 button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; align-items: end; }
+  .custform { background: #f7f8f6; border-radius: 10px; padding: 12px 14px; margin-top: 10px; }
+  .custform h3 { margin: 0; }
+  #custList, #qList { margin-top: 10px; max-height: 50vh; overflow: auto; }
+  #custList td button, #qList td button { padding: 7px 10px; font-size: 13px; }
+  .acctpill { display: inline-block; background: #fff4d6; color: #6b4c00; border-radius: 99px; padding: 1px 8px; font-size: 12px; font-weight: 700; }
+  .rowbtns { display: flex; gap: 10px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+  .rowbtns button { padding: 7px 12px; font-size: 14px; }
+  .expired { color: #c0392b; font-weight: 700; }
+  .rentbtn { background: #fff3e0; color: #8a4b00; }
+  .tile.rent { border-color: #f0c27a; background: #fffaf2; }
+  .tile.rent span { color: #8a4b00; font-weight: 600; }
+  .periods { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 6px; }
+  .periods button { background: #fff; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; padding: 10px 6px; }
+  .periods button span { font-weight: 500; color: var(--muted); font-size: 13px; }
+  .periods button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .periods button.on span { color: #e6f5ec; }
+  .rtotal { display: flex; justify-content: space-between; align-items: baseline; margin-top: 14px; font-size: 18px; }
+  .rtotal b { font-size: 26px; }
+  .modal.wide { max-width: 860px; }
+  .outhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .seg2 { display: flex; gap: 6px; } .seg2 button { background: #fff; border: 1px solid var(--line); }
+  .seg2 button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #outList { margin-top: 10px; max-height: 60vh; overflow: auto; }
+  #outList td button { padding: 8px 12px; }
+  tr.overdue td { background: #fdecea; }
+  .late { color: #c0392b; font-weight: 700; } .early { color: #2563c9; font-weight: 700; } .ontime { color: #1f8f4e; font-weight: 700; }
+  .retcard { background: #f4f5f3; border-radius: 10px; padding: 10px 12px; line-height: 1.5; }
+  .retopts { margin-top: 10px; }
+  .giftcode { font: 700 30px ui-monospace, monospace; letter-spacing: 2px; margin: 12px 0; padding: 12px; border: 2px dashed #999; border-radius: 10px; }
+  .seg button { background: #fff; border: 1px solid var(--line); padding: 10px; }
+  .seg button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .amtrow { display: flex; gap: 8px; } .amtrow input { font-size: 20px; } .amtrow button { white-space: nowrap; }
+  .phone { background: var(--panel); border-radius: var(--radius); padding: 14px; display: flex; gap: 12px; align-items: center; }
+  .phone #qr { width: 116px; height: 116px; flex: none; background: #fff; }
+  .phone #qr svg { width: 116px; height: 116px; display: block; }
+  .phone h3 { margin: 0 0 4px; font-size: 16px; }
+  .phone p { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+  .phone button { padding: 6px 10px; font-size: 13px; }
+  .live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #aaa; margin-right: 6px; }
+  .live.on { background: #2ecc71; }
+  label.report { background: #fff4d6; border-radius: 8px; padding: 10px; margin-top: 14px; }
+  .photorow { display: flex; align-items: center; gap: 10px; }
+  .photorow img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
+  .bigchange { font-size: 44px; font-weight: 800; text-align: center; margin: 10px 0; font-variant-numeric: tabular-nums; }
+  .quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+  @media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } body { height: auto; } .grid { max-height: none; } }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand"><img id="logo" alt="" hidden><span>ContractorPOS</span></div>
+  <div class="biz" id="bizName"></div>
+  <select id="registerSel" aria-label="Register"></select>
+  <div class="spacer"></div>
+  <a href="/jobs" id="jobsLink" hidden>Job board</a>
+  <a href="/checkout" class="active">Checkout</a>
+  <a href="/admin" id="adminLink" hidden>Manage</a>
+  <span id="userName" class="muted"></span>
+  <button class="link" onclick="logout()">Log out</button>
+</div>
+
+<div class="wrap">
+  <div class="left">
+    <div class="scanbar">
+      <input id="scan" placeholder="Scan barcode or type product name, then Enter" autocomplete="off">
+      <button onclick="openCustom()">+ Custom amount</button>
+      <button class="rentbtn" id="rentBtn" hidden onclick="openRent()">🔑 Rent</button>
+      <button class="rentbtn" id="rentalsOutBtn" hidden onclick="openRentalsOut()">Rentals out</button>
+    </div>
+    <div class="salebar" id="saleBar">
+      <button type="button" class="chip" id="custChip">👤 Customer</button>
+      <button type="button" class="chip" id="poChip">PO #</button>
+      <button type="button" class="chip" id="jobChip">📍 Job site</button>
+      <span class="spacer"></span>
+      <button type="button" class="chip fee" onclick="openFee('delivery')">🚚 Delivery fee</button>
+      <button type="button" class="chip fee" onclick="openFee('fuel')">⛽ Fuel charge</button>
+      <button type="button" class="chip quote" onclick="openSaveQuote()">📝 Save as quote</button>
+      <button type="button" class="chip quote" onclick="openQuotes()">📂 Quotes</button>
+    </div>
+    <div class="cart" id="cart"></div>
+    <div class="tabs" id="tabs"></div>
+    <div class="grid" id="grid"></div>
+  </div>
+  <div class="right">
+    <div class="totals">
+      <div class="row"><span>Items</span><span id="tCount">0</span></div>
+      <div class="row"><span>Subtotal</span><span id="tSub">$0.00</span></div>
+      <div class="row"><span id="tTaxLabel">Sales tax</span><span id="tTax">$0.00</span></div>
+      <div class="row grand"><span>Total</span><span id="tTotal">$0.00</span></div>
+    </div>
+    <div class="pay">
+      <button class="cash" onclick="openPay('cash')">Cash</button>
+      <button class="card" onclick="openPay('card')">Card</button>
+      <button class="half split" onclick="openPay('cash', true)">Split pay</button>
+      <button class="half" onclick="openPay('other')">Other</button>
+      <button class="wide ghost" onclick="clearSale()">Clear sale</button>
+    </div>
+    <div class="phone">
+      <div id="qr"></div>
+      <div>
+        <h3><span class="live" id="liveDot"></span>Phone scanner</h3>
+        <p>Scan this code with a phone camera. Items scanned on the phone appear here.</p>
+        <button class="ghost" onclick="newPair()">New code</button>
+      </div>
+    </div>
+    <div id="waBox"></div>
+  </div>
+</div>
+
+<!-- custom amount -->
+<div class="modal-back" id="customModal">
+  <form class="modal" id="customForm">
+    <h2 id="cTitle">Custom amount</h2>
+    <div class="muted" id="cSub">For items without a barcode.</div>
+    <input type="hidden" id="cBarcode">
+    <label for="cName">Description</label>
+    <input id="cName" placeholder="Custom item" maxlength="120">
+    <label for="cPrice">Price</label>
+    <input id="cPrice" inputmode="decimal" placeholder="0.00" required>
+    <label for="cQty">Quantity</label>
+    <input id="cQty" type="number" min="1" max="999" value="1">
+    <label class="check"><input type="checkbox" id="cTax" checked> Taxable</label>
+    <label class="check report"><input type="checkbox" id="cReport"> Send to management to add to products</label>
+    <div id="cPhotoBox" hidden>
+      <label>Photo of the item (optional)</label>
+      <div class="photorow">
+        <img id="cPhotoImg" alt="" hidden>
+        <button type="button" id="cPhotoBtn">Choose photo</button>
+        <button type="button" class="ghost" id="cPhotoClear" hidden>Remove</button>
+      </div>
+      <input type="file" id="cPhotoFile" accept="image/*" hidden>
+    </div>
+    <div class="actions"><button type="button" class="ghost" onclick="closeModals()">Cancel</button><button class="primary" id="cSubmit">Add to sale</button></div>
+  </form>
+</div>
+
+<!-- payment -->
+<div class="modal-back" id="payModal">
+  <form class="modal" id="payForm">
+    <h2>Payment</h2>
+    <div class="paysum">
+      <div><span class="muted">Total</span><b id="payTotal">$0.00</b></div>
+      <div class="due"><span class="muted">Balance due</span><b id="payBal">$0.00</b></div>
+    </div>
+    <div id="paidList"></div>
+    <div class="seg" id="paySeg">
+      <button type="button" data-m="cash">Cash</button><button type="button" data-m="card">Card</button><button type="button" data-m="check">Check</button>
+      <button type="button" data-m="account">Charge account</button><button type="button" data-m="gift_card">Gift card</button><button type="button" data-m="other">Other</button>
+    </div>
+    <label for="payAmt">Amount for this payment</label>
+    <div class="amtrow"><input id="payAmt" inputmode="decimal" autocomplete="off"><button type="button" class="ghost" id="splitBtn">Split evenly…</button></div>
+    <div class="muted" id="splitInfo" style="font-size:13px;margin-top:4px"></div>
+    <div id="cashBox">
+      <label for="tendered">Cash received</label>
+      <input id="tendered" inputmode="decimal" placeholder="Same as amount" autocomplete="off">
+      <div class="quick" id="quick"></div>
+      <div class="row" style="margin-top:12px;font-size:20px;display:flex;justify-content:space-between"><span>Change</span><b id="changeDue">$0.00</b></div>
+    </div>
+    <div id="cardBox" class="muted">Run this amount on your card terminal. When it is approved, press the button below.</div>
+    <div id="otherBox" class="muted">Record a payment taken another way (transfer, app).</div>
+    <div id="checkBox"><label for="checkNum">Check number</label><input id="checkNum" maxlength="40" autocomplete="off"></div>
+    <div id="acctBox"></div>
+    <div id="giftBox">
+      <label for="giftCodeIn">Gift card number</label>
+      <div class="amtrow"><input id="giftCodeIn" placeholder="GC-XXXX-XXXX" autocomplete="off" style="text-transform:uppercase"><button type="button" class="ghost" id="giftCheck">Check balance</button></div>
+      <div class="muted" id="giftBal" style="font-size:14px;margin-top:4px"></div>
+    </div>
+    <div class="err" id="payErr"></div>
+    <div class="actions"><button type="button" class="ghost" id="payCancel">Cancel</button><button class="primary" id="payBtn">Complete sale</button></div>
+  </form>
+</div>
+
+<!-- done -->
+<!-- choose / add a customer -->
+<div class="modal-back" id="custModal">
+  <div class="modal wide">
+    <div class="outhead"><h2>Customer</h2><button type="button" class="primary" id="custNewBtn">+ New customer</button></div>
+    <input id="custSearch" placeholder="Search name, company or phone" autocomplete="off">
+    <div id="custList"></div>
+    <form id="custForm" class="custform" hidden>
+      <h3 id="custFormTitle">New customer</h3>
+      <div class="grid2">
+        <div><label for="cfName">Name</label><input id="cfName" required maxlength="120"></div>
+        <div><label for="cfCompany">Company (optional)</label><input id="cfCompany" maxlength="120"></div>
+        <div><label for="cfPhone">Phone</label><input id="cfPhone" type="tel" inputmode="tel" maxlength="40"></div>
+        <div><label for="cfEmail">Email (optional)</label><input id="cfEmail" type="email" maxlength="120"></div>
+      </div>
+      <label for="cfAddress">Address (optional)</label><input id="cfAddress" maxlength="300">
+      <div id="cfAccountBox" hidden class="grid2">
+        <label class="check"><input type="checkbox" id="cfAccount"> Charge account</label>
+        <div><label for="cfLimit">Credit limit (blank = no limit)</label><input id="cfLimit" inputmode="decimal"></div>
+      </div>
+      <div class="err" id="cfErr"></div>
+      <div class="actions"><button type="button" class="ghost" id="cfCancel">Cancel</button><button class="primary">Save & use for this sale</button></div>
+    </form>
+    <div class="actions"><button type="button" class="ghost" id="custRemove" hidden>Remove customer from sale</button><button type="button" class="ghost" onclick="closeModals()">Close</button></div>
+  </div>
+</div>
+
+<!-- payment on a charge account -->
+<div class="modal-back" id="acctPayModal">
+  <form class="modal" id="acctPayForm">
+    <h2>Payment on account</h2>
+    <div id="apInfo" class="retcard"></div>
+    <label for="apAmt">Amount paid</label><input id="apAmt" inputmode="decimal" required>
+    <label>Paid with</label>
+    <div class="seg3" id="apSeg"><button type="button" data-m="cash" class="on">Cash</button><button type="button" data-m="check">Check</button><button type="button" data-m="card">Card</button><button type="button" data-m="other">Other</button></div>
+    <div id="apCheckBox" hidden><label for="apCheck">Check number</label><input id="apCheck" maxlength="40"></div>
+    <label for="apNote">Note (optional)</label><input id="apNote" maxlength="300">
+    <div class="err" id="apErr"></div>
+    <div class="actions"><button type="button" class="ghost" onclick="closeModals()">Cancel</button><button class="primary">Record payment</button></div>
+  </form>
+</div>
+
+<!-- PO number & job site -->
+<div class="modal-back" id="jobModal">
+  <form class="modal" id="jobForm">
+    <h2>PO & job site</h2>
+    <label for="jPo">PO number</label><input id="jPo" maxlength="60" autocomplete="off">
+    <label for="jAddr">Job site address (where the equipment will be)</label><input id="jAddr" maxlength="300" autocomplete="off">
+    <div class="rowbtns"><button type="button" class="ghost" id="jUseCust" hidden>Use customer's address</button></div>
+    <label for="jGps">GPS location (optional)</label>
+    <input id="jGps" placeholder="30.2672, -97.7431 or paste a Google Maps link" autocomplete="off">
+    <div class="rowbtns"><button type="button" class="ghost" id="jHere">📍 Use this device's location</button><a id="jMap" target="_blank" rel="noopener" hidden>Open in Google Maps ↗</a></div>
+    <div class="muted" style="font-size:13px">Tip: on a phone at the job site, open Google Maps, tap the blue dot, and copy the numbers, or use the button above on that phone.</div>
+    <div class="err" id="jErr"></div>
+    <div class="actions"><button type="button" class="ghost" onclick="closeModals()">Cancel</button><button class="primary">Save</button></div>
+  </form>
+</div>
+
+<!-- delivery fee / fuel charge -->
+<div class="modal-back" id="feeModal">
+  <form class="modal" id="feeForm">
+    <h2 id="feeTitle">Delivery fee</h2>
+    <label for="feeName">Description</label><input id="feeName" maxlength="120">
+    <label>Amount</label>
+    <div class="seg3 two" id="feeMode"><button type="button" data-k="amt" class="on">Dollar amount</button><button type="button" data-k="pct">% of items</button></div>
+    <input id="feeAmt" inputmode="decimal" placeholder="0.00" style="margin-top:8px">
+    <div class="muted" id="feeCalc" style="font-size:13px;margin-top:4px"></div>
+    <label class="check"><input type="checkbox" id="feeTax"> Taxable</label>
+    <div class="err" id="feeErr"></div>
+    <div class="actions"><button type="button" class="ghost" onclick="closeModals()">Cancel</button><button class="primary">Add to sale</button></div>
+  </form>
+</div>
+
+<!-- save the sale as a quote -->
+<div class="modal-back" id="saveQuoteModal">
+  <form class="modal" id="saveQuoteForm">
+    <h2>Save as quote</h2>
+    <div class="muted" id="sqSummary"></div>
+    <div id="sqWho">
+      <label for="sqName">Customer name</label><input id="sqName" maxlength="120">
+      <label for="sqPhone">Customer phone (used to find the quote later)</label><input id="sqPhone" type="tel" inputmode="tel" maxlength="40">
+    </div>
+    <label for="sqDays">Price good for how many days?</label><input id="sqDays" type="number" min="1" max="365" value="30">
+    <label for="sqNote">Note on the quote (optional)</label><input id="sqNote" maxlength="500" placeholder="e.g. Delivery Tuesday morning">
+    <div class="err" id="sqErr"></div>
+    <div class="actions"><button type="button" class="ghost" onclick="closeModals()">Cancel</button><button class="primary">Save quote</button></div>
+  </form>
+</div>
+
+<!-- quotes list -->
+<div class="modal-back" id="quotesModal">
+  <div class="modal wide">
+    <div class="outhead"><h2>Quotes</h2>
+      <div class="seg2" id="qTabs"><button type="button" data-st="open" class="on">Open</button><button type="button" data-st="sold">Sold</button><button type="button" data-st="canceled">Canceled</button></div></div>
+    <input id="qSearch" placeholder="Search phone, name, PO or quote #" autocomplete="off">
+    <div id="qList"></div>
+    <div class="actions"><button type="button" class="ghost" onclick="closeModals()">Close</button></div>
+  </div>
+</div>
+
+<!-- rent an item (prepaid) -->
+<div class="modal-back" id="rentModal">
+  <form class="modal" id="rentForm">
+    <h2>Rent an item</h2>
+    <label for="rItem">Item</label>
+    <select id="rItem"></select>
+    <div class="muted" id="rAvail" style="font-size:13px;margin-top:4px"></div>
+    <label>Rental period</label>
+    <div class="periods" id="rPeriods"></div>
+    <div id="rCountBox"><label for="rCount" id="rCountLabel">How many days?</label><input id="rCount" type="number" min="1" max="365" value="1"></div>
+    <label for="rQty">How many units?</label>
+    <input id="rQty" type="number" min="1" max="99" value="1">
+    <label for="rName">Customer name</label>
+    <input id="rName" autocomplete="off" required>
+    <label for="rPhone">Customer phone</label>
+    <input id="rPhone" type="tel" inputmode="tel" autocomplete="off" required>
+    <label for="rDue">Due back</label>
+    <input id="rDue" type="datetime-local">
+    <div class="muted" id="rHours" style="font-size:13px;margin-top:4px"></div>
+    <div class="rtotal"><span>Rental price</span><b id="rTotal">$0.00</b></div>
+    <div class="err" id="rErr"></div>
+    <div class="actions"><button type="button" class="ghost" onclick="closeModals()">Cancel</button><button class="primary">Add to sale</button></div>
+  </form>
+</div>
+
+<!-- rentals out -->
+<div class="modal-back" id="outModal">
+  <div class="modal wide">
+    <div class="outhead"><h2>Rentals</h2>
+      <div class="seg2"><button type="button" data-st="out" class="on">Out now</button><button type="button" data-st="returned">Returned</button></div></div>
+    <input id="outSearch" placeholder="Search customer, phone or item" autocomplete="off">
+    <div id="outList"></div>
+    <div class="actions"><button type="button" class="ghost" onclick="closeModals()">Close</button></div>
+  </div>
+</div>
+
+<!-- check a rental back in -->
+<div class="modal-back" id="returnModal">
+  <form class="modal" id="returnForm">
+    <h2>Check in rental</h2>
+    <div id="retInfo"></div>
+    <div class="retopts">
+      <label class="check"><input type="radio" name="retType" value="none" checked> No charge or refund</label>
+      <label class="check"><input type="radio" name="retType" value="late"> Late: add a charge</label>
+      <label class="check"><input type="radio" name="retType" value="refund"> Early: give a refund</label>
+    </div>
+    <div id="lateBox" hidden>
+      <label for="lateAmt">Late charge</label><input id="lateAmt" inputmode="decimal" placeholder="0.00">
+      <div class="muted" style="font-size:13px">It's added to the current sale on this register. Take payment as usual.</div>
+    </div>
+    <div id="refundBox" hidden>
+      <label for="refAmt">Refund amount</label><input id="refAmt" inputmode="decimal" placeholder="0.00">
+      <label>Refund as</label>
+      <label class="check"><input type="radio" name="refMethod" value="cash" checked> Cash from the drawer</label>
+      <label class="check"><input type="radio" name="refMethod" value="gift_card"> Gift card</label>
+      <label class="check"><input type="radio" name="refMethod" value="check"> Mail a check (goes on the Refunds owed list)</label>
+      <div id="addrBox" hidden><label for="refAddr">Mailing address for the check</label><input id="refAddr" autocomplete="off"></div>
+    </div>
+    <label for="retNote">Note (optional)</label><input id="retNote" maxlength="300" autocomplete="off">
+    <div class="err" id="retErr"></div>
+    <div class="actions"><button type="button" class="ghost" onclick="closeModals()">Cancel</button><button class="primary" id="retBtn">Check in</button></div>
+  </form>
+</div>
+
+<!-- after a gift card refund -->
+<div class="modal-back" id="giftModal">
+  <div class="modal" style="text-align:center">
+    <h2>Gift card created</h2>
+    <div class="muted">Give the customer this gift card number</div>
+    <div class="giftcode" id="giftCode"></div>
+    <div class="bigchange" id="giftAmt"></div>
+    <div class="actions" style="justify-content:center"><button class="ghost" id="giftPrint">Print gift card</button><button class="primary" onclick="closeModals()">Done</button></div>
+  </div>
+</div>
+
+<div class="modal-back" id="doneModal">
+  <div class="modal" style="text-align:center">
+    <h2>Sale complete</h2>
+    <div id="doneChangeWrap"><div class="muted">Change due</div><div class="bigchange" id="doneChange"></div></div>
+    <div class="muted" id="donePaid"></div>
+    <div class="actions" style="justify-content:center">
+      <button class="ghost" id="printBtn">Print receipt</button>
+      <button class="wa" id="waBtn">WhatsApp</button>
+      <button class="ghost" id="smsBtn">💬 Text</button>
+      <button class="ghost" id="emailBtn">✉️ Email</button>
+      <button class="primary" onclick="closeModals()">New sale</button>
+    </div>
+  </div>
+</div>
+
+<script src="/hours.js"></script>
+<script src="/app.js"></script>
+<script>
+let me, registerId, state = { cart: [], totals: {} }, products = [], category = 'All', es, payMethod;
+
+async function start() {
+  me = await api('/api/me');
+  if (!me.business) { location.href = '/admin#businesses'; return; }
+  applyBrand(me.business);
+  $('#bizName').textContent = me.business.name;
+  if (me.business.logo_url) { $('#logo').src = me.business.logo_url; $('#logo').hidden = false; }
+  $('#userName').textContent = me.user.name;
+  if (me.business.jobs_enabled) $('#jobsLink').hidden = false;
+  if (me.user.role !== 'cashier') {
+    $('#adminLink').hidden = false;
+    const showCount = () => api('/api/pending/count').then((r) => {
+      $('#adminLink').innerHTML = 'Manage' + (r.pending_count ? ` <span class="badge" title="Items waiting to be added to Products">${r.pending_count}</span>` : '');
+      $('#adminLink').href = r.pending_count ? '/admin#pending' : '/admin';
+    }).catch(() => {});
+    showCount(); setInterval(showCount, 60000);
+  }
+
+  const regs = (await api('/api/registers')).filter((r) => r.active);
+  if (!regs.length) { $('#cart').innerHTML = '<div class="empty">No registers yet. Add a location in Manage.</div>'; return; }
+  $('#registerSel').innerHTML = regs.map((r) => `<option value="${r.id}">${esc(r.location_name)} · ${esc(r.name)}</option>`).join('');
+  const saved = localStorage.getItem('mp_register_' + me.business.id);
+  registerId = regs.some((r) => String(r.id) === saved) ? saved : String(regs[0].id);
+  $('#registerSel').value = registerId;
+  $('#registerSel').onchange = () => { registerId = $('#registerSel').value; localStorage.setItem('mp_register_' + me.business.id, registerId); loadRegister(); };
+
+  products = await api('/api/products');
+  renderProducts();
+  await loadRegister();
+  if (me.business.rentals_enabled) {
+    $('#rentBtn').hidden = false; $('#rentalsOutBtn').hidden = false;
+    refreshOutCount(); setInterval(refreshOutCount, 60000);
+  }
+}
+
+async function loadRegister() {
+  const s = await api(`/api/registers/${registerId}/state`);
+  state = s;
+  saleInfo = s.sale_info || {}; renderSaleBar();
+  $('#tTaxLabel').textContent = `Sales tax (${s.register.tax_rate}%)`;
+  renderCart();
+  $('#qr').innerHTML = s.pair_qr_svg;
+  connect();
+  focusScan();
+}
+
+function connect() {
+  if (es) es.close();
+  es = new EventSource(`/api/registers/${registerId}/events`);
+  es.onopen = () => $('#liveDot').classList.add('on');
+  es.onerror = () => $('#liveDot').classList.remove('on');
+  es.onmessage = (m) => {
+    const d = JSON.parse(m.data);
+    if (d.type === 'cart') {
+      const flashKey = d.source === 'phone' ? newestKey(state.cart, d.cart) : null;
+      state.cart = d.cart; state.totals = d.totals; renderCart(flashKey);
+      if (d.source === 'phone' && d.event && d.event.kind === 'added') toast('Phone: added ' + d.event.name);
+    }
+    if (d.type === 'paired-reset') loadRegister();
+    if (d.type === 'sale-info') { saleInfo = d.info || {}; renderSaleBar(); }
+  };
+}
+function newestKey(before, after) {
+  for (const it of after) {
+    const old = before.find((b) => b.key === it.key);
+    if (!old || old.qty !== it.qty) return it.key;
+  }
+  return null;
+}
+
+function renderCart(flashKey) {
+  const c = state.cart, t = state.totals;
+  if (!c.length) {
+    $('#cart').innerHTML = '<div class="empty">Scan an item, tap a product below, or use your phone.</div>';
+  } else {
+    $('#cart').innerHTML = `<table><thead><tr><th>Item</th><th>Qty</th><th class="num">Price</th><th class="num">Total</th><th></th></tr></thead><tbody>${
+      c.map((it) => `<tr data-key="${it.key}" class="${it.key === flashKey ? 'flash' : ''}">
+        <td><div class="itemcell">${it.img && (it.product_id || it.rental_product_id) ? `<img class="cthumb" src="${productImg(it.product_id || it.rental_product_id, it.img)}" alt="">` : ''}<div>
+          <b>${esc(it.name)}</b>${it.taxable ? '' : ' <span class="pill">no tax</span>'}
+          ${it.rental ? `<div class="muted" style="font-size:12px">🔑 ${esc(it.rental.customer_name)} · due back ${fmtDateTime(it.rental.due_at)}</div>`
+            : it.barcode ? `<div class="muted" style="font-size:12px">${esc(it.barcode)}</div>` : ''}</div></div></td>
+        <td><span class="qty"><button data-act="minus">−</button><span>${it.qty}</span><button data-act="plus">+</button></span></td>
+        <td class="num">${money(it.unit_cents)}</td>
+        <td class="num"><b>${money(it.unit_cents * it.qty)}</b></td>
+        <td><button class="del" data-act="del" title="Remove">✕</button></td></tr>`).join('')
+    }</tbody></table>`;
+  }
+  $('#tCount').textContent = t.item_count || 0;
+  $('#tSub').textContent = money(t.subtotal_cents);
+  $('#tTax').textContent = money(t.tax_cents);
+  $('#tTotal').textContent = money(t.total_cents);
+}
+
+$('#cart').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-act]'); if (!btn) return;
+  const key = btn.closest('tr').dataset.key;
+  const it = state.cart.find((x) => x.key === key); if (!it) return;
+  try {
+    if (btn.dataset.act === 'del') await cartCall('remove', { key });
+    else await cartCall('qty', { key, qty: it.qty + (btn.dataset.act === 'plus' ? 1 : -1) });
+  } catch (err) { toast(err.message, 'bad'); }
+  focusScan();
+});
+
+async function cartCall(action, body) {
+  const r = await api(`/api/registers/${registerId}/cart/${action}`, body);
+  const flash = newestKey(state.cart, r.cart);
+  state.cart = r.cart; state.totals = r.totals; renderCart(flash);
+  return r;
+}
+
+// Scan box: works with USB/Bluetooth barcode scanners (they type the code + Enter) and with typing.
+$('#scan').addEventListener('keydown', async (e) => {
+  if (e.key !== 'Enter') return;
+  const v = $('#scan').value.trim(); if (!v) return;
+  $('#scan').value = '';
+  try {
+    const r = await cartCall('scan', { code: v });
+    if (r.rental) { openRent(r.rental.id); return; }
+    if (!r.found) {
+      const matches = products.filter((p) => p.name.toLowerCase().includes(v.toLowerCase()));
+      if (matches.length === 1) { await cartCall('product', { product_id: matches[0].id }); }
+      else if (matches.length > 1) { category = 'All'; renderProducts(matches); toast(`${matches.length} matches below`); }
+      else if (/^[0-9A-Za-z\-]{6,}$/.test(v) && /\d/.test(v)) { toast(`Barcode ${v} is not in Products`, 'bad'); openCustom(v); }
+      else { toast(`No product found for "${v}"`, 'bad'); }
+    }
+  } catch (err) { toast(err.message, 'bad'); }
+});
+
+function renderProducts(list) {
+  const cats = ['All', ...new Set(products.map((p) => p.category).filter(Boolean))];
+  $('#tabs').innerHTML = cats.length > 1 ? cats.map((c) => `<button class="${c === category ? 'on' : ''}" data-cat="${esc(c)}">${esc(c)}</button>`).join('') : '';
+  const shown = list || products.filter((p) => category === 'All' || p.category === category);
+  $('#grid').innerHTML = shown.filter((p) => !p.is_rental || (me && me.business.rentals_enabled)).map((p) => `<button class="tile${p.is_rental ? ' rent' : ''}" data-id="${p.id}" ${p.is_rental ? 'data-rental="1"' : ''}>
+      ${p.has_image ? `<img src="${productImg(p.id, p.image_version)}" alt="" loading="lazy">` : ''}<b>${esc(p.name)}</b>
+      <span>${p.is_rental ? '🔑 Rent · from ' + money(Math.min(...[p.rate_half_day, p.rate_day, p.rate_week, p.rate_month].filter((x) => x != null))) : money(p.price_cents)}</span></button>`).join('')
+    || '<div class="muted">No products yet. Add them in Manage → Products.</div>';
+}
+$('#tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; category = b.dataset.cat; renderProducts(); });
+$('#grid').addEventListener('click', async (e) => {
+  const b = e.target.closest('.tile'); if (!b) return;
+  if (b.dataset.rental) { openRent(Number(b.dataset.id)); return; }
+  try { await cartCall('product', { product_id: Number(b.dataset.id) }); } catch (err) { toast(err.message, 'bad'); }
+  focusScan();
+});
+
+function focusScan() { if (!document.querySelector('.modal-back.open')) $('#scan').focus(); }
+function closeModals() { $$('.modal-back').forEach((m) => m.classList.remove('open')); focusScan(); }
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModals(); });
+
+// Custom amount, or (with a barcode) an item that isn't in Products yet.
+let cPhoto = null;
+function openCustom(barcode) {
+  barcode = typeof barcode === 'string' ? barcode : '';
+  $('#customForm').reset(); $('#cQty').value = 1; $('#cTax').checked = true;
+  $('#cBarcode').value = barcode;
+  $('#cTitle').textContent = barcode ? 'Item not in the system' : 'Custom amount';
+  $('#cSub').textContent = barcode ? `Barcode ${barcode} is not in Products. Add it to this sale with a price.` : 'For items without a barcode.';
+  $('#cName').placeholder = barcode ? 'What is it?' : 'Custom item';
+  $('#cReport').checked = !!barcode;
+  setCPhoto(null); updateReport();
+  $('#customModal').classList.add('open'); (barcode ? $('#cName') : $('#cPrice')).focus();
+}
+function setCPhoto(d) {
+  cPhoto = d; $('#cPhotoImg').hidden = !d; if (d) $('#cPhotoImg').src = d;
+  $('#cPhotoClear').hidden = !d; $('#cPhotoBtn').textContent = d ? 'Change photo' : 'Choose photo';
+}
+function updateReport() {
+  $('#cPhotoBox').hidden = !$('#cReport').checked;
+  $('#cSubmit').textContent = $('#cReport').checked ? 'Add & send to management' : 'Add to sale';
+}
+$('#cReport').addEventListener('change', updateReport);
+$('#cPhotoBtn').addEventListener('click', () => $('#cPhotoFile').click());
+$('#cPhotoClear').addEventListener('click', () => setCPhoto(null));
+$('#cPhotoFile').addEventListener('change', async () => {
+  const f = $('#cPhotoFile').files[0]; $('#cPhotoFile').value = '';
+  if (f) try { setCPhoto(await resizeImage(f)); } catch (e) { toast(e.message, 'bad'); }
+});
+$('#customForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const price = toCents($('#cPrice').value);
+  if (price === null) { toast('Enter a valid price', 'bad'); return; }
+  const report = $('#cReport').checked;
+  if (report && !$('#cName').value.trim()) { toast('Type a short description for management', 'bad'); $('#cName').focus(); return; }
+  const body = { name: $('#cName').value, price_cents: price, qty: $('#cQty').value, taxable: $('#cTax').checked, barcode: $('#cBarcode').value };
+  $('#cSubmit').disabled = true;
+  try {
+    await cartCall(report ? 'pending' : 'custom', report ? { ...body, photo: cPhoto } : body);
+    if (report) toast('Added · sent to management');
+    closeModals();
+  } catch (err) { toast(err.message, 'bad'); }
+  finally { $('#cSubmit').disabled = false; }
+});
+
+// ---------- payment (one payment, or split across several) ----------
+let paid = [], split = null;
+const payTotal = () => state.totals.total_cents;
+const balance = () => payTotal() - paid.reduce((a, p) => a + p.amount_cents, 0);
+
+function openPay(method, splitMode) {
+  if (!state.cart.length) { toast('The cart is empty', 'bad'); return; }
+  paid = []; split = null; payMethod = method;
+  $('#payErr').textContent = '';
+  setAmount(splitMode ? '' : balance());
+  renderPay();
+  $('#splitInfo').textContent = splitMode ? 'Enter the first amount (for example what they pay in cash), or use Split evenly.' : '';
+  $('#payModal').classList.add('open');
+  if (splitMode || method !== 'cash') $('#payAmt').focus(); else $('#tendered').focus();
+}
+function setAmount(c) { $('#payAmt').value = c === '' ? '' : (c / 100).toFixed(2); $('#tendered').value = ''; }
+function currentAmount() { const c = toCents($('#payAmt').value); return c === null ? 0 : c; }
+
+function renderPay() {
+  const bal = balance(), amt = currentAmount();
+  $('#payTotal').textContent = money(payTotal());
+  $('#payBal').textContent = money(bal);
+  $('.paysum .due').classList.toggle('show', paid.length > 0);
+  $('#paidList').innerHTML = paid.map((p, i) => `<div class="paidrow"><span>✓ ${PAY_NAMES[p.method]}${p.change_cents ? ` <span class="muted">(change ${money(p.change_cents)})</span>` : ''}</span>
+    <span><b>${money(p.amount_cents)}</b> <button type="button" class="del" data-i="${i}" title="Remove this payment">✕</button></span></div>`).join('');
+  $$('#paySeg button').forEach((b) => b.classList.toggle('on', b.dataset.m === payMethod));
+  $('#cashBox').hidden = payMethod !== 'cash'; $('#cardBox').hidden = payMethod !== 'card'; $('#otherBox').hidden = payMethod !== 'other';
+  $('#giftBox').hidden = payMethod !== 'gift_card';
+  $('#checkBox').hidden = payMethod !== 'check';
+  $('#acctBox').hidden = payMethod !== 'account';
+  const cust = saleInfo.customer;
+  const acctOk = !!(cust && cust.charge_account);
+  $('#paySeg [data-m=account]').disabled = !acctOk;
+  $('#paySeg [data-m=account]').title = acctOk ? '' : 'Choose a customer with a charge account first';
+  if (payMethod === 'account' && cust) {
+    const room = cust.credit_limit_cents == null ? null : cust.credit_limit_cents - cust.balance_cents;
+    $('#acctBox').innerHTML = `<div class="retcard">Charge to <b>${esc(cust.name)}</b>${cust.company ? ' · ' + esc(cust.company) : ''}
+      <div>Balance now ${balText(cust.balance_cents)}${room == null ? ' · no credit limit' : ` · ${money(Math.max(0, room))} left of ${money(cust.credit_limit_cents)} limit`}</div></div>`;
+  }
+  // Quick cash buttons based on this payment's amount.
+  const base = amt || bal;
+  const opts = [base, Math.ceil(base / 500) * 500, Math.ceil(base / 1000) * 1000, Math.ceil(base / 2000) * 2000, 5000, 10000]
+    .filter((v, i, a) => v >= base && v > 0 && a.indexOf(v) === i).slice(0, 6);
+  $('#quick').innerHTML = opts.map((v) => `<button type="button" data-v="${v}">${v === base ? 'Exact' : money(v)}</button>`).join('');
+  updateChange();
+  const left = bal - amt;
+  $('#payBtn').textContent = amt > 0 && left > 0 ? `Add ${PAY_NAMES[payMethod]} payment · ${money(left)} left`
+    : payMethod === 'account' && !paid.length ? 'Charge to account' : 'Complete sale';
+  if (split) $('#splitInfo').textContent = `Split ${split.shares.length} ways · person ${Math.min(split.idx + 1, split.shares.length)} of ${split.shares.length}`;
+}
+function updateChange() {
+  const t = toCents($('#tendered').value), amt = currentAmount();
+  $('#changeDue').textContent = t === null ? '$0.00' : money(Math.max(0, t - amt));
+}
+$('#paySeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return; payMethod = b.dataset.m; renderPay();
+  if (payMethod === 'gift_card') { $('#giftBal').textContent = ''; $('#giftCodeIn').value = ''; $('#giftCodeIn').focus(); }
+  else if (payMethod === 'check') { $('#checkNum').value = ''; $('#checkNum').focus(); }
+  else $('#payAmt').focus();
+});
+// Looks up a gift card; fills the amount with what it can cover.
+async function checkGift() {
+  const code = $('#giftCodeIn').value.trim(); if (!code) return null;
+  try {
+    const g = await api('/api/gift-cards/' + encodeURIComponent(code));
+    $('#giftCodeIn').value = g.code;
+    const used = paid.filter((p) => p.method === 'gift_card' && p.gift_code === g.code).reduce((a, p) => a + p.amount_cents, 0);
+    const avail = g.balance_cents - used;
+    $('#giftBal').innerHTML = `Balance <b>${money(avail)}</b>${g.customer_name ? ' · ' + esc(g.customer_name) : ''}`;
+    if (avail <= 0) { $('#giftBal').innerHTML += ' · <span style="color:#c0392b">No money left on this card</span>'; return g; }
+    setAmount(Math.min(avail, balance())); renderPay();
+    return g;
+  } catch (err) { $('#giftBal').innerHTML = `<span style="color:#c0392b">${esc(err.message)}</span>`; return null; }
+}
+$('#giftCheck').addEventListener('click', checkGift);
+$('#giftCodeIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); checkGift(); } });
+$('#payAmt').addEventListener('input', renderPay);
+$('#quick').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; $('#tendered').value = (b.dataset.v / 100).toFixed(2); updateChange(); });
+$('#tendered').addEventListener('input', updateChange);
+$('#paidList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-i]'); if (!b) return;
+  const p = paid[Number(b.dataset.i)];
+  if (p.method === 'card' && !confirm('Remove this card payment? If the card was already charged, void it on the card terminal too.')) return;
+  paid.splice(Number(b.dataset.i), 1); split = null; $('#splitInfo').textContent = '';
+  setAmount(balance()); renderPay();
+});
+$('#splitBtn').addEventListener('click', () => {
+  const n = parseInt(prompt(`Split ${money(balance())} evenly between how many people? (2–10)`, '2'), 10);
+  if (!(n >= 2 && n <= 10)) return;
+  const bal = balance(), base = Math.floor(bal / n), extra = bal - base * n;
+  split = { shares: Array.from({ length: n }, (_, i) => base + (i < extra ? 1 : 0)), idx: 0 };
+  setAmount(split.shares[0]); renderPay(); $('#payAmt').focus();
+});
+$('#payCancel').addEventListener('click', () => {
+  if (paid.length && !confirm('Cancel this payment? The payments entered so far will be removed.' +
+    (paid.some((p) => p.method === 'card') ? ' If a card was already charged, void it on the card terminal.' : ''))) return;
+  paid = []; split = null; closeModals();
+});
+
+$('#payForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('#payErr').textContent = '';
+  const bal = balance();
+  let amt = toCents($('#payAmt').value);
+  if (amt === null || amt <= 0) { $('#payErr').textContent = 'Enter the amount for this payment'; return; }
+  if (amt > bal) { $('#payErr').textContent = payMethod === 'cash'
+    ? `Only ${money(bal)} is due. Put the cash they hand you under "Cash received" to figure change.`
+    : `Only ${money(bal)} is due.`; return; }
+  const p = { method: payMethod, amount_cents: amt };
+  if (payMethod === 'gift_card') {
+    const g = await checkGift();
+    if (!g) { $('#payErr').textContent = 'Enter a valid gift card number and press Check balance'; return; }
+    const used = paid.filter((x) => x.method === 'gift_card' && x.gift_code === g.code).reduce((a, x) => a + x.amount_cents, 0);
+    if (amt > g.balance_cents - used) { $('#payErr').textContent = `This gift card only has ${money(g.balance_cents - used)}`; return; }
+    p.gift_code = g.code;
+  }
+  if (payMethod === 'check') p.check_number = $('#checkNum').value.trim();
+  if (payMethod === 'account') {
+    const cust = saleInfo.customer;
+    if (!cust || !cust.charge_account) { $('#payErr').textContent = 'Choose a customer with a charge account first'; return; }
+    const already = paid.filter((x) => x.method === 'account').reduce((a, x) => a + x.amount_cents, 0);
+    if (cust.credit_limit_cents != null && cust.balance_cents + already + amt > cust.credit_limit_cents) {
+      $('#payErr').textContent = `That goes over ${cust.name}'s ${money(cust.credit_limit_cents)} credit limit`; return;
+    }
+  }
+  if (payMethod === 'cash') {
+    const t = $('#tendered').value.trim() ? toCents($('#tendered').value) : amt;
+    if (t === null) { $('#payErr').textContent = 'Enter a valid cash amount'; return; }
+    if (t < amt) { $('#payErr').textContent = 'Cash received is less than this payment'; return; }
+    p.tendered_cents = t; p.change_cents = t - amt;
+  }
+  paid.push(p);
+  if (balance() > 0) {
+    // More to pay: get ready for the next payment.
+    if (split) split.idx++; else $('#splitInfo').textContent = '';
+    setAmount(split && split.shares[split.idx] != null ? split.shares[split.idx] : balance());
+    if (p.change_cents) toast(`Give ${money(p.change_cents)} change`);
+    renderPay(); $('#payAmt').focus();
+    return;
+  }
+  $('#payBtn').disabled = true;
+  try {
+    const r = await api(`/api/registers/${registerId}/checkout`,
+      { payments: paid.map(({ method, amount_cents, tendered_cents, gift_code, check_number }) => ({ method, amount_cents, tendered_cents, gift_code, check_number })) });
+    state.cart = []; state.totals = { subtotal_cents: 0, tax_cents: 0, total_cents: 0, item_count: 0 }; renderCart();
+    $('#payModal').classList.remove('open');
+    // Change from cash parts already given out during a split was shown as it happened.
+    const lastChange = paid[paid.length - 1].change_cents || 0;
+    $('#doneChangeWrap').hidden = !lastChange;
+    $('#doneChange').textContent = money(lastChange);
+    $('#donePaid').textContent = 'Paid: ' + paidByText(r);
+    paid = []; split = null;
+    $('#printBtn').onclick = () => window.open('/receipt?id=' + r.sale_id, '_blank', 'width=420,height=700');
+    $('#waBtn').onclick = () => { $('#doneModal').classList.remove('open'); openWhatsAppDialog(r.sale_id); };
+    $('#smsBtn').onclick = () => { $('#doneModal').classList.remove('open'); openTextDialog(r.sale_id); };
+    $('#emailBtn').onclick = () => { $('#doneModal').classList.remove('open'); openEmailDialog(r.sale_id); };
+    $('#doneModal').classList.add('open');
+    products = await api('/api/products'); renderProducts();
+  } catch (err) { paid.pop(); renderPay(); $('#payErr').textContent = err.message; }
+  finally { $('#payBtn').disabled = false; }
+});
+
+// ================= Sale details: customer, PO, job site =================
+let saleInfo = {};
+function renderSaleBar() {
+  const c = saleInfo.customer;
+  const cc = $('#custChip');
+  const name = c ? c.name : saleInfo.customer_name;
+  cc.textContent = name ? `👤 ${name}${c && c.charge_account ? ` · acct ${balText(c.balance_cents)}` : ''}` : '👤 Customer';
+  cc.className = 'chip' + (c && c.charge_account ? ' acct' : name ? ' set' : '');
+  $('#poChip').textContent = saleInfo.po_number ? `PO # ${saleInfo.po_number}` : 'PO #';
+  $('#poChip').className = 'chip' + (saleInfo.po_number ? ' set' : '');
+  const gps = saleInfo.job_lat != null && saleInfo.job_lng != null;
+  $('#jobChip').textContent = saleInfo.job_address ? `📍 ${saleInfo.job_address}` : gps ? `📍 GPS ${Number(saleInfo.job_lat).toFixed(4)}, ${Number(saleInfo.job_lng).toFixed(4)}` : '📍 Job site';
+  $('#jobChip').className = 'chip' + (saleInfo.job_address || gps ? ' set' : '');
+  if (saleInfo.quote_id) { $('#poChip').textContent = `Quote #${saleInfo.quote_id} · ` + $('#poChip').textContent; $('#poChip').className = 'chip set'; }
+}
+// Saves sale details for this register; pass only what changes.
+async function saveInfo(patch) {
+  const next = { customer_id: saleInfo.customer_id || null, customer_name: saleInfo.customer_name || null,
+    customer_phone: saleInfo.customer_phone || null, po_number: saleInfo.po_number || null, job_address: saleInfo.job_address || null,
+    job_lat: saleInfo.job_lat ?? null, job_lng: saleInfo.job_lng ?? null, quote_id: saleInfo.quote_id || null, ...patch };
+  saleInfo = await api(`/api/registers/${registerId}/sale-info`, next, 'PUT');
+  renderSaleBar();
+}
+$('#custChip').onclick = () => openCustomers();
+$('#poChip').onclick = () => openJob('po');
+$('#jobChip').onclick = () => openJob('job');
+
+// ----- customers -----
+let custRows = [], editingCust = null, custTimer;
+async function openCustomers() {
+  $('#custModal').classList.add('open'); $('#custForm').hidden = true; $('#custSearch').value = '';
+  $('#custRemove').hidden = !(saleInfo.customer_id || saleInfo.customer_name);
+  await searchCustomers(); $('#custSearch').focus();
+}
+async function searchCustomers() {
+  try { custRows = await api('/api/customers?q=' + encodeURIComponent($('#custSearch').value.trim())); } catch (e) { toast(e.message, 'bad'); return; }
+  $('#custList').innerHTML = custRows.length ? `<table class="list"><thead><tr><th>Customer</th><th>Phone</th><th>Account</th><th></th></tr></thead><tbody>${
+    custRows.map((c) => `<tr><td><b>${esc(c.name)}</b>${c.company ? `<div class="muted" style="font-size:12px">${esc(c.company)}</div>` : ''}</td>
+      <td>${esc(c.phone || '')}</td>
+      <td>${c.charge_account ? `<span class="acctpill">Charge acct</span><div style="font-size:13px">Balance ${balText(c.balance_cents)}${c.credit_limit_cents != null ? ` / ${money(c.credit_limit_cents)}` : ''}</div>` : '<span class="muted">—</span>'}</td>
+      <td style="white-space:nowrap"><button class="primary" data-use="${c.id}">Use</button> <button class="ghost" data-edit="${c.id}">Edit</button>
+        ${c.charge_account ? ` <button class="ghost" data-pay="${c.id}">Take payment</button>` : ''}</td></tr>`).join('')}</tbody></table>`
+    : '<p class="muted">No customers found. Add a new one.</p>';
+}
+$('#custSearch').addEventListener('input', () => { clearTimeout(custTimer); custTimer = setTimeout(searchCustomers, 250); });
+$('#custList').addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const c = custRows.find((x) => String(x.id) === (b.dataset.use || b.dataset.edit || b.dataset.pay));
+  if (b.dataset.use) {
+    try { await saveInfo({ customer_id: c.id, customer_name: null, customer_phone: null }); closeModals(); toast(`Customer: ${c.name}`); }
+    catch (err) { toast(err.message, 'bad'); }
+  } else if (b.dataset.edit) showCustForm(c);
+  else if (b.dataset.pay) openAcctPay(c);
+});
+function showCustForm(c) {
+  editingCust = c || null;
+  $('#custFormTitle').textContent = c ? `Edit ${c.name}` : 'New customer';
+  $('#cfName').value = c ? c.name : $('#custSearch').value.replace(/[\d()+\- ]{7,}/, '').trim();
+  $('#cfCompany').value = c ? c.company || '' : ''; $('#cfEmail').value = c ? c.email || '' : ''; $('#cfAddress').value = c ? c.address || '' : '';
+  const typedPhone = /[\d()+\- ]{7,}/.exec($('#custSearch').value);
+  $('#cfPhone').value = c ? c.phone || '' : (typedPhone ? typedPhone[0].trim() : '');
+  $('#cfAccountBox').hidden = me.user.role === 'cashier';
+  $('#cfAccount').checked = !!(c && c.charge_account);
+  $('#cfLimit').value = c && c.credit_limit_cents != null ? (c.credit_limit_cents / 100).toFixed(2) : '';
+  $('#cfErr').textContent = ''; $('#custForm').hidden = false; $('#cfName').focus();
+}
+$('#custNewBtn').onclick = () => showCustForm(null);
+$('#cfCancel').onclick = () => { $('#custForm').hidden = true; };
+$('#custForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('#cfErr').textContent = '';
+  const limit = $('#cfLimit').value.trim() ? toCents($('#cfLimit').value) : null;
+  if ($('#cfLimit').value.trim() && limit === null) { $('#cfErr').textContent = 'Credit limit must be an amount like 2500.00'; return; }
+  const body = { name: $('#cfName').value, company: $('#cfCompany').value, phone: $('#cfPhone').value, email: $('#cfEmail').value,
+    address: $('#cfAddress').value, charge_account: $('#cfAccount').checked, credit_limit_cents: limit, notes: editingCust ? editingCust.notes : null };
+  try {
+    const id = editingCust ? (await api('/api/customers/' + editingCust.id, body, 'PUT'), editingCust.id) : (await api('/api/customers', body)).id;
+    await saveInfo({ customer_id: id, customer_name: null, customer_phone: null });
+    closeModals(); toast(editingCust ? 'Customer updated' : 'Customer added to this sale');
+  } catch (err) { $('#cfErr').textContent = err.message; }
+});
+$('#custRemove').onclick = async () => { await saveInfo({ customer_id: null, customer_name: null, customer_phone: null }); closeModals(); };
+
+// ----- payment on a charge account -----
+let acctCust = null, apMethod = 'cash';
+function openAcctPay(c) {
+  acctCust = c; apMethod = 'cash';
+  $('#acctPayForm').reset(); $('#apErr').textContent = '';
+  $('#apInfo').innerHTML = `<b>${esc(c.name)}</b>${c.company ? ' · ' + esc(c.company) : ''}<div>Balance owed: <b>${balText(c.balance_cents)}</b></div>`;
+  $('#apAmt').value = c.balance_cents > 0 ? (c.balance_cents / 100).toFixed(2) : '';
+  syncAp(); $('#custModal').classList.remove('open'); $('#acctPayModal').classList.add('open'); $('#apAmt').select();
+}
+function syncAp() { $$('#apSeg button').forEach((b) => b.classList.toggle('on', b.dataset.m === apMethod)); $('#apCheckBox').hidden = apMethod !== 'check'; }
+$('#apSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; apMethod = b.dataset.m; syncAp(); });
+$('#acctPayForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const amt = toCents($('#apAmt').value); if (!amt) { $('#apErr').textContent = 'Enter the amount paid'; return; }
+  if (amt > acctCust.balance_cents && !confirm(`That's more than the ${balText(acctCust.balance_cents)} owed. Keep the extra as a credit on the account?`)) return;
+  try {
+    await api(`/api/customers/${acctCust.id}/payments`, { method: apMethod, amount_cents: amt, check_number: $('#apCheck').value,
+      note: $('#apNote').value, location_id: state.register.location_id });
+    closeModals(); toast(`Payment recorded. ${acctCust.name}'s balance is now ${balText(acctCust.balance_cents - amt)}`);
+    if (saleInfo.customer_id === acctCust.id) saveInfo({});
+  } catch (err) { $('#apErr').textContent = err.message; }
+});
+
+// ----- PO & job site -----
+// Accepts "30.2672, -97.7431" or a Google Maps link containing @lat,lng or q=lat,lng.
+function parseGps(s) {
+  s = String(s || '').trim(); if (!s) return null;
+  const m = /(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/.exec(decodeURIComponent(s));
+  if (!m) return undefined;
+  const lat = Number(m[1]), lng = Number(m[2]);
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : undefined;
+}
+function syncMapLink() {
+  const g = parseGps($('#jGps').value);
+  const link = mapLink(g ? g.lat : null, g ? g.lng : null, $('#jAddr').value.trim());
+  $('#jMap').hidden = !link; if (link) $('#jMap').href = link;
+}
+function openJob(focus) {
+  $('#jPo').value = saleInfo.po_number || ''; $('#jAddr').value = saleInfo.job_address || '';
+  $('#jGps').value = saleInfo.job_lat != null ? `${saleInfo.job_lat}, ${saleInfo.job_lng}` : '';
+  const c = saleInfo.customer; $('#jUseCust').hidden = !(c && c.address);
+  $('#jErr').textContent = ''; syncMapLink();
+  $('#jobModal').classList.add('open'); (focus === 'job' ? $('#jAddr') : $('#jPo')).focus();
+}
+$('#jGps').addEventListener('input', syncMapLink); $('#jAddr').addEventListener('input', syncMapLink);
+$('#jUseCust').onclick = () => { $('#jAddr').value = saleInfo.customer.address; syncMapLink(); };
+$('#jHere').onclick = () => {
+  if (!navigator.geolocation) { $('#jErr').textContent = 'This device cannot share its location'; return; }
+  $('#jHere').disabled = true; $('#jHere').textContent = 'Finding location…';
+  navigator.geolocation.getCurrentPosition((pos) => {
+    $('#jGps').value = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`; syncMapLink();
+    $('#jHere').disabled = false; $('#jHere').textContent = '📍 Use this device\'s location';
+  }, () => {
+    $('#jErr').textContent = 'Could not get the location. Allow location access, or type/paste the GPS numbers.';
+    $('#jHere').disabled = false; $('#jHere').textContent = '📍 Use this device\'s location';
+  }, { enableHighAccuracy: true, timeout: 15000 });
+};
+$('#jobForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const g = parseGps($('#jGps').value);
+  if (g === undefined) { $('#jErr').textContent = 'GPS should look like 30.2672, -97.7431 (or paste a Google Maps link)'; return; }
+  try {
+    await saveInfo({ po_number: $('#jPo').value.trim() || null, job_address: $('#jAddr').value.trim() || null,
+      job_lat: g ? g.lat : null, job_lng: g ? g.lng : null });
+    closeModals();
+  } catch (err) { $('#jErr').textContent = err.message; }
+});
+
+// ----- delivery fee & fuel charge -----
+let feeKind = 'delivery', feeMode = 'amt';
+function feeDefaults() { try { return JSON.parse(localStorage.getItem('mp_fees_' + me.business.id) || '{}'); } catch (e) { return {}; } }
+function itemsSubtotal() { return state.cart.filter((it) => !/^(Delivery fee|Fuel charge)/.test(it.name)).reduce((a, it) => a + it.unit_cents * it.qty, 0); }
+function openFee(kind) {
+  feeKind = kind; const d = feeDefaults()[kind] || {};
+  feeMode = d.mode || (kind === 'fuel' ? 'pct' : 'amt');
+  $('#feeTitle').textContent = kind === 'fuel' ? 'Fuel charge' : 'Delivery fee';
+  $('#feeName').value = kind === 'fuel' ? 'Fuel charge' : 'Delivery fee';
+  $('#feeAmt').value = d.value != null ? d.value : '';
+  $('#feeTax').checked = d.taxable != null ? d.taxable : true;
+  $('#feeErr').textContent = ''; syncFee();
+  $('#feeModal').classList.add('open'); $('#feeAmt').select();
+}
+function feeCents() {
+  const v = $('#feeAmt').value.trim();
+  if (feeMode === 'amt') return toCents(v);
+  const pct = Number(v); if (!(pct > 0 && pct <= 100)) return null;
+  return Math.round(itemsSubtotal() * pct / 100);
+}
+function syncFee() {
+  $$('#feeMode button').forEach((b) => b.classList.toggle('on', b.dataset.k === feeMode));
+  $('#feeAmt').placeholder = feeMode === 'amt' ? '0.00' : 'e.g. 3.5';
+  const c = feeCents();
+  $('#feeCalc').textContent = feeMode === 'pct' ? `${$('#feeAmt').value || 0}% of ${money(itemsSubtotal())} in items = ${money(c || 0)}` : '';
+}
+$('#feeMode').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; feeMode = b.dataset.k; syncFee(); $('#feeAmt').focus(); });
+$('#feeAmt').addEventListener('input', syncFee);
+$('#feeForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const c = feeCents(); if (!c) { $('#feeErr').textContent = feeMode === 'pct' ? 'Enter a percent, and add items first' : 'Enter the amount'; return; }
+  const label = $('#feeName').value.trim() || $('#feeTitle').textContent;
+  const name = feeMode === 'pct' ? `${label} (${$('#feeAmt').value.trim()}%)` : label;
+  try {
+    await cartCall('custom', { name, price_cents: c, qty: 1, taxable: $('#feeTax').checked });
+    // Remember the last amount used for next time on this computer.
+    const all = feeDefaults(); all[feeKind] = { mode: feeMode, value: $('#feeAmt').value.trim(), taxable: $('#feeTax').checked };
+    try { localStorage.setItem('mp_fees_' + me.business.id, JSON.stringify(all)); } catch (err) { /* ok */ }
+    closeModals();
+  } catch (err) { $('#feeErr').textContent = err.message; }
+});
+
+// ----- quotes -----
+function openSaveQuote() {
+  if (!state.cart.length) { toast('Add items first, then save them as a quote', 'bad'); return; }
+  const c = saleInfo.customer;
+  $('#saveQuoteForm').reset(); $('#sqDays').value = 30; $('#sqErr').textContent = '';
+  $('#sqSummary').textContent = `${state.totals.item_count} items · ${money(state.totals.total_cents)}${c ? ' · for ' + c.name : ''}`;
+  $('#sqWho').hidden = !!(c && c.phone);
+  if (!c) { $('#sqName').value = saleInfo.customer_name || ''; $('#sqPhone').value = saleInfo.customer_phone || ''; }
+  else { $('#sqName').value = c.name; $('#sqPhone').value = c.phone || ''; }
+  $('#saveQuoteModal').classList.add('open'); ($('#sqWho').hidden ? $('#sqNote') : $('#sqName')).focus();
+}
+$('#saveQuoteForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('#sqErr').textContent = '';
+  try {
+    const r = await api(`/api/registers/${registerId}/quote`, { customer_name: $('#sqName').value, customer_phone: $('#sqPhone').value,
+      valid_days: $('#sqDays').value, note: $('#sqNote').value });
+    closeModals();
+    state.cart = []; state.totals = { subtotal_cents: 0, tax_cents: 0, total_cents: 0, item_count: 0 }; renderCart();
+    saleInfo = {}; renderSaleBar();
+    toast(`Quote #${r.quote_id} saved`);
+    openQuotes(String(r.quote_id));
+  } catch (err) { $('#sqErr').textContent = err.message; }
+});
+let qStatus = 'open', qRows = [], qTimer;
+async function openQuotes(search) {
+  $('#quotesModal').classList.add('open'); $('#qSearch').value = search || '';
+  if (search) qStatus = 'open';
+  await loadQuotes(); if (!search) $('#qSearch').focus();
+}
+async function loadQuotes() {
+  $$('#qTabs button').forEach((b) => b.classList.toggle('on', b.dataset.st === qStatus));
+  try { qRows = await api(`/api/quotes?status=${qStatus}&q=${encodeURIComponent($('#qSearch').value.trim())}`); } catch (e) { toast(e.message, 'bad'); return; }
+  $('#qList').innerHTML = qRows.length ? `<table class="list"><thead><tr><th>#</th><th>Customer</th><th>PO / job</th><th class="num">Total</th><th>Good until</th><th></th></tr></thead><tbody>${
+    qRows.map((q) => `<tr><td><b>${q.id}</b><div class="muted" style="font-size:12px">${new Date(q.created_at).toLocaleDateString()}</div></td>
+      <td>${esc(q.customer_name || '')}<div class="muted" style="font-size:12px">${esc(q.customer_phone || '')}</div></td>
+      <td>${q.po_number ? 'PO ' + esc(q.po_number) : ''}<div class="muted" style="font-size:12px">${esc(q.job_address || '')}</div></td>
+      <td class="num"><b>${money(q.total_cents)}</b><div class="muted" style="font-size:12px">${q.line_count} lines</div></td>
+      <td class="${q.expired && q.status === 'open' ? 'expired' : ''}">${q.valid_until ? new Date(q.valid_until + 'T12:00:00').toLocaleDateString() : ''}${q.expired && q.status === 'open' ? '<div style="font-size:12px">Expired</div>' : ''}</td>
+      <td style="white-space:nowrap">${q.status === 'open' ? `<button class="primary" data-load="${q.id}">Ring up</button> ` : ''}
+        <button class="ghost" data-print="${q.id}">Print</button> <button class="wa" data-wa="${q.id}">WhatsApp</button>
+        ${q.status === 'open' ? ` <button class="ghost" data-cancel="${q.id}">Cancel</button>` : ''}
+        ${q.sale_id ? `<div class="muted" style="font-size:12px">Sale #${q.sale_id}</div>` : ''}</td></tr>`).join('')}</tbody></table>`
+    : `<p class="muted">No ${qStatus} quotes${$('#qSearch').value.trim() ? ' match that search' : ''}.</p>`;
+}
+$('#qSearch').addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(loadQuotes, 250); });
+$('#qTabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; qStatus = b.dataset.st; loadQuotes(); });
+$('#qList').addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  try {
+    if (b.dataset.load) {
+      const q = qRows.find((x) => String(x.id) === b.dataset.load);
+      if (q.expired && !confirm(`Quote #${q.id} has expired. Ring it up at the quoted prices anyway?`)) return;
+      let r;
+      try { r = await api(`/api/quotes/${q.id}/load`, { register_id: Number(registerId) }); }
+      catch (err) {
+        if (!/already has items/.test(err.message) || !confirm('This register already has items. Replace them with the quote?')) throw err;
+        r = await api(`/api/quotes/${q.id}/load`, { register_id: Number(registerId), replace: true });
+      }
+      state.cart = r.cart; state.totals = r.totals; renderCart(); saleInfo = r.sale_info; renderSaleBar();
+      closeModals(); toast(`Quote #${q.id} loaded. Take payment to finish.${r.tax_changed ? ' Note: the tax rate changed since the quote.' : ''}`);
+    }
+    if (b.dataset.print) window.open('/quote?id=' + b.dataset.print, '_blank', 'width=420,height=700');
+    if (b.dataset.wa) {
+      const q = await api('/api/quotes/' + b.dataset.wa);
+      openWhatsAppDialog({ title: 'Send quote on WhatsApp', info: `Quote #${q.id} · ${money(q.total_cents)}`, text: quoteText(q), phone: q.customer_phone });
+    }
+    if (b.dataset.cancel && confirm(`Cancel quote #${b.dataset.cancel}?`)) { await api(`/api/quotes/${b.dataset.cancel}/cancel`, {}); loadQuotes(); }
+  } catch (err) { toast(err.message, 'bad'); }
+});
+
+// ================= Rentals =================
+function rentLength(period, n) {
+  if (period === 'half_day') return 'Half day';
+  const unit = { day: 'day', week: 'week', month: 'month' }[period];
+  return `${n} ${unit}${n === 1 ? '' : 's'}`;
+}
+let rentItems = [], halfDayHours = 4, rentPeriod = null, rentHours = null, rentTz = 'America/Chicago';
+const toLocalInput = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+// Counts only the location's business hours (shared with the server in hours.js).
+function rentDue(period, count) { return Hours.rentalDue(new Date(), period, count, halfDayHours, rentHours, rentTz); }
+function showRentHours() {
+  const v = $('#rDue').value, d = v ? new Date(v) : null;
+  const closed = d && rentHours && !Hours.isOpen(d, rentHours, rentTz);
+  $('#rHours').innerHTML = rentHours
+    ? `Store hours: ${esc(Hours.hoursText(rentHours))}. Closed hours don't count toward the rental time.${closed ? '<br><b style="color:#c0392b">The store is closed at that due-back time.</b>' : ''}`
+    : 'No business hours set for this location, so time is counted around the clock (Manage → Locations → Edit).';
+}
+$('#rDue').addEventListener('input', showRentHours);
+async function refreshOutCount() {
+  try {
+    const c = await api('/api/rentals/count');
+    $('#rentalsOutBtn').innerHTML = `Rentals out (${c.out})` + (c.overdue ? ` <span class="badge" title="Overdue">${c.overdue} late</span>` : '');
+  } catch (e) { /* ignore */ }
+}
+async function openRent(productId) {
+  try { const r = await api('/api/rental-items?register_id=' + registerId); rentItems = r.items; halfDayHours = r.half_day_hours; rentHours = r.hours; rentTz = r.time_zone; }
+  catch (e) { toast(e.message, 'bad'); return; }
+  if (!rentItems.length) { toast('No rental items yet. Add one in Manage → Products and check "This is a rental item".', 'bad'); return; }
+  $('#rentForm').reset(); $('#rErr').textContent = ''; $('#rQty').value = 1; $('#rCount').value = 1;
+  $('#rItem').innerHTML = rentItems.map((p) => `<option value="${p.id}">${esc(p.name)} (${Math.max(0, p.rental_units - p.units_out)} of ${p.rental_units} available)</option>`).join('');
+  if (productId) $('#rItem').value = String(productId);
+  rentPeriod = null; renderRent(true);
+  // Use the sale's customer if one is chosen.
+  const sc = saleInfo.customer;
+  if (sc) { $('#rName').value = sc.name; $('#rPhone').value = sc.phone || ''; }
+  else if (saleInfo.customer_name) { $('#rName').value = saleInfo.customer_name; $('#rPhone').value = saleInfo.customer_phone || ''; }
+  $('#rentModal').classList.add('open'); $('#rName').focus();
+}
+function currentRentItem() { return rentItems.find((p) => String(p.id) === $('#rItem').value); }
+function renderRent(resetDue) {
+  const p = currentRentItem(); if (!p) return;
+  const avail = Math.max(0, p.rental_units - p.units_out);
+  $('#rAvail').innerHTML = avail ? `${avail} available` : '<span style="color:#c0392b">All units are rented out right now</span>';
+  const offered = ['half_day', 'day', 'week', 'month'].filter((k) => p['rate_' + k] != null);
+  if (!offered.includes(rentPeriod)) { rentPeriod = offered[0]; resetDue = true; }
+  $('#rPeriods').innerHTML = offered.map((k) => `<button type="button" data-p="${k}" class="${k === rentPeriod ? 'on' : ''}">
+      <b>${k === 'half_day' ? `Half day (${halfDayHours} hrs)` : { day: 'Day', week: 'Week', month: 'Month' }[k]}</b><span>${money(p['rate_' + k])}${k === 'half_day' ? '' : ' each'}</span></button>`).join('');
+  $('#rCountBox').hidden = rentPeriod === 'half_day';
+  $('#rCountLabel').textContent = `How many ${{ day: 'days', week: 'weeks', month: 'months' }[rentPeriod] || ''}?`;
+  const count = rentPeriod === 'half_day' ? 1 : Math.max(1, parseInt($('#rCount').value, 10) || 1);
+  const qty = Math.max(1, parseInt($('#rQty').value, 10) || 1);
+  if (resetDue) $('#rDue').value = toLocalInput(rentDue(rentPeriod, count));
+  showRentHours();
+  $('#rTotal').textContent = money(p['rate_' + rentPeriod] * count * qty) + ' + tax';
+}
+$('#rItem').addEventListener('change', () => renderRent(true));
+$('#rPeriods').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; rentPeriod = b.dataset.p; renderRent(true); });
+$('#rCount').addEventListener('input', () => renderRent(true));
+$('#rQty').addEventListener('input', () => renderRent(false));
+$('#rentForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('#rErr').textContent = '';
+  const p = currentRentItem();
+  const due = $('#rDue').value ? new Date($('#rDue').value) : null;
+  try {
+    await cartCall('rental', { product_id: p.id, period: rentPeriod, count: $('#rCount').value, qty: $('#rQty').value,
+      customer_name: $('#rName').value, customer_phone: $('#rPhone').value, due_at: due ? due.toISOString() : null });
+    closeModals(); toast('Rental added. Take payment to finish.');
+  } catch (err) { $('#rErr').textContent = err.message; }
+});
+
+// ----- rentals out list -----
+let outStatus = 'out', outRows = [];
+async function openRentalsOut() {
+  $('#outModal').classList.add('open'); $('#outSearch').value = '';
+  await loadOut();
+}
+async function loadOut() {
+  $$('#outModal .seg2 button').forEach((b) => b.classList.toggle('on', b.dataset.st === outStatus));
+  try { outRows = (await api('/api/rentals?status=' + outStatus)).rentals; } catch (e) { toast(e.message, 'bad'); return; }
+  renderOut();
+}
+function timeDiff(ms) {
+  const m = Math.round(Math.abs(ms) / 60000), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
+  return d ? `${d} day${d === 1 ? '' : 's'}${h ? ` ${h} hr` : ''}` : h ? `${h} hr${mm ? ` ${mm} min` : ''}` : `${mm} min`;
+}
+function renderOut() {
+  const q = $('#outSearch').value.trim().toLowerCase();
+  const rows = outRows.filter((r) => !q || [r.customer_name, r.customer_phone, r.item_name].join(' ').toLowerCase().includes(q));
+  $('#outList').innerHTML = rows.length ? `<table class="list"><thead><tr><th>Item</th><th>Customer</th><th>${outStatus === 'out' ? 'Due back' : 'Returned'}</th><th class="num">Paid</th><th></th></tr></thead><tbody>${
+    rows.map((r) => {
+      const late = new Date(r.due_at) - Date.now();
+      const when = outStatus === 'out'
+        ? `${fmtDateTime(r.due_at)}<div class="${r.overdue ? 'late' : 'muted'}" style="font-size:12px">${r.overdue ? 'LATE by ' + timeDiff(late) : 'in ' + timeDiff(late)}</div>`
+        : `${fmtDateTime(r.returned_at)}<div class="muted" style="font-size:12px">${r.late_charge_cents ? 'Late charge ' + money(r.late_charge_cents) : ''}${r.refund_cents ? 'Refund ' + money(r.refund_cents) : ''}${r.return_note ? ' · ' + esc(r.return_note) : ''}</div>`;
+      return `<tr class="${r.overdue ? 'overdue' : ''}"><td><b>${esc(r.item_name)}</b>${r.qty > 1 ? ' ×' + r.qty : ''}<div class="muted" style="font-size:12px">#${r.id} · ${esc(rentLength(r.period, r.period_count))}</div></td>
+        <td>${esc(r.customer_name)}<div class="muted" style="font-size:12px">${esc(r.customer_phone || '')}</div></td>
+        <td>${when}</td><td class="num">${money(r.paid_cents)}</td>
+        <td>${outStatus === 'out' ? `<button class="primary" data-ret="${r.id}">Check in</button>` : ''}</td></tr>`;
+    }).join('')}</tbody></table>` : `<p class="muted">${outStatus === 'out' ? 'Nothing is rented out right now.' : 'No returned rentals yet.'}</p>`;
+}
+$('#outSearch').addEventListener('input', renderOut);
+$('#outModal .seg2').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; outStatus = b.dataset.st; loadOut(); });
+$('#outList').addEventListener('click', (e) => { const b = e.target.closest('[data-ret]'); if (b) openReturn(outRows.find((r) => r.id === Number(b.dataset.ret))); });
+
+// ----- check in -----
+let returning = null;
+function openReturn(r) {
+  returning = r;
+  const diff = Date.now() - new Date(r.due_at);
+  const status = diff > 15 * 60000 ? `<span class="late">Late by ${timeDiff(diff)}</span>`
+    : diff < -60 * 60000 ? `<span class="early">Early: ${timeDiff(diff)} before it was due</span>` : '<span class="ontime">On time</span>';
+  $('#retInfo').innerHTML = `<div class="retcard"><b>${esc(r.item_name)}</b>${r.qty > 1 ? ' ×' + r.qty : ''} · ${esc(r.customer_name)} ${esc(r.customer_phone || '')}
+    <div>Rented ${fmtDateTime(r.start_at)} · due ${fmtDateTime(r.due_at)}</div><div>Paid ${money(r.paid_cents)} (before tax)</div><div style="margin-top:4px;font-size:17px">${status}</div></div>`;
+  $('#returnForm').reset(); $('#retErr').textContent = '';
+  const type = diff > 15 * 60000 ? 'late' : diff < -24 * 3600000 ? 'refund' : 'none';
+  $(`input[name=retType][value=${type}]`).checked = true;
+  syncReturn();
+  $('#outModal').classList.remove('open');
+  $('#returnModal').classList.add('open');
+}
+function syncReturn() {
+  const t = $('input[name=retType]:checked').value;
+  $('#lateBox').hidden = t !== 'late'; $('#refundBox').hidden = t !== 'refund';
+  $('#addrBox').hidden = $('input[name=refMethod]:checked').value !== 'check';
+  $('#retBtn').textContent = t === 'late' ? 'Check in & add charge' : t === 'refund' ? 'Check in & refund' : 'Check in';
+}
+$('#returnForm').addEventListener('change', syncReturn);
+$('#returnForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('#retErr').textContent = '';
+  const t = $('input[name=retType]:checked').value;
+  const body = { register_id: Number(registerId), note: $('#retNote').value };
+  if (t === 'late') {
+    const c = toCents($('#lateAmt').value); if (!c) { $('#retErr').textContent = 'Enter the late charge'; return; }
+    body.late_charge_cents = c;
+  }
+  if (t === 'refund') {
+    const c = toCents($('#refAmt').value); if (!c) { $('#retErr').textContent = 'Enter the refund amount'; return; }
+    body.refund_cents = c; body.refund_method = $('input[name=refMethod]:checked').value; body.mailing_address = $('#refAddr').value;
+  }
+  $('#retBtn').disabled = true;
+  try {
+    const r = await api(`/api/rentals/${returning.id}/return`, body);
+    $('#returnModal').classList.remove('open');
+    if (r.cart) { state.cart = r.cart; state.totals = r.totals; renderCart(); }
+    refreshOutCount();
+    if (r.late_charge_cents) toast(`Checked in. Late charge ${money(r.late_charge_cents)} added to the sale.`);
+    else if (r.refund_method === 'cash') toast(`Checked in. Give ${money(r.refund_cents)} cash back from the drawer.`);
+    else if (r.refund_method === 'check') toast(`Checked in. ${money(r.refund_cents)} check added to Refunds owed.`);
+    else if (r.gift_card) {
+      $('#giftCode').textContent = r.gift_card.code; $('#giftAmt').textContent = money(r.gift_card.balance_cents);
+      $('#giftPrint').onclick = () => window.open('/giftcard?code=' + encodeURIComponent(r.gift_card.code), '_blank', 'width=420,height=600');
+      $('#giftModal').classList.add('open');
+    } else toast('Checked in.');
+  } catch (err) { $('#retErr').textContent = err.message; }
+  finally { $('#retBtn').disabled = false; }
+});
+
+async function clearSale() {
+  if (!state.cart.length || !confirm('Remove all items from this sale?')) return;
+  try { await cartCall('clear', {}); } catch (err) { toast(err.message, 'bad'); }
+  focusScan();
+}
+async function newPair() {
+  if (!confirm('Make a new code? Phones paired with the old code will need to scan again.')) return;
+  await api(`/api/registers/${registerId}/new-pair`, {});
+}
+
+mountWhatsAppBox($('#waBox'));
+start().catch((e) => toast(e.message, 'bad'));
+</script>
+</body>
+</html>
