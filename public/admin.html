@@ -38,6 +38,7 @@
   .rentpill { background: #fff3e0; color: #8a4b00; }
   button.rentson { background: #fff3e0; color: #8a4b00; }
   button.jobson { background: #e3ecff; color: #1d3f9a; }
+  button.aion { background: #efe7ff; color: #4b2aa8; }
   .stat.refund b { color: #c0392b; }
   .badge { background: #e74c3c; color: #fff; border-radius: 99px; padding: 1px 7px; font-size: 12px; margin-left: 4px; }
   .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
@@ -215,7 +216,8 @@ async function showBusinesses() {
     ${list.map((b) => `<tr class="${b.active ? '' : 'off'}"><td><b>${esc(b.name)}</b></td><td>${esc(b.owner_email || '')}</td><td class="num">${b.location_count}</td><td class="num">${b.user_count}</td>
       <td>${b.active ? '<span class="pill">Active</span>' : '<span class="pill off">Off</span>'}</td>
       <td style="white-space:nowrap"><button class="${b.rentals_enabled ? 'rentson' : 'ghost'}" data-rentals="${b.id}" data-on="${b.rentals_enabled}" title="Rentals add-on">🔑 Rentals ${b.rentals_enabled ? 'on' : 'off'}</button>
-        <button class="${b.qbo_enabled ? 'qboon' : 'ghost'}" data-qbo="${b.id}" data-on="${b.qbo_enabled}" title="QuickBooks add-on">QuickBooks ${b.qbo_enabled ? 'on' : 'off'}</button></td>
+        <button class="${b.qbo_enabled ? 'qboon' : 'ghost'}" data-qbo="${b.id}" data-on="${b.qbo_enabled}" title="QuickBooks add-on">QuickBooks ${b.qbo_enabled ? 'on' : 'off'}</button>
+        <button class="${b.ai_enabled ? 'aion' : 'ghost'}" data-ai="${b.id}" data-on="${b.ai_enabled}" title="Claude add-on: ask about plans and photos, materials estimates. ${b.claude_month} request(s) this month">✨ Claude ${b.ai_enabled ? 'on' : 'off'}${b.claude_month ? ` · ${b.claude_month} this month` : ''}</button></td>
       <td style="white-space:nowrap"><button class="primary" data-enter="${b.id}">Open</button> <button data-toggle="${b.id}" data-active="${b.active}">${b.active ? 'Turn off' : 'Turn on'}</button></td></tr>`).join('')
       || '<tr><td colspan="7" class="muted">No businesses yet. Create the first one.</td></tr>'}
     </tbody></table></div>`;
@@ -231,7 +233,11 @@ async function showBusinesses() {
   };
   $('#view').onclick = async (e) => {
     const en = e.target.closest('[data-enter]'), tg = e.target.closest('[data-toggle]'), rt = e.target.closest('[data-rentals]');
-    const qb = e.target.closest('[data-qbo]'), jb = e.target.closest('[data-jobs]');
+    const qb = e.target.closest('[data-qbo]'), jb = e.target.closest('[data-jobs]'), ab = e.target.closest('[data-ai]');
+    if (ab) {
+      const on = ab.dataset.on !== 'true';
+      await api('/api/admin/businesses/' + ab.dataset.ai, { ai_enabled: on }, 'PUT'); showBusinesses(); return;
+    }
     if (jb) {
       const on = jb.dataset.on !== 'true';
       if (!on && !confirm('Turn off the job board for this business? It will be hidden. Nothing is deleted.')) return;
