@@ -154,9 +154,11 @@ module.exports = function setupJobs(app, deps) {
     needManager(req.user);
     const c = await pool.query('SELECT * FROM job_columns WHERE id=$1 AND business_id=$2', [req.params.id, req.user.business_id]);
     if (!c.rows[0]) fail(404, 'Column not found');
-    await pool.query('UPDATE job_columns SET name=$1, color=$2, buttons=$3 WHERE id=$4',
+    // Optional colors: a #rrggbb value, or empty to use the standard look.
+    const opt = (k) => (k in req.body ? (/^#[0-9a-fA-F]{6}$/.test(req.body[k] || '') ? req.body[k] : null) : c.rows[0][k]);
+    await pool.query('UPDATE job_columns SET name=$1, color=$2, buttons=$3, text_color=$4, bg_color=$5, card_color=$6, card_text_color=$7 WHERE id=$8',
       [text(req.body.name, 'Column name', { max: 40 }), cleanColor(req.body.color, c.rows[0].color),
-        JSON.stringify(cleanButtons(req.body.buttons)), c.rows[0].id]);
+        JSON.stringify(cleanButtons(req.body.buttons)), opt('text_color'), opt('bg_color'), opt('card_color'), opt('card_text_color'), c.rows[0].id]);
     notify(req.user.business_id, { type: 'columns' });
     res.json({ ok: true });
   }));
