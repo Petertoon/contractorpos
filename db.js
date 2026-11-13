@@ -520,6 +520,12 @@ ALTER TABLE job_crews DROP CONSTRAINT IF EXISTS job_crews_billing_check;
 ALTER TABLE job_crews ADD CONSTRAINT job_crews_billing_check CHECK (billing IN ('included','extra','costplus'));
 UPDATE job_crews SET charge_cents = amount_cents WHERE billing = 'extra' AND charge_cents = 0;
 
+-- Sending a job's quote/statement to the customer: a private link (/j#<token>) and email tracking.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS share_token TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS jobs_share_token ON jobs(share_token) WHERE share_token IS NOT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS statement_emailed_to TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS statement_email_count INT NOT NULL DEFAULT 0;
+
 -- Claude add-on: switched on per business by the platform admin. Every request is logged (for usage and billing).
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE TABLE IF NOT EXISTS claude_requests (
