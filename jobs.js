@@ -1,662 +1,1242 @@
-// Jobs add-on: the contractor job board.
-// A job is a card on the board. Its columns (phases) and card buttons are set by each company.
-// Opening a card shows the job ticket: quoted price, everything added along the way
-// (inventory items, extra charges, equipment rental), payments over time, a final discount, and the balance.
-const crypto = require('crypto');
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Board</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  :root { --jbg: #0b1220; --jpanel: #131c2e; --jcard: #18233a; --jline: #26334d; --jink: #e8eefc; --jmuted: #8fa0bf; --red: #ff5a5a; }
+  html, body { background: var(--jbg); color: var(--jink); }
+  body { min-height: 100vh; }
+  a { color: #8cb4ff; }
+  .jtop { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #0f172a; border-bottom: 1px solid var(--jline); flex-wrap: wrap; }
+  .jtop .brand { font-weight: 800; font-size: 20px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .jtop .brand img { height: 30px; border-radius: 6px; background: #fff; }
+  .jtop .brand small { color: var(--jmuted); font-weight: 600; font-size: 14px; }
+  .jtop .spacer { flex: 1; }
+  .jtop a, .jtop .link { color: #dbe6ff; text-decoration: none; padding: 8px 10px; border-radius: 6px; font-weight: 600; background: transparent; }
+  .jtop a:hover, .jtop .link:hover { background: rgba(255,255,255,.08); }
+  .jtop input, .jtop select { width: auto; background: #18233a; color: var(--jink); border-color: var(--jline); padding: 8px 10px; }
+  .jtop #search { width: 230px; }
+  button.dk { background: #1e2a44; color: var(--jink); border: 1px solid var(--jline); }
+  button.dk:hover { background: #26355a; }
+  #clock { color: var(--jmuted); font-size: 14px; white-space: nowrap; }
+  .counts { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 14px 0; }
+  .counts span { border: 1px solid var(--c, var(--jline)); color: var(--jink); border-radius: 7px; padding: 3px 9px; font-size: 13px; font-weight: 700; background: #111a2c; }
 
-const BLUE = '#3b82f6', GOLD = '#e0a526', GREEN = '#22c55e', GRAY = '#94a3b8';
-const DEFAULT_COLUMNS = [
-  { name: 'Quoting', color: '#2f4fd8', buttons: [['Quoting', BLUE], ['Submitted', GOLD], ['On Hold', GRAY, 'bottom']] },
-  { name: 'Scheduled', color: '#2e8b3e', buttons: [['Ready', GREEN], ['Reschedule', GRAY]] },
-  { name: 'In Progress', color: '#c9921a', buttons: [['Working', BLUE]] },
-  { name: 'Completed', color: '#7a3cc4', buttons: [['Final Check', BLUE], ['Punch List', GOLD], ['Approve', GREEN]] },
-  { name: 'Payment', color: '#1f7f9e', buttons: [['Invoice', BLUE], ['Paid', GREEN]] },
-  { name: 'Closed', color: '#4b5a6a', buttons: [['Closed', GRAY]] },
-];
-const METHODS = ['cash', 'card', 'check', 'other'];
-const METHOD_NAMES = { cash: 'Cash', card: 'Card', check: 'Check', other: 'Other' };
-const PERIODS = { half_day: 'Half day', day: 'Day', week: 'Week', month: 'Month' };
-const usd = (c) => (c < 0 ? '-' : '') + '$' + (Math.abs(c) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  /* board */
+  #board { display: flex; gap: 10px; padding: 10px 14px 18px; overflow-x: auto; align-items: flex-start; min-height: calc(100vh - 110px); }
+  .col { flex: 1 1 0; min-width: 250px; background: var(--jpanel); border-radius: 10px; display: flex; flex-direction: column; max-height: calc(100vh - 125px); }
+  .col.drop { outline: 2px dashed #8cb4ff; }
+  .colhead { background: var(--c); border-radius: 10px 10px 0 0; padding: 10px 12px; display: flex; align-items: center; gap: 8px; }
+  .colhead div { flex: 1; }
+  .colhead b { display: block; font-size: 16px; letter-spacing: .02em; }
+  .colhead small { opacity: .9; font-size: 12.5px; }
+  .gear { background: transparent; color: #fff; padding: 4px 6px; font-size: 18px; }
+  .cards { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+  .empty { color: var(--jmuted); text-align: center; padding: 16px 0; font-size: 14px; }
+  .jc { background: var(--jcard); border-radius: 9px; border-left: 4px solid var(--c); padding: 9px 10px 10px; cursor: pointer; position: relative; }
+  .jc:hover { background: #1d2a45; }
+  .jc.dragging { opacity: .4; }
+  .jc .t { font-weight: 800; font-size: 15px; padding-right: 26px; }
+  .jc .t span { color: var(--jmuted); font-weight: 700; margin-right: 6px; }
+  .jc .d { color: #c3cee6; font-size: 13.5px; line-height: 1.35; }
+  .jc .m { font-size: 13.5px; line-height: 1.45; font-variant-numeric: tabular-nums; }
+  .jc .owed { color: var(--red); font-weight: 800; }
+  .jc .ok { color: #34d399; font-weight: 800; }
+  .flag { position: absolute; right: 8px; top: 30px; background: #7f1d1d; color: #fecaca; font-size: 11.5px; font-weight: 800; border-radius: 5px; padding: 2px 6px; }
+  .bar { height: 6px; background: #2b3854; border-radius: 9px; overflow: hidden; margin: 6px 0 2px; }
+  .bar i { display: block; height: 100%; background: #4ade80; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .chip { border: 1.5px solid var(--b); color: var(--b); background: transparent; padding: 4px 10px; font-size: 12.5px; border-radius: 7px; font-weight: 800; }
+  .chip.on { background: var(--b); color: #0b1220; }
+  .nx { position: absolute; right: 6px; top: 6px; background: #22304d; color: #dbe6ff; padding: 1px 8px; font-size: 16px; border-radius: 6px; }
+  .nx:hover { background: #2f4170; }
 
-module.exports = function setupJobs(app, deps) {
-  const { pool, wrap, fail, text, cents, requireLogin, requireBusiness, requireRole, barcodeVariants } = deps;
-  const biz = [requireLogin, requireBusiness];
-  const isManager = (u) => ['admin', 'owner', 'manager'].includes(u.role);
-  const needManager = (u) => { if (!isManager(u)) fail(403, 'Only an owner or manager can do this'); };
+  /* job ticket (opens over the board) */
+  .ticket { position: fixed; inset: 0; background: var(--jbg); z-index: 40; display: flex; flex-direction: column; }
+  .thead { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #0f172a; border-bottom: 1px solid var(--jline); flex-wrap: wrap; }
+  .thead .tt { font-size: 20px; font-weight: 800; }
+  .thead .tt span { color: var(--jmuted); margin-right: 6px; }
+  .colchip { background: var(--c); color: #fff; padding: 4px 10px; border-radius: 7px; font-weight: 800; font-size: 13px; }
+  .tgrid { flex: 1; display: grid; grid-template-columns: 330px 1fr 360px; gap: 10px; padding: 10px 14px; min-height: 0; }
+  .pane { background: var(--jpanel); border-radius: 10px; padding: 12px; overflow-y: auto; min-height: 0; min-width: 0; }
+  .pane h3 { margin: 0 0 8px; font-size: 15px; color: #b9c6e2; text-transform: uppercase; letter-spacing: .04em; }
+  .pane input, .pane select, .modal input, .modal select, .modal textarea { background: #0f1729; color: var(--jink); border-color: var(--jline); }
+  .addrow { display: flex; gap: 6px; }
+  .addrow #qty { width: 70px; }
+  .results { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .res { display: flex; justify-content: space-between; gap: 8px; background: var(--jcard); border-radius: 8px; padding: 9px 10px; cursor: pointer; text-align: left; color: var(--jink); font-weight: 600; width: 100%; }
+  .res:hover { background: #22304d; }
+  .res small { color: var(--jmuted); display: block; font-weight: 500; }
+  .bigbtns { display: grid; gap: 8px; margin: 10px 0; }
+  .bigbtns button { padding: 13px; font-size: 15px; }
+  table.lines { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  table.lines th { text-align: left; color: var(--jmuted); font-size: 12.5px; text-transform: uppercase; padding: 6px; border-bottom: 1px solid var(--jline); }
+  table.lines td { padding: 9px 6px; border-bottom: 1px solid var(--jline); vertical-align: middle; }
+  table.lines .num { text-align: right; white-space: nowrap; }
+  table.lines tr.quote td { font-weight: 800; background: #16213a; }
+  .kind { font-size: 11px; font-weight: 800; border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+  .k-item { background: #1e3a5f; color: #9cc8ff; } .k-charge { background: #4a3510; color: #ffd27a; } .k-rental { background: #3b2259; color: #d6b4ff; }
+  .tx { color: var(--jmuted); font-size: 11px; margin-left: 4px; }
+  .qbtn { padding: 2px 9px; background: #22304d; color: var(--jink); }
+  .xbtn { padding: 2px 9px; background: transparent; color: #ff8a8a; font-size: 18px; }
+  .tot { font-variant-numeric: tabular-nums; }
+  .tot div { display: flex; justify-content: space-between; padding: 4px 0; }
+  .tot .sep { border-top: 1px solid var(--jline); margin-top: 4px; padding-top: 8px; }
+  .tot .big { font-size: 26px; font-weight: 800; }
+  .tot .big.owed { color: var(--red); }
+  .tot .big.zero { color: #34d399; }
+  .side-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+  .side-actions button { padding: 13px 8px; }
+  .plist div, .hist div { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--jline); font-size: 14px; }
+  .plist .v { text-decoration: line-through; color: var(--jmuted); }
+  .hist div { display: block; color: #c3cee6; }
+  .hist small { color: var(--jmuted); display: block; }
+  .info div { padding: 3px 0; font-size: 14px; }
+  .info b { color: var(--jmuted); font-weight: 600; display: inline-block; min-width: 82px; }
+  .lockmsg { background: #2a2140; color: #e4d2ff; border-radius: 8px; padding: 8px 10px; font-size: 14px; margin-bottom: 10px; }
 
-  const jobsOn = wrap(async (req, res, next) => {
-    const b = await pool.query('SELECT jobs_enabled FROM businesses WHERE id=$1', [req.user.business_id]);
-    if (!b.rows[0] || !b.rows[0].jobs_enabled) fail(403, 'The job board is not turned on for this business');
-    next();
-  });
-  const J = [...biz, jobsOn];
+  /* dialogs (dark) */
+  .modal { background: #131c2e; color: var(--jink); max-width: 520px; }
+  .modal label { color: #c3cee6; }
+  .modal textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--jline); border-radius: 8px; font: inherit; }
+  .modal .muted, .muted { color: var(--jmuted); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .prow { display: grid; grid-template-columns: 110px 1fr 1fr 34px; gap: 6px; align-items: center; margin-top: 8px; }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .presets button { padding: 5px 10px; font-size: 13px; }
+  .btnset { border: 1px solid var(--jline); border-radius: 9px; padding: 8px 10px; margin-top: 8px; }
+  .btnset .row { display: grid; grid-template-columns: auto 1fr 52px; gap: 8px; align-items: center; }
+  .btnset .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+  .btnset .row2 label { margin: 0; font-size: 12.5px; color: var(--jmuted); } .btnset .row2 select { margin-top: 2px; }
+  .btnset input[type=color] { padding: 2px; height: 38px; }
+  .collist div { display: flex; align-items: center; gap: 6px; padding: 7px 0; border-bottom: 1px solid var(--jline); }
+  .collist div b { flex: 1; }
+  .collist i { width: 14px; height: 14px; border-radius: 4px; background: var(--c); display: inline-block; }
+  .collist button { padding: 5px 9px; }
+  .custlist button { display: block; width: 100%; text-align: left; margin-top: 4px; background: var(--jcard); color: var(--jink); }
+  .summary { background: #0f1729; border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-variant-numeric: tabular-nums; }
+  .summary div { display: flex; justify-content: space-between; padding: 2px 0; }
+  .summary .big { font-size: 20px; font-weight: 800; }
+  #toast { z-index: 200; }
+  .filebtns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .filebtns .ai { grid-column: 1 / -1; background: linear-gradient(90deg, #5b3fd6, #c4622d); color: #fff; border: 0; }
+  .files { display: flex; flex-direction: column; gap: 6px; }
+  .frow { display: flex; align-items: center; gap: 10px; background: var(--jcard); border-radius: 8px; padding: 8px 10px; }
+  .frow .ficon { font-size: 22px; width: 28px; text-align: center; }
+  .frow img.fthumb { width: 54px; height: 54px; object-fit: cover; border-radius: 6px; background: #fff; flex: none; }
+  .frow .fname { flex: 1; min-width: 0; }
+  .frow .fname b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .frow .fname small { color: var(--jmuted); }
+  .frow .fact { display: flex; gap: 6px; align-items: center; }
+  .frow .fact button, .frow .fact a { padding: 6px 10px; font-size: 13px; border-radius: 7px; text-decoration: none; background: #22304d; color: var(--jink); font-weight: 600; }
+  .frow .fact .estb { background: #4b33b5; }
+  .frow.est { border-left: 4px solid #8b6cff; }
+  .modal.wide { max-width: 980px; }
+  table.est { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  table.est th { text-align: left; color: var(--jmuted); font-size: 12px; text-transform: uppercase; padding: 6px 4px; border-bottom: 1px solid var(--jline); }
+  table.est td { padding: 6px 4px; border-bottom: 1px solid var(--jline); vertical-align: middle; }
+  table.est td small { color: var(--jmuted); display: block; }
+  table.est input, table.est select { padding: 6px 8px; font-size: 14px; }
+  table.est .q { width: 74px; } table.est .pr { width: 96px; } table.est select { max-width: 230px; }
+  .estlist { margin: 6px 0 0 18px; padding: 0; color: #c3cee6; font-size: 14px; }
+  .spin { display: inline-block; width: 18px; height: 18px; border: 3px solid #8b6cff; border-right-color: transparent; border-radius: 50%; animation: sp 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  .clip { color: var(--jmuted); font-size: 12.5px; }
+  .chat { max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .chat .q { align-self: flex-end; background: #24345a; border-radius: 10px 10px 2px 10px; padding: 8px 12px; max-width: 85%; white-space: pre-wrap; }
+  .chat .a { background: #0f1729; border: 1px solid var(--jline); border-radius: 10px 10px 10px 2px; padding: 6px 14px; line-height: 1.45; font-size: 15px; }
+  .chat .a h4 { margin: 10px 0 4px; font-size: 15px; color: #c9b8ff; } .chat .a p { margin: 6px 0; } .chat .a ul, .chat .a ol { margin: 4px 0; padding-left: 22px; }
+  .chat .a code { background: #22304d; padding: 0 4px; border-radius: 4px; }
+  table.mdt { border-collapse: collapse; margin: 6px 0; font-size: 14px; display: block; overflow-x: auto; }
+  table.mdt th, table.mdt td { border: 1px solid var(--jline); padding: 4px 8px; text-align: left; }
+  table.mdt th { background: #1d2a45; }
+  .crewbox { background: #16213a; border: 1px solid var(--jline); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
+  .crewhead { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .crewhead b { font-size: 15px; } .crewhead .sum { flex: 1; color: #c3cee6; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .crewhead .tog { color: var(--jmuted); font-size: 13px; }
+  .phase { margin-top: 10px; }
+  .phase h4 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 8px; }
+  .phase h4 i { width: 10px; height: 10px; border-radius: 3px; background: var(--c); display: inline-block; }
+  .phase h4 small { color: var(--jmuted); text-transform: none; letter-spacing: 0; font-weight: 600; }
+  .crow { display: flex; align-items: center; gap: 10px; background: var(--jcard); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
+  .crow.done { opacity: .55; }
+  .crow .who { flex: 1; min-width: 0; }
+  .crow .who b { font-size: 15px; } .crow .who small { color: var(--jmuted); display: block; }
+  .crow .amt { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .crow .amt small { display: block; font-size: 11.5px; font-weight: 800; }
+  .crow .amt .inc { color: #8fb4ff; } .crow .amt .ext { color: #ffd27a; } .crow .amt .cp { color: #f0a5ff; }
+  .crow .amt .cpd { color: var(--jmuted); font-weight: 600; font-size: 11.5px; }
+  .cpbox { display: grid; grid-template-columns: 1fr 130px; gap: 8px; margin-top: 8px; align-items: center; }
+  .cpbox .prev { grid-column: 1 / -1; font-size: 14px; color: #c3cee6; }
+  .crow button { padding: 5px 9px; font-size: 13px; background: #22304d; color: var(--jink); }
+  .crow button.ok { background: #14532d; color: #bbf7d0; }
+  .crewtot { display: flex; gap: 14px; flex-wrap: wrap; color: #c3cee6; font-size: 13.5px; margin-top: 6px; }
+  .k-crew { background: #12443a; color: #8ff0cf; }
+  .billopt { display: grid; gap: 6px; margin-top: 6px; }
+  .billopt label { margin: 0; display: flex; gap: 8px; align-items: flex-start; font-weight: 600; background: #0f1729; border: 1px solid var(--jline); border-radius: 8px; padding: 9px 10px; cursor: pointer; }
+  .billopt label input { width: auto; margin-top: 3px; } .billopt label small { display: block; color: var(--jmuted); font-weight: 500; }
+  #printArea { display: none; }
 
-  // ---------- live updates: every open board in a business hears about changes ----------
-  const listeners = new Map(); // businessId -> Set(res)
-  function notify(businessId, payload) {
-    const set = listeners.get(businessId);
-    if (!set) return;
-    const data = `data: ${JSON.stringify(payload)}\n\n`;
-    for (const r of set) r.write(data);
+  @media (max-width: 1100px) { .tgrid { grid-template-columns: 1fr 1fr; } .tgrid .add { grid-column: 1 / -1; } }
+  @media (max-width: 760px) {
+    .tgrid { grid-template-columns: 1fr; flex: none; padding: 8px; } .ticket { overflow-y: auto; } .jtop #search { width: 140px; }
+    .pane { overflow: visible; } .ticket { overflow-x: hidden; } .addrow input:first-child { min-width: 0; } .results { max-height: 250px; overflow-y: auto; }
+    table.lines { font-size: 14px; } table.lines th:nth-child(3), table.lines td:nth-child(3) { display: none; }
+    table.lines td, table.lines th { padding: 8px 3px; } .qbtn { padding: 2px 7px; }
+    .prow { grid-template-columns: 90px 1fr 1fr 30px; } .btnset .row2 { grid-template-columns: 1fr; }
+    #board { min-height: auto; } .col { min-width: 82vw; }
   }
-  app.get('/api/jobs/events', ...J, (req, res) => {
-    res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
-    res.flushHeaders();
-    res.write('data: {"type":"hello"}\n\n');
-    const id = req.user.business_id;
-    if (!listeners.has(id)) listeners.set(id, new Set());
-    listeners.get(id).add(res);
-    const ping = setInterval(() => res.write(': ping\n\n'), 25000);
-    req.on('close', () => { clearInterval(ping); listeners.get(id)?.delete(res); });
-  });
 
-  // ---------- helpers ----------
-  const cleanButtons = (list) => (Array.isArray(list) ? list : []).slice(0, 3).map((b) => ({
-    label: text(b && b.label, 'Button name', { required: false, max: 24 }) || 'Button',
-    enabled: !!(b && b.enabled),
-    action: b && b.action === 'next' ? 'next' : 'mark',
-    color: /^#[0-9a-fA-F]{6}$/.test((b && b.color) || '') ? b.color : BLUE,
-    // Where a card with this status sits in the column: top, middle (default) or bottom.
-    place: ['top', 'bottom'].includes(b && b.place) ? b.place : 'middle',
-  }));
-  const cleanColor = (c, fallback) => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : fallback);
+  @media print {
+    body { background: #fff; color: #000; }
+    body > *:not(#printArea) { display: none !important; }
+    #printArea { display: block; color: #000; font-size: 13px; }
+    #printArea h1 { font-size: 22px; margin: 0; }
+    #printArea table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    #printArea th, #printArea td { border-bottom: 1px solid #ccc; padding: 5px 4px; text-align: left; }
+    #printArea .num { text-align: right; }
+    #printArea .head { display: flex; justify-content: space-between; gap: 20px; }
+    #printArea .totals { margin-left: auto; width: 320px; margin-top: 10px; }
+    #printArea .totals div { display: flex; justify-content: space-between; padding: 2px 0; }
+    #printArea .totals .b { font-weight: 800; font-size: 16px; border-top: 2px solid #000; padding-top: 4px; }
+  }
+</style>
+</head>
+<body>
+<header class="jtop">
+  <div class="brand"><img id="logo" alt="" hidden><span>🏗</span><span id="bizName">Job Board</span><small>Job Board</small></div>
+  <button class="primary" id="newJob">+ New job</button>
+  <input id="search" placeholder="Search job #, name, customer…" autocomplete="off">
+  <select id="viewSel" aria-label="Which jobs">
+    <option value="">All jobs</option><option value="high">High priority</option><option value="owed">Balance owed</option>
+  </select>
+  <label class="check" style="margin:0;color:var(--jmuted);font-size:13px"><input type="checkbox" id="allClosed"> Older closed jobs</label>
+  <div class="spacer"></div>
+  <button class="dk" id="setupBtn" hidden>⚙ Workflow setup</button>
+  <a href="/checkout">Checkout</a>
+  <a href="/admin" id="manageLink" hidden>Manage</a>
+  <span id="clock"></span>
+  <button class="link" onclick="logout()">Log out</button>
+</header>
+<div class="counts" id="counts"></div>
+<main id="board"></main>
 
-  async function columns(db, businessId) {
-    const sql = 'SELECT * FROM job_columns WHERE business_id=$1 ORDER BY position, id';
-    let r = await db.query(sql, [businessId]);
-    if (!r.rows.length) {
-      // First time: set up the standard six phases (in its own transaction, locked so two screens can't both do it).
-      // The company can change them in Workflow setup.
-      await withTx(async (t) => {
-        await t.query('SELECT pg_advisory_xact_lock(4242, $1)', [businessId]);
-        if ((await t.query(sql, [businessId])).rows.length) return;
-        for (const [i, c] of DEFAULT_COLUMNS.entries()) {
-          await t.query('INSERT INTO job_columns (business_id, name, color, position, buttons) VALUES ($1,$2,$3,$4,$5)',
-            [businessId, c.name, c.color, i + 1,
-              JSON.stringify(c.buttons.map(([label, color, place]) => ({ label, enabled: true, action: 'mark', color, place: place || 'middle' })))]);
-        }
-      });
-      r = await db.query(sql, [businessId]);
-    }
-    return r.rows;
-  }
-  async function withTx(fn) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const out = await fn(client);
-      await client.query('COMMIT');
-      return out;
-    } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
-  }
-  const log = (db, jobId, user, action) => db.query(
-    'INSERT INTO job_history (job_id, user_id, user_name, action) VALUES ($1,$2,$3,$4)', [jobId, user.id, user.name, action]);
+<div class="ticket" id="ticket" hidden>
+  <div class="thead" id="tHead"></div>
+  <div class="tgrid">
+    <div class="pane add">
+      <h3>Add to this job</h3>
+      <div class="addrow">
+        <input id="tSearch" placeholder="Scan barcode or type item name" autocomplete="off">
+        <input id="qty" type="number" min="1" value="1" aria-label="Quantity">
+      </div>
+      <div class="bigbtns">
+        <button class="dk" id="chargeBtn">+ Extra charge / change order</button>
+        <button class="dk" id="rentalBtn" hidden>🔑 Equipment rental</button>
+      </div>
+      <h3 style="margin-top:4px">Plans, photos &amp; estimates</h3>
+      <div class="filebtns">
+        <button class="dk" id="pdfBtn">📄 Attach PDF</button>
+        <button class="dk" id="photoBtn">📷 Add photo</button>
+        <button class="ai" id="aiBtn" hidden>✨ Ask Claude about a plan or photo</button>
+      </div>
+      <input type="file" id="pdfFile" accept="application/pdf,.pdf" multiple hidden>
+      <input type="file" id="photoFile" accept="image/*" multiple hidden>
+      <div style="height:12px"></div>
+      <div class="muted" style="font-size:13px" id="resHint">Inventory items</div>
+      <div class="results" id="tResults"></div>
+    </div>
+    <div class="pane" id="tLines"></div>
+    <div class="pane" id="tSide"></div>
+  </div>
+</div>
 
-  // Quote + everything added + tax − discount = total; total − payments = balance.
-  function totals(job, extras, taxable, paid) {
-    const rate = job.tax_exempt ? 0 : Number(job.tax_rate);
-    const tax = Math.round((taxable * rate) / 100 + 1e-9);
-    const subtotal = job.quoted_cents + extras;
-    const total = subtotal + tax - job.discount_cents;
-    return { quoted_cents: job.quoted_cents, extras_cents: extras, taxable_cents: taxable, tax_rate: rate, tax_cents: tax,
-      subtotal_cents: subtotal, discount_cents: job.discount_cents, total_cents: total, paid_cents: paid, balance_cents: total - paid };
-  }
-  const JOB_SUMS = `
-    COALESCE((SELECT sum(i.qty * i.unit_cents) FROM job_items i WHERE i.job_id = j.id), 0)::bigint AS extras,
-    COALESCE((SELECT sum(i.qty * i.unit_cents) FROM job_items i WHERE i.job_id = j.id AND i.taxable), 0)::bigint AS taxable_sum,
-    COALESCE((SELECT sum(p.amount_cents) FROM job_payments p WHERE p.job_id = j.id AND NOT p.voided), 0)::bigint AS paid`;
-  const withTotals = (j) => {
-    const t = totals(j, Number(j.extras), Number(j.taxable_sum), Number(j.paid));
-    delete j.extras; delete j.taxable_sum; delete j.paid;
-    return { ...j, ...t };
+<div class="modal-back" id="m"><form class="modal" id="mBody" onsubmit="return false"></form></div>
+<div id="printArea"></div>
+
+<script src="/app.js"></script>
+<script>
+let me, isMgr = false, cols = [], jobs = [], products = [], openId = null, cur = null, rentalsOn = false, files = [], crewOpen = false;
+const usd = (c) => (c < 0 ? '-' : '') + '$' + (Math.abs(c || 0) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const dollars = (c) => (c == null ? '' : (c / 100).toFixed(2));
+const shortDate = (d) => (d ? new Date(d.length === 10 ? d + 'T12:00:00' : d).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '');
+const METHOD = { cash: 'Cash', card: 'Card', check: 'Check', other: 'Other' };
+
+// ---------- small dialog helper ----------
+let mResolve = null;
+function openModal(html) {
+  const mb = $('#mBody'); mb.onclick = mb.oninput = mb.onchange = null; mb.classList.remove('wide');
+  $('#mBody').innerHTML = html;
+  $('#m').classList.add('open');
+  const f = $('#mBody input:not([type=hidden]):not([type=checkbox]), #mBody select, #mBody textarea');
+  if (f && window.innerWidth > 700) setTimeout(() => f.focus(), 30);
+  return $('#mBody');
+}
+function closeModal() { $('#m').classList.remove('open'); $('#mBody').innerHTML = ''; }
+$('#m').addEventListener('mousedown', (e) => { if (e.target.id === 'm') closeModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if ($('#m').classList.contains('open')) closeModal(); else if (openId) closeTicket(); } });
+async function run(fn) { try { return await fn(); } catch (e) { toast(e.message, 'bad'); return null; } }
+
+// ---------- board ----------
+async function loadBoard() {
+  const d = await api('/api/jobs/board' + ($('#allClosed').checked ? '?closed=all' : ''));
+  cols = d.columns; jobs = d.jobs;
+  renderBoard();
+}
+function matches(j) {
+  const q = $('#search').value.trim().toLowerCase();
+  const v = $('#viewSel').value;
+  if (v === 'high' && j.priority !== 'high') return false;
+  if (v === 'owed' && !(j.balance_cents > 0 && j.paid_cents > 0)) return false;
+  if (!q) return true;
+  return [String(j.job_number), j.name, j.description, j.customer_name, j.customer_phone, j.job_address, j.crew]
+    .some((s) => (s || '').toLowerCase().includes(q.replace(/^#/, '')));
+}
+function moneyLines(j, i) {
+  const last = i === cols.length - 1;
+  if (last) return `<div class="m">Paid: ${usd(j.paid_cents)}</div><div class="m">Closed: ${shortDate(j.closed_at)} <span class="ok">✓</span></div>`;
+  if (i === 0 && !j.paid_cents && !j.extras_cents) return `<div class="m">${usd(j.total_cents)}</div>`;
+  const bal = j.balance_cents;
+  return `<div class="m">Total: ${usd(j.total_cents)}</div>
+    <div class="m">Balance: <span class="${bal > 0 ? 'owed' : 'ok'}">${usd(bal)}</span></div>`;
+}
+function card(j, c, i) {
+  const btns = (c.buttons || []).map((b, k) => ({ ...b, k })).filter((b) => b.enabled);
+  const last = i === cols.length - 1;
+  const next = cols[i + 1];
+  const extra = [];
+  if (j.start_date && i <= 2) extra.push(`📅 Start: ${shortDate(j.start_date)}`);
+  if (j.crews_now) extra.push(`👷 ${esc(j.crews_now)}`); else if (j.crew) extra.push(`👷 ${esc(j.crew)}`);
+  if (j.file_count) extra.push(`<span class="clip">📎 ${j.file_count} file${j.file_count === 1 ? '' : 's'}</span>`);
+  if (i > 0 && !last) extra.push(`<span class="muted">In ${esc(c.name)} since ${shortDate(j.column_entered_at)}</span>`);
+  return `<div class="jc" draggable="true" data-job="${j.id}" style="--c:${c.color}">
+    <div class="t"><span>#${j.job_number}</span>${esc(j.name)}</div>
+    ${j.priority === 'high' ? '<div class="flag">⚑ High</div>' : ''}
+    ${!last && next ? `<button class="nx" data-next="${j.id}" title="Move to ${esc(next.name)}">›</button>` : ''}
+    ${j.description ? `<div class="d">${esc(j.description.split('\n')[0])}</div>` : ''}
+    ${j.customer_name && j.customer_name !== j.name ? `<div class="d">👤 ${esc(j.customer_name)}</div>` : ''}
+    ${moneyLines(j, i)}
+    ${extra.map((x) => `<div class="m">${x}</div>`).join('')}
+    ${j.progress > 0 && !last ? `<div class="m" style="display:flex;justify-content:space-between"><span></span><span>${j.progress}%</span></div><div class="bar"><i style="width:${j.progress}%"></i></div>` : ''}
+    ${btns.length ? `<div class="chips">${btns.map((b) => `<button class="chip ${j.status_label === b.label ? 'on' : ''}" style="--b:${b.color || '#3b82f6'}" data-btn="${b.k}" data-jid="${j.id}">${esc(b.label)}</button>`).join('')}</div>` : ''}
+  </div>`;
+}
+// Cards sort themselves: by where their status button says (top, middle, bottom), then high priority first,
+// then the longest in the column first (the order the server sends).
+const PLACE_RANK = { top: 0, middle: 1, bottom: 2 };
+function sortCards(list, c) {
+  const rank = (j) => {
+    const b = (c.buttons || []).find((x) => x.enabled && x.label === j.status_label);
+    return PLACE_RANK[(b && b.place) || 'middle'];
   };
-  // Loads one job (locked for update when inside a transaction) with its totals and column place.
-  async function loadJob(db, id, businessId, lock = false) {
-    const r = await db.query(`SELECT j.* FROM jobs j WHERE j.id=$1 AND j.business_id=$2 ${lock ? 'FOR UPDATE' : ''}`, [id, businessId]);
-    if (!r.rows[0]) fail(404, 'Job not found');
-    const s = await db.query(`SELECT ${JOB_SUMS} FROM jobs j WHERE j.id=$1`, [id]);
-    const job = withTotals({ ...r.rows[0], ...s.rows[0] });
-    const cols = await columns(db, businessId);
-    const idx = cols.findIndex((c) => c.id === job.column_id);
-    job.column_index = idx;
-    job.is_closed = idx === cols.length - 1;
-    return { job, cols };
+  return list.map((j, i) => ({ j, i })).sort((a, b) => rank(a.j) - rank(b.j)
+    || (b.j.priority === 'high') - (a.j.priority === 'high') || a.i - b.i).map((x) => x.j);
+}
+function renderBoard() {
+  const shown = jobs.filter(matches);
+  $('#counts').innerHTML = `<span>${shown.length} Total</span>` +
+    cols.map((c) => `<span style="--c:${c.color}">${shown.filter((j) => j.column_id === c.id).length} ${esc(c.name)}</span>`).join('');
+  $('#board').innerHTML = cols.map((c, i) => {
+    const list = sortCards(shown.filter((j) => j.column_id === c.id), c);
+    const nb = (c.buttons || []).filter((b) => b.enabled).length;
+    return `<section class="col" data-col="${c.id}" style="--c:${c.color}">
+      <div class="colhead"><div><b>${i + 1}. ${esc(c.name.toUpperCase())}</b><small>${list.length} Job${list.length === 1 ? '' : 's'} • ${nb} Button${nb === 1 ? '' : 's'}</small></div>
+        ${isMgr ? `<button class="gear" data-gear="${c.id}" title="Column settings">⚙</button>` : ''}</div>
+      <div class="cards">${list.map((j) => card(j, c, i)).join('') || '<div class="empty">No jobs</div>'}</div></section>`;
+  }).join('');
+}
+$('#board').addEventListener('click', async (e) => {
+  const g = e.target.closest('[data-gear]');
+  if (g) return columnSettings(Number(g.dataset.gear));
+  const nx = e.target.closest('[data-next]');
+  if (nx) { e.stopPropagation(); return run(async () => { await api(`/api/jobs/${nx.dataset.next}/move`, { direction: 1 }); await loadBoard(); }); }
+  const b = e.target.closest('[data-btn]');
+  if (b) {
+    e.stopPropagation();
+    return run(async () => {
+      const r = await api(`/api/jobs/${b.dataset.jid}/button`, { index: Number(b.dataset.btn) });
+      if (r.moved) toast('Moved to the next column');
+      await loadBoard();
+    });
   }
-  const notClosed = (job) => { if (job.is_closed) fail(400, 'This job is closed. Move it back out of the last column to change it.'); };
+  const c = e.target.closest('[data-job]');
+  if (c) openTicket(Number(c.dataset.job));
+});
+// Drag a card to the next (or previous) column.
+let dragId = null;
+$('#board').addEventListener('dragstart', (e) => {
+  const c = e.target.closest('[data-job]'); if (!c) return;
+  dragId = Number(c.dataset.job); c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move';
+});
+$('#board').addEventListener('dragend', () => { dragId = null; $$('.dragging, .drop').forEach((x) => x.classList.remove('dragging', 'drop')); });
+$('#board').addEventListener('dragover', (e) => {
+  const col = e.target.closest('[data-col]'); if (!col || !dragId) return;
+  e.preventDefault(); $$('.drop').forEach((x) => x !== col && x.classList.remove('drop')); col.classList.add('drop');
+});
+$('#board').addEventListener('drop', (e) => {
+  const col = e.target.closest('[data-col]'); if (!col || !dragId) return;
+  e.preventDefault();
+  const id = dragId;
+  const j = jobs.find((x) => x.id === id);
+  if (j && j.column_id === Number(col.dataset.col)) return;
+  run(async () => { await api(`/api/jobs/${id}/move`, { column_id: Number(col.dataset.col) }); await loadBoard(); });
+});
+$('#search').addEventListener('input', renderBoard);
+$('#viewSel').addEventListener('change', renderBoard);
+$('#allClosed').addEventListener('change', () => run(loadBoard));
 
-  // ---------- board ----------
-  app.get('/api/jobs/board', ...J, wrap(async (req, res) => {
-    const cols = await columns(pool, req.user.business_id);
-    const last = cols[cols.length - 1];
-    // Closed jobs drop off the board after 60 days unless asked for.
-    const params = [req.user.business_id];
-    let where = 'j.business_id = $1';
-    if (req.query.closed !== 'all' && last) {
-      params.push(last.id);
-      where += ` AND NOT (j.column_id = $2 AND j.column_entered_at < now() - interval '60 days')`;
-    }
-    const { rows } = await pool.query(
-      `SELECT j.id, j.job_number, j.name, j.description, j.customer_name, j.customer_phone, j.job_address, j.column_id,
-              j.status_label, j.priority, j.crew, j.start_date, j.progress, j.quoted_cents, j.tax_rate, j.tax_exempt,
-              j.discount_cents, j.column_entered_at, j.closed_at, j.updated_at, ${JOB_SUMS},
-              (SELECT count(*) FROM job_files f WHERE f.job_id = j.id)::int AS file_count,
-              (SELECT string_agg(c.trade || COALESCE(' · ' || c.name, ''), ', ' ORDER BY c.id) FROM job_crews c
-                WHERE c.job_id = j.id AND c.column_id = j.column_id AND NOT c.done) AS crews_now
-         FROM jobs j WHERE ${where} ORDER BY (j.priority = 'high') DESC, j.column_entered_at, j.id`, params);
-    // A job whose column was removed goes back to the first column.
-    const ids = new Set(cols.map((c) => c.id));
-    const jobs = rows.map(withTotals).map((j) => (ids.has(j.column_id) ? j : { ...j, column_id: cols[0].id }));
-    res.json({ columns: cols, jobs });
-  }));
-
-  // ---------- workflow setup (columns and their buttons) ----------
-  app.put('/api/job-columns/:id', ...J, wrap(async (req, res) => {
-    needManager(req.user);
-    const c = await pool.query('SELECT * FROM job_columns WHERE id=$1 AND business_id=$2', [req.params.id, req.user.business_id]);
-    if (!c.rows[0]) fail(404, 'Column not found');
-    await pool.query('UPDATE job_columns SET name=$1, color=$2, buttons=$3 WHERE id=$4',
-      [text(req.body.name, 'Column name', { max: 40 }), cleanColor(req.body.color, c.rows[0].color),
-        JSON.stringify(cleanButtons(req.body.buttons)), c.rows[0].id]);
-    notify(req.user.business_id, { type: 'columns' });
-    res.json({ ok: true });
-  }));
-  app.post('/api/job-columns', ...J, wrap(async (req, res) => {
-    needManager(req.user);
-    const id = await withTx(async (db) => {
-      const cols = await columns(db, req.user.business_id);
-      if (cols.length >= 12) fail(400, '12 columns is the most a board can have');
-      // New columns go just before the last (closing) column unless a place is given.
-      let at = cols.length - 1;
-      if (req.body.after_id) {
-        const i = cols.findIndex((c) => c.id === Number(req.body.after_id));
-        if (i >= 0) at = Math.min(i + 1, cols.length - 1);
-      }
-      const order = cols.map((c) => c.id);
-      const r = await db.query('INSERT INTO job_columns (business_id, name, color, position, buttons) VALUES ($1,$2,$3,0,$4) RETURNING id',
-        [req.user.business_id, text(req.body.name, 'Column name', { max: 40 }), cleanColor(req.body.color, '#2563c9'),
-          JSON.stringify(cleanButtons(req.body.buttons))]);
-      order.splice(at, 0, r.rows[0].id);
-      for (const [i, cid] of order.entries()) await db.query('UPDATE job_columns SET position=$1 WHERE id=$2', [i + 1, cid]);
-      return r.rows[0].id;
-    });
-    notify(req.user.business_id, { type: 'columns' });
-    res.json({ id });
-  }));
-  app.post('/api/job-columns/:id/move', ...J, wrap(async (req, res) => {
-    needManager(req.user);
-    await withTx(async (db) => {
-      const cols = await columns(db, req.user.business_id);
-      const i = cols.findIndex((c) => c.id === Number(req.params.id));
-      if (i < 0) fail(404, 'Column not found');
-      const j = i + (Number(req.body.direction) < 0 ? -1 : 1);
-      if (j < 0 || j >= cols.length) return;
-      if (i === cols.length - 1 || j === cols.length - 1) fail(400, 'The last column is where finished jobs close; it stays last');
-      [cols[i], cols[j]] = [cols[j], cols[i]];
-      for (const [k, c] of cols.entries()) await db.query('UPDATE job_columns SET position=$1 WHERE id=$2', [k + 1, c.id]);
-    });
-    notify(req.user.business_id, { type: 'columns' });
-    res.json({ ok: true });
-  }));
-  app.delete('/api/job-columns/:id', ...J, wrap(async (req, res) => {
-    needManager(req.user);
-    await withTx(async (db) => {
-      const cols = await columns(db, req.user.business_id);
-      const i = cols.findIndex((c) => c.id === Number(req.params.id));
-      if (i < 0) fail(404, 'Column not found');
-      if (cols.length <= 2) fail(400, 'A board needs at least two columns');
-      if (i === cols.length - 1) fail(400, 'The last column is where finished jobs close; it cannot be removed');
-      const n = await db.query('SELECT count(*)::int AS n FROM jobs WHERE column_id=$1', [cols[i].id]);
-      if (n.rows[0].n) fail(400, `Move the ${n.rows[0].n} job(s) out of "${cols[i].name}" first`);
-      await db.query('DELETE FROM job_columns WHERE id=$1', [cols[i].id]);
-    });
-    notify(req.user.business_id, { type: 'columns' });
-    res.json({ ok: true });
-  }));
-
-  // ---------- jobs ----------
-  async function jobFields(db, req, current) {
-    const b = req.body;
-    const f = {
-      name: text(b.name, 'Job name', { max: 120 }),
-      description: text(b.description, 'Description', { required: false, max: 1000 }) || null,
-      customer_name: text(b.customer_name, 'Customer name', { required: false, max: 120 }) || null,
-      customer_phone: text(b.customer_phone, 'Customer phone', { required: false, max: 40 }) || null,
-      job_address: text(b.job_address, 'Job site address', { required: false, max: 300 }) || null,
-      po_number: text(b.po_number, 'PO #', { required: false, max: 60 }) || null,
-      crew: text(b.crew, 'Crew', { required: false, max: 60 }) || null,
-      priority: b.priority === 'high' ? 'high' : 'normal',
-      progress: Math.max(0, Math.min(100, parseInt(b.progress, 10) || 0)),
-      start_date: /^\d{4}-\d{2}-\d{2}$/.test(b.start_date || '') ? b.start_date : null,
-      quoted_cents: b.quoted_cents == null || b.quoted_cents === '' ? 0 : cents(b.quoted_cents, 'Quoted price'),
-      tax_exempt: !!b.tax_exempt,
-      customer_id: null,
+// ---------- new job / edit details ----------
+function jobForm(j = {}) {
+  return `<h2>${j.id ? `Edit job #${j.job_number}` : 'New job'}</h2>
+    <label>Job name</label><input name="name" required maxlength="120" value="${esc(j.name || '')}" placeholder="e.g. Miller Remodel">
+    <label>Description</label><textarea name="description" rows="2" maxlength="1000" placeholder="e.g. Kitchen & Bath">${esc(j.description || '')}</textarea>
+    <label>Customer</label>
+    <div class="addrow"><input name="customer_name" value="${esc(j.customer_name || '')}" placeholder="Name"><button type="button" class="dk" id="findCust">Find…</button></div>
+    <input type="hidden" name="customer_id" value="${j.customer_id || ''}"><div class="custlist" id="custList"></div>
+    <div class="two"><div><label>Phone</label><input name="customer_phone" value="${esc(j.customer_phone || '')}" inputmode="tel"></div>
+      <div><label>PO #</label><input name="po_number" value="${esc(j.po_number || '')}"></div></div>
+    <label>Job site address</label><input name="job_address" value="${esc(j.job_address || '')}">
+    <div class="two"><div><label>Quoted price</label><input name="quoted" inputmode="decimal" value="${dollars(j.quoted_cents ?? '')}" placeholder="0.00"></div>
+      <div><label>Priority</label><select name="priority"><option value="normal">Normal</option><option value="high" ${j.priority === 'high' ? 'selected' : ''}>High</option></select></div></div>
+    <div class="two"><div><label>Crew</label><input name="crew" value="${esc(j.crew || '')}" placeholder="e.g. Crew 1"></div>
+      <div><label>Start date</label><input name="start_date" type="date" value="${j.start_date || ''}"></div></div>
+    ${j.id ? `<label>Progress: <span id="pv">${j.progress || 0}</span>%</label><input name="progress" type="range" min="0" max="100" step="5" value="${j.progress || 0}" oninput="$('#pv').textContent=this.value">` : ''}
+    <label class="check"><input type="checkbox" name="tax_exempt" ${j.tax_exempt ? 'checked' : ''}> Tax exempt (no sales tax on this job)</label>
+    <div class="err" id="fErr"></div>
+    <div class="actions">${j.id && isMgr ? '<button type="button" class="danger" id="delJob" style="margin-right:auto">Delete</button>' : ''}
+      <button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="saveJob">${j.id ? 'Save' : 'Create job'}</button></div>`;
+}
+function readJobForm(f) {
+  const v = Object.fromEntries(new FormData(f).entries());
+  const q = v.quoted.trim() === '' ? 0 : toCents(v.quoted);
+  if (q == null) throw new Error('Quoted price is not a valid amount');
+  return { ...v, quoted_cents: q, tax_exempt: !!f.tax_exempt.checked, customer_id: v.customer_id || null };
+}
+function wireCustomerFind(f) {
+  $('#findCust').onclick = () => run(async () => {
+    const q = f.customer_name.value.trim() || f.customer_phone.value.trim();
+    const list = await api('/api/customers?q=' + encodeURIComponent(q));
+    $('#custList').innerHTML = list.length ? list.slice(0, 8).map((c) => `<button type="button" data-cid="${c.id}">${esc(c.name)}${c.company ? ' · ' + esc(c.company) : ''} <span class="muted">${esc(c.phone || '')}</span></button>`).join('')
+      : '<div class="muted" style="margin-top:4px">No saved customers match. The name you typed will be used.</div>';
+    $('#custList').onclick = (e) => {
+      const b = e.target.closest('[data-cid]'); if (!b) return;
+      const c = list.find((x) => x.id === Number(b.dataset.cid));
+      f.customer_id.value = c.id; f.customer_name.value = c.name; f.customer_phone.value = c.phone || '';
+      if (!f.job_address.value && c.address) f.job_address.value = c.address;
+      $('#custList').innerHTML = `<div class="muted" style="margin-top:4px">✓ Linked to saved customer ${esc(c.name)}</div>`;
     };
-    if (b.customer_id) {
-      const c = await db.query('SELECT id, name, phone FROM customers WHERE id=$1 AND business_id=$2', [b.customer_id, req.user.business_id]);
-      if (!c.rows[0]) fail(404, 'Customer not found');
-      f.customer_id = c.rows[0].id;
-      f.customer_name = f.customer_name || c.rows[0].name;
-      f.customer_phone = f.customer_phone || c.rows[0].phone;
-    }
-    // Location decides the sales tax rate on taxable items.
-    const locId = b.location_id || (current && current.location_id);
-    const l = await db.query(
-      `SELECT id, tax_rate FROM locations WHERE business_id=$1 AND ($2::int IS NULL OR id=$2) ORDER BY (id=$2) DESC NULLS LAST, id LIMIT 1`,
-      [req.user.business_id, locId ? Number(locId) : null]);
-    f.location_id = l.rows[0] ? l.rows[0].id : null;
-    f.tax_rate = l.rows[0] ? l.rows[0].tax_rate : 0;
-    return f;
-  }
-
-  app.post('/api/jobs', ...J, wrap(async (req, res) => {
-    const out = await withTx(async (db) => {
-      const f = await jobFields(db, req);
-      const cols = await columns(db, req.user.business_id);
-      await db.query('SELECT pg_advisory_xact_lock(4243, $1)', [req.user.business_id]);
-      const n = await db.query('SELECT COALESCE(max(job_number), 1000) + 1 AS n FROM jobs WHERE business_id=$1', [req.user.business_id]);
-      const r = await db.query(
-        `INSERT INTO jobs (business_id, location_id, job_number, name, description, customer_id, customer_name, customer_phone,
-           job_address, po_number, column_id, priority, crew, start_date, progress, quoted_cents, tax_rate, tax_exempt, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id, job_number`,
-        [req.user.business_id, f.location_id, n.rows[0].n, f.name, f.description, f.customer_id, f.customer_name, f.customer_phone,
-          f.job_address, f.po_number, cols[0].id, f.priority, f.crew, f.start_date, f.progress, f.quoted_cents, f.tax_rate,
-          f.tax_exempt, req.user.id]);
-      await log(db, r.rows[0].id, req.user, `Job created in ${cols[0].name}` + (f.quoted_cents ? ` · quoted ${usd(f.quoted_cents)}` : ''));
-      return r.rows[0];
-    });
-    notify(req.user.business_id, { type: 'job', id: out.id });
-    res.json(out);
-  }));
-
-  app.get('/api/jobs/:id', ...J, wrap(async (req, res) => {
-    const { job, cols } = await loadJob(pool, req.params.id, req.user.business_id);
-    const items = await pool.query('SELECT * FROM job_items WHERE job_id=$1 ORDER BY id', [job.id]);
-    const payments = await pool.query(
-      `SELECT p.*, u.name AS taken_by FROM job_payments p LEFT JOIN users u ON u.id = p.created_by WHERE p.job_id=$1 ORDER BY p.id`, [job.id]);
-    const history = await pool.query('SELECT * FROM job_history WHERE job_id=$1 ORDER BY id DESC LIMIT 300', [job.id]);
-    const loc = await pool.query('SELECT name, address, phone FROM locations WHERE id=$1', [job.location_id]);
-    const crews = await pool.query(
-      `SELECT c.*, k.name AS column_name, k.position AS column_position FROM job_crews c LEFT JOIN job_columns k ON k.id = c.column_id
-        WHERE c.job_id=$1 ORDER BY k.position NULLS LAST, c.id`, [job.id]);
-    res.json({ ...job, column: cols[job.column_index] || null, columns_count: cols.length, columns: cols.map((c) => ({ id: c.id, name: c.name, color: c.color })),
-      location: loc.rows[0] || null, items: items.rows, payments: payments.rows, history: history.rows, crews: crews.rows });
-  }));
-
-  app.put('/api/jobs/:id', ...J, wrap(async (req, res) => {
-    await withTx(async (db) => {
-      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
-      const f = await jobFields(db, req, job);
-      if (job.is_closed && f.quoted_cents !== job.quoted_cents) fail(400, 'This job is closed; the quoted price can no longer change');
-      if (f.quoted_cents !== job.quoted_cents && job.paid_cents > 0 && !isManager(req.user)) {
-        fail(403, 'Payments have been taken on this job; only an owner or manager can change the quoted price');
-      }
-      await db.query(
-        `UPDATE jobs SET name=$1, description=$2, customer_id=$3, customer_name=$4, customer_phone=$5, job_address=$6, po_number=$7,
-           priority=$8, crew=$9, start_date=$10, progress=$11, quoted_cents=$12, location_id=$13, tax_rate=$14, tax_exempt=$15,
-           updated_at=now() WHERE id=$16`,
-        [f.name, f.description, f.customer_id, f.customer_name, f.customer_phone, f.job_address, f.po_number, f.priority, f.crew,
-          f.start_date, f.progress, f.quoted_cents, f.location_id, f.tax_rate, f.tax_exempt, job.id]);
-      const changes = [];
-      if (f.quoted_cents !== job.quoted_cents) changes.push(`quoted price ${usd(job.quoted_cents)} → ${usd(f.quoted_cents)}`);
-      if (f.progress !== job.progress) changes.push(`progress ${f.progress}%`);
-      if ((f.crew || '') !== (job.crew || '')) changes.push(`crew ${f.crew || 'none'}`);
-      if (f.tax_exempt !== job.tax_exempt) changes.push(f.tax_exempt ? 'marked tax exempt' : 'tax exempt removed');
-      if (f.priority !== job.priority) changes.push(`priority ${f.priority}`);
-      await log(db, job.id, req.user, changes.length ? `Details changed: ${changes.join(', ')}` : 'Details updated');
-    });
-    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
-    res.json({ ok: true });
-  }));
-
-  app.delete('/api/jobs/:id', ...J, wrap(async (req, res) => {
-    needManager(req.user);
-    await withTx(async (db) => {
-      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
-      const p = await db.query('SELECT count(*)::int AS n FROM job_payments WHERE job_id=$1', [job.id]);
-      if (p.rows[0].n) fail(400, 'This job has payments recorded, so it cannot be deleted. Move it to the last column instead.');
-      // Put inventory back.
-      const items = await db.query('SELECT * FROM job_items WHERE job_id=$1 AND stock_taken', [job.id]);
-      for (const it of items.rows) await db.query('UPDATE products SET stock_qty = stock_qty + $1 WHERE id=$2 AND track_stock', [it.qty, it.product_id]);
-      await db.query('DELETE FROM jobs WHERE id=$1', [job.id]);
-    });
-    notify(req.user.business_id, { type: 'job', id: Number(req.params.id), deleted: true });
-    res.json({ ok: true });
-  }));
-
-  // Moves a job one column left or right. Jobs can't skip columns.
-  async function moveJob(db, job, cols, direction, user) {
-    const from = job.column_index < 0 ? 0 : job.column_index;
-    const to = from + (direction < 0 ? -1 : 1);
-    if (to < 0 || to >= cols.length) fail(400, direction < 0 ? 'This job is already in the first column' : 'This job is already in the last column');
-    const last = cols.length - 1;
-    if (direction < 0 && !isManager(user)) fail(403, 'Only an owner or manager can move a job back');
-    if (to === last) {
-      if (job.balance_cents > 0) fail(400, `${usd(job.balance_cents)} is still owed on this job. Take the payment or finish with a discount first.`);
-      if (job.balance_cents < 0) fail(400, `The customer has paid ${usd(-job.balance_cents)} more than the total. Void a payment or lower the discount first.`);
-    }
-    await db.query(
-      `UPDATE jobs SET column_id=$1, status_label=NULL, column_entered_at=now(), updated_at=now(),
-         closed_at = CASE WHEN $2 THEN now() ELSE NULL END WHERE id=$3`, [cols[to].id, to === last, job.id]);
-    await log(db, job.id, user, `Moved ${direction < 0 ? 'back ' : ''}from ${cols[from].name} to ${cols[to].name}` + (to === last ? ' (job closed)' : ''));
-  }
-  app.post('/api/jobs/:id/move', ...J, wrap(async (req, res) => {
-    await withTx(async (db) => {
-      const { job, cols } = await loadJob(db, req.params.id, req.user.business_id, true);
-      let direction = Number(req.body.direction);
-      // Dragging to a column: only the next or previous column is allowed.
-      if (req.body.column_id) {
-        const target = cols.findIndex((c) => c.id === Number(req.body.column_id));
-        if (target < 0) fail(404, 'Column not found');
-        const diff = target - Math.max(0, job.column_index);
-        if (diff === 0) return;
-        if (Math.abs(diff) > 1) fail(400, `Jobs move one column at a time. Next for this job is "${cols[Math.max(0, job.column_index) + Math.sign(diff)].name}".`);
-        direction = diff;
-      }
-      if (direction !== 1 && direction !== -1) fail(400, 'Choose which way to move the job');
-      await moveJob(db, job, cols, direction, req.user);
-    });
-    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
-    res.json({ ok: true });
-  }));
-
-  // A card button: marks the job with that status, and (if set up that way) moves it to the next column.
-  app.post('/api/jobs/:id/button', ...J, wrap(async (req, res) => {
-    let moved = false;
-    await withTx(async (db) => {
-      const { job, cols } = await loadJob(db, req.params.id, req.user.business_id, true);
-      const col = cols[Math.max(0, job.column_index)];
-      const btn = (col.buttons || [])[Number(req.body.index)];
-      if (!btn || !btn.enabled) fail(400, 'That button is not turned on for this column');
-      await db.query('UPDATE jobs SET status_label=$1, updated_at=now() WHERE id=$2', [btn.label, job.id]);
-      await log(db, job.id, req.user, `${btn.label} (in ${col.name})`);
-      if (btn.action === 'next' && job.column_index < cols.length - 1) {
-        await moveJob(db, job, cols, 1, req.user);
-        moved = true;
-      }
-    });
-    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
-    res.json({ ok: true, moved });
-  }));
-
-  // ---------- job ticket: items, charges, equipment rental ----------
-  app.post('/api/jobs/:id/items', ...J, wrap(async (req, res) => {
-    const b = req.body;
-    const out = await withTx(async (db) => {
-      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
-      notClosed(job);
-      const qty = Math.max(1, Math.min(9999, parseInt(b.qty, 10) || 1));
-      const kind = ['item', 'charge', 'rental'].includes(b.kind) ? b.kind : (b.code ? 'item' : fail(400, 'Choose what to add'));
-      if (kind === 'charge') {
-        const name = text(b.name, 'Description', { max: 120 });
-        const unit = cents(b.unit_cents, 'Amount');
-        if (unit <= 0) fail(400, 'Enter the amount');
-        const r = await db.query(
-          `INSERT INTO job_items (job_id, kind, name, qty, unit_cents, taxable, created_by) VALUES ($1,'charge',$2,$3,$4,$5,$6) RETURNING *`,
-          [job.id, name, qty, unit, !!b.taxable, req.user.id]);
-        await log(db, job.id, req.user, `Added charge: ${name}${qty > 1 ? ` × ${qty}` : ''} ${usd(unit * qty)}`);
-        return { item: r.rows[0] };
-      }
-      // Inventory item (by product, or by scanning/typing its barcode) or a rental product.
-      let p;
-      if (b.code) {
-        const r = await db.query(
-          `SELECT * FROM products WHERE business_id=$1 AND active AND barcode = ANY($2) LIMIT 1`,
-          [req.user.business_id, barcodeVariants(text(b.code, 'Code', { max: 100 }))]);
-        if (!r.rows[0]) return { found: false };
-        p = r.rows[0];
-      } else {
-        const r = await db.query('SELECT * FROM products WHERE id=$1 AND business_id=$2 AND active', [b.product_id, req.user.business_id]);
-        p = r.rows[0] || fail(404, 'Product not found');
-      }
-      // A rental product scanned or picked as an item: the screen asks for the rental period instead.
-      if (kind === 'item' && p.is_rental) return { found: true, rental: { id: p.id, name: p.name } };
-      if (kind === 'rental') {
-        if (!p.is_rental) fail(400, `${p.name} is not a rental item`);
-        const period = PERIODS[b.period] ? b.period : fail(400, 'Choose a rental period');
-        const count = period === 'half_day' ? 1 : Math.max(1, Math.min(365, parseInt(b.count, 10) || 1));
-        const rate = p['rate_' + period];
-        if (rate == null) fail(400, `${p.name} has no ${PERIODS[period].toLowerCase()} rate`);
-        const label = period === 'half_day' ? 'half day' : `${count} ${period}${count === 1 ? '' : 's'}`;
-        const name = `Equipment rental: ${p.name} · ${label}`;
-        const r = await db.query(
-          `INSERT INTO job_items (job_id, kind, product_id, barcode, name, qty, unit_cents, taxable, created_by)
-           VALUES ($1,'rental',$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-          [job.id, p.id, p.barcode, name, qty, rate * count, p.taxable, req.user.id]);
-        await log(db, job.id, req.user, `Added ${name}${qty > 1 ? ` × ${qty}` : ''} ${usd(rate * count * qty)}`);
-        return { item: r.rows[0] };
-      }
-      // Same product again: add to the quantity already on the job.
-      const ex = await db.query(`SELECT * FROM job_items WHERE job_id=$1 AND kind='item' AND product_id=$2 AND unit_cents=$3 LIMIT 1`,
-        [job.id, p.id, p.price_cents]);
-      let item;
-      if (ex.rows[0]) {
-        item = (await db.query('UPDATE job_items SET qty = qty + $1, stock_taken = $2 WHERE id=$3 RETURNING *',
-          [qty, p.track_stock || ex.rows[0].stock_taken, ex.rows[0].id])).rows[0];
-      } else {
-        item = (await db.query(
-          `INSERT INTO job_items (job_id, kind, product_id, barcode, name, qty, unit_cents, taxable, stock_taken, created_by)
-           VALUES ($1,'item',$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-          [job.id, p.id, p.barcode, p.name, qty, p.price_cents, p.taxable, p.track_stock, req.user.id])).rows[0];
-      }
-      if (p.track_stock) await db.query('UPDATE products SET stock_qty = stock_qty - $1 WHERE id=$2', [qty, p.id]);
-      await log(db, job.id, req.user, `Added ${p.name}${qty > 1 ? ` × ${qty}` : ''} ${usd(p.price_cents * qty)}`);
-      return { found: true, item };
-    });
-    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
-    res.json(out);
-  }));
-
-  app.put('/api/jobs/:id/items/:itemId', ...J, wrap(async (req, res) => {
-    await withTx(async (db) => {
-      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
-      notClosed(job);
-      const r = await db.query('SELECT * FROM job_items WHERE id=$1 AND job_id=$2', [req.params.itemId, job.id]);
-      const it = r.rows[0] || fail(404, 'Line not found');
-      if (it.crew_id) fail(400, 'This line comes from a crew. Change it under Crews.');
-      const qty = Math.max(1, Math.min(9999, parseInt(req.body.qty, 10) || 1));
-      if (qty === it.qty) return;
-      await db.query('UPDATE job_items SET qty=$1 WHERE id=$2', [qty, it.id]);
-      if (it.stock_taken && it.product_id) await db.query('UPDATE products SET stock_qty = stock_qty - $1 WHERE id=$2 AND track_stock', [qty - it.qty, it.product_id]);
-      await log(db, job.id, req.user, `Changed ${it.name} quantity ${it.qty} → ${qty}`);
-    });
-    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
-    res.json({ ok: true });
-  }));
-
-  app.delete('/api/jobs/:id/items/:itemId', ...J, wrap(async (req, res) => {
-    await withTx(async (db) => {
-      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
-      notClosed(job);
-      const chk = await db.query('SELECT crew_id FROM job_items WHERE id=$1 AND job_id=$2', [req.params.itemId, job.id]);
-      if (chk.rows[0] && chk.rows[0].crew_id) fail(400, 'This line comes from a crew. Remove it or change it to "part of the quote" under Crews.');
-      const r = await db.query('DELETE FROM job_items WHERE id=$1 AND job_id=$2 RETURNING *', [req.params.itemId, job.id]);
-      const it = r.rows[0] || fail(404, 'Line not found');
-      if (it.stock_taken && it.product_id) await db.query('UPDATE products SET stock_qty = stock_qty + $1 WHERE id=$2 AND track_stock', [it.qty, it.product_id]);
-      await log(db, job.id, req.user, `Removed ${it.name}${it.qty > 1 ? ` × ${it.qty}` : ''} (${usd(it.qty * it.unit_cents)})`);
-    });
-    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
-    res.json({ ok: true });
-  }));
-
-  // ---------- payments (split pay; any number over the life of the job) ----------
-  app.post('/api/jobs/:id/payments', ...J, wrap(async (req, res) => {
-    const out = await withTx(async (db) => {
-      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
-      notClosed(job);
-      const list = Array.isArray(req.body.payments) ? req.body.payments : [];
-      if (!list.length) fail(400, 'Add a payment');
-      if (list.length > 10) fail(400, 'Too many payments at once (10 max)');
-      const parts = list.map((p) => {
-        const method = METHODS.includes(p.method) ? p.method : fail(400, 'Choose how they paid');
-        const amount = cents(p.amount_cents, 'Payment amount');
-        if (amount <= 0) fail(400, 'Each payment must be more than $0.00');
-        let tendered = null, change = null;
-        if (method === 'cash') {
-          tendered = p.tendered_cents == null || p.tendered_cents === '' ? amount : cents(p.tendered_cents, 'Cash received');
-          if (tendered < amount) fail(400, 'Cash received is less than the cash payment');
-          change = tendered - amount;
-        }
-        const check = method === 'check' ? (text(p.check_number, 'Check number', { required: false, max: 40 }) || null) : null;
-        return { method, amount, tendered, change, check };
-      });
-      const sum = parts.reduce((a, p) => a + p.amount, 0);
-      if (sum > job.balance_cents) {
-        fail(400, job.balance_cents <= 0 ? 'Nothing is owed on this job right now'
-          : `That is ${usd(sum - job.balance_cents)} more than the ${usd(job.balance_cents)} owed`);
-      }
-      const note = text(req.body.note, 'Note', { required: false, max: 200 }) || null;
-      const batch = crypto.randomBytes(6).toString('hex');
-      for (const p of parts) {
-        await db.query(
-          `INSERT INTO job_payments (job_id, business_id, location_id, batch, method, amount_cents, tendered_cents, change_cents,
-             check_number, note, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-          [job.id, req.user.business_id, job.location_id, batch, p.method, p.amount, p.tendered, p.change, p.check, note, req.user.id]);
-      }
-      const desc = parts.map((p) => `${METHOD_NAMES[p.method]}${p.check ? ' #' + p.check : ''} ${usd(p.amount)}`).join(' + ');
-      await log(db, job.id, req.user, `Payment ${usd(sum)} (${desc}) · balance now ${usd(job.balance_cents - sum)}` + (note ? ` · ${note}` : ''));
-      return { paid_cents: sum, balance_cents: job.balance_cents - sum, change_cents: parts.reduce((a, p) => a + (p.change || 0), 0) };
-    });
-    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
-    res.json(out);
-  }));
-
-  app.post('/api/jobs/:id/payments/:pid/void', ...J, wrap(async (req, res) => {
-    needManager(req.user);
-    await withTx(async (db) => {
-      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
-      notClosed(job);
-      const r = await db.query(
-        'UPDATE job_payments SET voided=TRUE WHERE id=$1 AND job_id=$2 AND NOT voided AND deposit_id IS NULL RETURNING *',
-        [req.params.pid, job.id]);
-      const p = r.rows[0] || fail(400, 'Payment not found, already voided, or already in a bank deposit');
-      await log(db, job.id, req.user, `Voided payment ${METHOD_NAMES[p.method]} ${usd(p.amount_cents)}`);
-    });
-    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
-    res.json({ ok: true });
-  }));
-
-  // ---------- final discount (when the project came in smaller than quoted) ----------
-  app.put('/api/jobs/:id/discount', ...J, wrap(async (req, res) => {
-    needManager(req.user);
-    await withTx(async (db) => {
-      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
-      notClosed(job);
-      const d = req.body.discount_cents == null || req.body.discount_cents === '' ? 0 : cents(req.body.discount_cents, 'Discount');
-      const before = job.subtotal_cents + job.tax_cents;
-      if (d > before) fail(400, `The discount can't be more than the job total of ${usd(before)}`);
-      const note = text(req.body.note, 'Reason', { required: false, max: 200 }) || null;
-      await db.query('UPDATE jobs SET discount_cents=$1, discount_note=$2, updated_at=now() WHERE id=$3', [d, note, job.id]);
-      await log(db, job.id, req.user, d ? `Discount ${usd(d)}${note ? ` (${note})` : ''} · total now ${usd(before - d)}` : 'Discount removed');
-    });
-    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
-    res.json({ ok: true });
-  }));
-
-  // ---------- crews on the job (per phase) ----------
-  async function crewFields(db, req, cols, current) {
-    const b = req.body;
-    const f = {
-      trade: text(b.trade, 'Trade', { max: 60 }),
-      name: text(b.name, 'Name', { required: false, max: 100 }) || null,
-      phone: text(b.phone, 'Phone', { required: false, max: 40 }) || null,
-      amount_cents: b.amount_cents == null || b.amount_cents === '' ? 0 : cents(b.amount_cents, 'Amount'),
-      billing: ['extra', 'costplus'].includes(b.billing) ? b.billing : 'included',
-      note: text(b.note, 'Note', { required: false, max: 300 }) || null,
-      done: 'done' in b ? !!b.done : !!(current && current.done),
-      column_id: null,
-    };
-    const col = cols.find((c) => c.id === Number(b.column_id));
-    f.column_id = col ? col.id : (current ? current.column_id : null);
-    if (f.billing === 'extra' && !f.amount_cents) fail(400, 'Enter the amount to charge for this crew');
-    // Cost plus: cost + markup (percent or dollars) is what goes on the ticket.
-    f.markup_type = null; f.markup_percent = null; f.markup_cents = null;
-    if (f.billing === 'costplus') {
-      if (!f.amount_cents) fail(400, "Enter the crew's cost");
-      f.markup_type = b.markup_type === 'dollar' ? 'dollar' : 'percent';
-      if (f.markup_type === 'percent') {
-        const pct = Number(b.markup_percent);
-        if (!(pct >= 0 && pct <= 1000)) fail(400, 'Markup percent is not valid');
-        f.markup_percent = Math.round(pct * 1000) / 1000;
-      } else {
-        f.markup_cents = b.markup_cents == null || b.markup_cents === '' ? 0 : cents(b.markup_cents, 'Markup');
-      }
-    }
-    f.charge_cents = f.billing === 'extra' ? f.amount_cents
-      : f.billing === 'costplus' ? f.amount_cents + (f.markup_type === 'percent' ? Math.round((f.amount_cents * f.markup_percent) / 100 + 1e-9) : f.markup_cents)
-      : 0;
-    return f;
-  }
-  const markupText = (c) => (c.markup_type === 'dollar' ? usd(c.markup_cents || 0) : `${Number(c.markup_percent || 0)}%`);
-  // Up-charge and cost-plus crews have one "charge" line on the ticket; a crew that's part of the quote has none.
-  async function syncCrewLine(db, crew, userId) {
-    const label = (`Crew: ${crew.trade}${crew.name ? ' — ' + crew.name : ''}` +
-      (crew.billing === 'costplus' ? ` (cost ${usd(crew.amount_cents)} + ${markupText(crew)})` : '')).slice(0, 120);
-    if (crew.billing !== 'included' && crew.charge_cents > 0) {
-      const u = await db.query('UPDATE job_items SET name=$1, unit_cents=$2, qty=1 WHERE crew_id=$3 RETURNING id', [label, crew.charge_cents, crew.id]);
-      if (!u.rowCount) {
-        await db.query(`INSERT INTO job_items (job_id, kind, name, qty, unit_cents, taxable, crew_id, created_by) VALUES ($1,'charge',$2,1,$3,FALSE,$4,$5)`,
-          [crew.job_id, label, crew.charge_cents, crew.id, userId]);
-      }
-    } else {
-      await db.query('DELETE FROM job_items WHERE crew_id=$1', [crew.id]);
-    }
-  }
-  const crewText = (c) => `${c.trade}${c.name ? ' (' + c.name + ')' : ''}` + (c.billing === 'costplus'
-    ? ` cost plus: ${usd(c.amount_cents)} + ${markupText(c)} = ${usd(c.charge_cents)}`
-    : (c.amount_cents ? ` ${usd(c.amount_cents)} ${c.billing === 'extra' ? 'up-charge' : 'part of quote'}` : ''));
-
-  app.post('/api/jobs/:id/crews', ...J, wrap(async (req, res) => {
-    const id = await withTx(async (db) => {
-      const { job, cols } = await loadJob(db, req.params.id, req.user.business_id, true);
-      notClosed(job);
-      const f = await crewFields(db, req, cols);
-      if (!f.column_id) f.column_id = job.column_id;
-      const n = await db.query('SELECT count(*)::int AS n FROM job_crews WHERE job_id=$1', [job.id]);
-      if (n.rows[0].n >= 100) fail(400, 'This job already has 100 crews');
-      const r = await db.query(
-        `INSERT INTO job_crews (job_id, column_id, trade, name, phone, amount_cents, billing, note, markup_type, markup_percent, markup_cents, charge_cents, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-        [job.id, f.column_id, f.trade, f.name, f.phone, f.amount_cents, f.billing, f.note, f.markup_type, f.markup_percent, f.markup_cents, f.charge_cents, req.user.id]);
-      await syncCrewLine(db, r.rows[0], req.user.id);
-      const col = cols.find((c) => c.id === f.column_id);
-      await log(db, job.id, req.user, `Crew added${col ? ' to ' + col.name : ''}: ${crewText(r.rows[0])}`);
-      return r.rows[0].id;
-    });
-    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
-    res.json({ id });
-  }));
-  app.put('/api/jobs/:id/crews/:cid', ...J, wrap(async (req, res) => {
-    await withTx(async (db) => {
-      const { job, cols } = await loadJob(db, req.params.id, req.user.business_id, true);
-      notClosed(job);
-      const cur = (await db.query('SELECT * FROM job_crews WHERE id=$1 AND job_id=$2', [req.params.cid, job.id])).rows[0] || fail(404, 'Crew not found');
-      const sent = Object.keys(req.body);
-      // Only the fields sent change (e.g. just { done: true } from the Done button).
-      req.body = { ...cur, ...req.body };
-      const f = await crewFields(db, req, cols, cur);
-      const r = await db.query(
-        `UPDATE job_crews SET column_id=$1, trade=$2, name=$3, phone=$4, amount_cents=$5, billing=$6, note=$7, done=$8,
-           markup_type=$9, markup_percent=$10, markup_cents=$11, charge_cents=$12 WHERE id=$13 RETURNING *`,
-        [f.column_id, f.trade, f.name, f.phone, f.amount_cents, f.billing, f.note, f.done, f.markup_type, f.markup_percent, f.markup_cents, f.charge_cents, cur.id]);
-      await syncCrewLine(db, r.rows[0], req.user.id);
-      const what = f.done !== cur.done && sent.length === 1 ? (f.done ? 'Crew finished' : 'Crew back on the job') : 'Crew changed';
-      await log(db, job.id, req.user, `${what}: ${crewText(r.rows[0])}`);
-    });
-    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
-    res.json({ ok: true });
-  }));
-  app.delete('/api/jobs/:id/crews/:cid', ...J, wrap(async (req, res) => {
-    await withTx(async (db) => {
-      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
-      notClosed(job);
-      const r = await db.query('DELETE FROM job_crews WHERE id=$1 AND job_id=$2 RETURNING *', [req.params.cid, job.id]);
-      const c = r.rows[0] || fail(404, 'Crew not found');
-      await log(db, job.id, req.user, `Crew removed: ${crewText(c)}${c.billing !== 'included' && c.charge_cents ? ' (its charge was taken off the ticket)' : ''}`);
-    });
-    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
-    res.json({ ok: true });
-  }));
-
-  // Used by jobfiles.js (attachments and Claude estimates).
-  return { notify, log, J };
+  });
+  f.customer_name.addEventListener('input', () => { f.customer_id.value = ''; });
+}
+$('#newJob').onclick = () => {
+  const f = openModal(jobForm());
+  wireCustomerFind(f);
+  $('#saveJob').onclick = () => run(async () => {
+    if (!f.reportValidity()) return;
+    const r = await api('/api/jobs', readJobForm(f));
+    closeModal(); toast(`Job #${r.job_number} created`); await loadBoard();
+  });
 };
+function editDetails() {
+  const f = openModal(jobForm(cur));
+  wireCustomerFind(f);
+  $('#saveJob').onclick = () => run(async () => {
+    if (!f.reportValidity()) return;
+    await api(`/api/jobs/${cur.id}`, readJobForm(f), 'PUT');
+    closeModal(); toast('Saved'); await refreshTicket();
+  });
+  if ($('#delJob')) $('#delJob').onclick = () => run(async () => {
+    if (!confirm(`Delete job #${cur.job_number} ${cur.name}? This can't be undone.`)) return;
+    await api(`/api/jobs/${cur.id}`, undefined, 'DELETE');
+    closeModal(); closeTicket(); toast('Job deleted');
+  });
+}
+
+// ---------- job ticket ----------
+async function openTicket(id) {
+  openId = id;
+  $('#ticket').hidden = false;
+  history.replaceState(null, '', '#job-' + id);
+  await run(refreshTicket);
+  if (!products.length) products = await api('/api/products').catch(() => []);
+  showResults();
+  if (window.innerWidth > 760) $('#tSearch').focus();
+}
+function closeTicket() {
+  openId = null; cur = null; $('#ticket').hidden = true;
+  history.replaceState(null, '', location.pathname);
+  run(loadBoard);
+}
+async function refreshTicket() {
+  if (!openId) return;
+  const [j, f] = await Promise.all([api('/api/jobs/' + openId), api(`/api/jobs/${openId}/files`)]);
+  cur = j; files = f;
+  renderTicket();
+}
+function renderTicket() {
+  const j = cur, c = j.column || { name: '', color: '#444', buttons: [] };
+  const locked = j.is_closed;
+  const btns = (c.buttons || []).map((b, k) => ({ ...b, k })).filter((b) => b.enabled);
+  const i = j.column_index;
+  $('#tHead').innerHTML = `<button class="dk" onclick="closeTicket()">← Board</button>
+    <div class="tt"><span>#${j.job_number}</span>${esc(j.name)}</div>
+    <span class="colchip" style="--c:${c.color}">${esc(c.name)}</span>
+    ${j.priority === 'high' ? '<span class="flag" style="position:static">⚑ High</span>' : ''}
+    <div class="chips" style="margin:0">${btns.map((b) => `<button class="chip ${j.status_label === b.label ? 'on' : ''}" style="--b:${b.color || '#3b82f6'}" data-tbtn="${b.k}">${esc(b.label)}</button>`).join('')}</div>
+    <div class="spacer" style="flex:1"></div>
+    ${i > 0 && isMgr ? '<button class="dk" id="tPrev">‹ Move back</button>' : ''}
+    ${i < j.columns_count - 1 ? `<button class="dk" id="tNext">Move to next ›</button>` : ''}
+    <button class="dk" id="tCrews">👷 Crews (${j.crews.length})</button>
+    <button class="dk" onclick="editDetails()">Edit details</button>
+    <button class="dk" onclick="printTicket()">🖨 Print</button>`;
+  $('#tHead').onclick = (e) => {
+    const b = e.target.closest('[data-tbtn]');
+    if (b) return run(async () => { const r = await api(`/api/jobs/${j.id}/button`, { index: Number(b.dataset.tbtn) }); if (r.moved) toast('Moved to the next column'); await refreshTicket(); });
+    if (e.target.id === 'tCrews') { crewOpen = !crewOpen; renderTicket(); if (crewOpen) $('#crewBox').scrollIntoView({ block: 'nearest' }); return; }
+    if (e.target.id === 'tNext') return run(async () => { await api(`/api/jobs/${j.id}/move`, { direction: 1 }); toast('Moved'); await refreshTicket(); });
+    if (e.target.id === 'tPrev') return run(async () => { await api(`/api/jobs/${j.id}/move`, { direction: -1 }); toast('Moved back'); await refreshTicket(); });
+  };
+  // Center: the job's lines, starting with the quoted price.
+  $('#tLines').innerHTML = `${crewPanel(j)}<h3>Job ticket</h3>
+    ${locked ? '<div class="lockmsg">🔒 This job is closed. Move it back a column to make changes.</div>' : ''}
+    <table class="lines"><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th><th></th></tr></thead><tbody>
+      <tr class="quote"><td>Quoted price <a href="#" onclick="editDetails();return false" style="font-weight:600;font-size:13px;margin-left:6px">${locked ? '' : 'change'}</a></td><td class="num"></td><td class="num"></td><td class="num">${usd(j.quoted_cents)}</td><td></td></tr>
+      ${j.items.map((it) => `<tr>
+        <td>${esc(it.name)}${it.crew_id ? `<span class="kind k-crew">${/ \(cost \$/.test(it.name) ? 'Crew cost plus' : 'Crew up-charge'}</span>` : `<span class="kind k-${it.kind}">${{ item: 'Item', charge: 'Charge', rental: 'Rental' }[it.kind]}</span>`}${it.taxable ? '<span class="tx">T</span>' : ''}
+          <div class="muted" style="font-size:12px">${shortDate(it.created_at)}</div></td>
+        <td class="num">${locked || it.crew_id ? it.qty : `<button class="qbtn" data-dq="${it.id}" data-q="${it.qty - 1}" ${it.qty <= 1 ? 'disabled' : ''}>−</button> ${it.qty} <button class="qbtn" data-dq="${it.id}" data-q="${it.qty + 1}">+</button>`}</td>
+        <td class="num">${usd(it.unit_cents)}</td><td class="num">${usd(it.unit_cents * it.qty)}</td>
+        <td>${locked || it.crew_id ? '' : `<button class="xbtn" data-del="${it.id}" title="Remove">×</button>`}</td></tr>`).join('')}
+    </tbody></table>
+    ${!j.items.length ? '<p class="muted">Nothing added yet. Items, extra charges and equipment rental added along the way show here.</p>' : ''}
+    <div class="muted" style="font-size:12.5px;margin-top:8px">T = taxable${j.tax_exempt ? ' (this job is tax exempt)' : ` at ${Number(j.tax_rate)}%`}</div>
+    <h3 style="margin-top:20px">Plans, photos &amp; estimates (${files.length})</h3>
+    <div class="files">${files.map(fileRow).join('') || '<div class="muted">No files yet. Attach plans or blueprints as a PDF, or add photos of the job site.</div>'}</div>`;
+  $('#tLines').onclick = (e) => {
+    if (e.target.closest('[data-crewtoggle]')) { crewOpen = !crewOpen; return renderTicket(); }
+    if (e.target.closest('[data-crewadd]')) return crewDialog(null, Number(e.target.closest('[data-crewadd]').dataset.crewadd) || null);
+    const ce = e.target.closest('[data-crewedit]');
+    if (ce) return crewDialog(j.crews.find((x) => x.id === Number(ce.dataset.crewedit)));
+    const cd = e.target.closest('[data-crewdone]');
+    if (cd) { const c = j.crews.find((x) => x.id === Number(cd.dataset.crewdone));
+      return run(async () => { await api(`/api/jobs/${j.id}/crews/${c.id}`, { done: !c.done }, 'PUT'); await refreshTicket(); }); }
+    const cx = e.target.closest('[data-crewdel]');
+    if (cx) { const c = j.crews.find((x) => x.id === Number(cx.dataset.crewdel));
+      if (!confirm(`Remove ${c.trade}${c.name ? ' (' + c.name + ')' : ''} from this job?${c.billing !== 'included' ? ' Its charge comes off the ticket.' : ''}`)) return;
+      return run(async () => { await api(`/api/jobs/${j.id}/crews/${c.id}`, undefined, 'DELETE'); toast('Crew removed'); await refreshTicket(); }); }
+    const fv = e.target.closest('[data-fview]');
+    if (fv) { const f = files.find((x) => x.id === Number(fv.dataset.fview)); return f.kind === 'answer' ? showAnswer(f) : showEstimate(f); }
+    const fe = e.target.closest('[data-fest]');
+    if (fe) return estimateDialog(Number(fe.dataset.fest));
+    const fd = e.target.closest('[data-fdel]');
+    if (fd) {
+      const f = files.find((x) => x.id === Number(fd.dataset.fdel));
+      if (!confirm(`Remove ${f.name}?`)) return;
+      return run(async () => { await api(`/api/jobs/${j.id}/files/${f.id}`, undefined, 'DELETE'); toast('Removed'); await refreshTicket(); });
+    }
+    const q = e.target.closest('[data-dq]');
+    if (q) return run(async () => { await api(`/api/jobs/${j.id}/items/${q.dataset.dq}`, { qty: Number(q.dataset.q) }, 'PUT'); await refreshTicket(); });
+    const d = e.target.closest('[data-del]');
+    if (d) {
+      const it = j.items.find((x) => x.id === Number(d.dataset.del));
+      if (!confirm(`Remove ${it.name}?`)) return;
+      run(async () => { await api(`/api/jobs/${j.id}/items/${it.id}`, undefined, 'DELETE'); await refreshTicket(); });
+    }
+  };
+  // Right: totals, payments, details, history.
+  const bal = j.balance_cents;
+  const mapUrl = mapLink(null, null, j.job_address);
+  $('#tSide').innerHTML = `<h3>Totals</h3>
+    <div class="tot">
+      <div><span>Quoted price</span><span>${usd(j.quoted_cents)}</span></div>
+      <div><span>Added along the way</span><span>${usd(j.extras_cents)}</span></div>
+      <div><span>Sales tax${j.tax_exempt ? ' (exempt)' : ` ${Number(j.tax_rate)}%`}</span><span>${usd(j.tax_cents)}</span></div>
+      ${j.discount_cents ? `<div><span>Discount${j.discount_note ? ` <span class="muted">(${esc(j.discount_note)})</span>` : ''}</span><span>−${usd(j.discount_cents)}</span></div>` : ''}
+      <div class="sep"><b>Job total</b><b>${usd(j.total_cents)}</b></div>
+      <div><span>Paid so far</span><span>${usd(j.paid_cents)}</span></div>
+      <div class="sep"><b>${bal < 0 ? 'Overpaid' : 'Balance owed'}</b><span class="big ${bal > 0 ? 'owed' : 'zero'}">${usd(Math.abs(bal))}</span></div>
+    </div>
+    <div class="side-actions">
+      <button class="primary" id="payBtn" ${locked || bal <= 0 ? 'disabled' : ''}>Take payment</button>
+      <button class="dk" id="finishBtn" ${locked ? 'disabled' : ''}>Finish job…</button>
+    </div>
+    <h3>Payments (${j.payments.filter((p) => !p.voided).length})</h3>
+    <div class="plist">${j.payments.map((p) => `<div class="${p.voided ? 'v' : ''}"><span>${shortDate(p.created_at)} · ${METHOD[p.method]}${p.check_number ? ' #' + esc(p.check_number) : ''}${p.note ? ` · <span class="muted">${esc(p.note)}</span>` : ''}${p.voided ? ' (void)' : ''}</span>
+      <span>${usd(p.amount_cents)}${isMgr && !p.voided && !p.deposit_id && !locked ? ` <a href="#" data-void="${p.id}" style="font-size:12px">void</a>` : ''}</span></div>`).join('') || '<div class="muted">No payments yet</div>'}</div>
+    <h3 style="margin-top:16px">Job details</h3>
+    <div class="info">
+      ${j.description ? `<div>${esc(j.description).replace(/\n/g, '<br>')}</div>` : ''}
+      ${j.customer_name ? `<div><b>Customer</b>${esc(j.customer_name)}</div>` : ''}
+      ${j.customer_phone ? `<div><b>Phone</b><a href="tel:${esc(j.customer_phone)}">${esc(j.customer_phone)}</a></div>` : ''}
+      ${j.job_address ? `<div><b>Job site</b>${mapUrl ? `<a href="${mapUrl}" target="_blank" rel="noopener">${esc(j.job_address)}</a>` : esc(j.job_address)}</div>` : ''}
+      ${j.po_number ? `<div><b>PO #</b>${esc(j.po_number)}</div>` : ''}
+      ${j.crew ? `<div><b>Crew</b>${esc(j.crew)}</div>` : ''}
+      ${j.start_date ? `<div><b>Start</b>${shortDate(j.start_date)}</div>` : ''}
+      <div><b>Progress</b>${j.progress}%</div>
+    </div>
+    <h3 style="margin-top:16px">History</h3>
+    <div class="hist">${j.history.slice(0, 40).map((h) => `<div>${esc(h.action)}<small>${fmtDateTime(h.created_at)}${h.user_name ? ' · ' + esc(h.user_name) : ''}</small></div>`).join('')}</div>`;
+  $('#payBtn').onclick = () => payDialog();
+  $('#finishBtn').onclick = () => finishDialog();
+  $('#tSide').onclick = (e) => {
+    const v = e.target.closest('[data-void]'); if (!v) return;
+    e.preventDefault();
+    const p = j.payments.find((x) => x.id === Number(v.dataset.void));
+    if (!confirm(`Void the ${METHOD[p.method]} payment of ${usd(p.amount_cents)}?`)) return;
+    run(async () => { await api(`/api/jobs/${j.id}/payments/${p.id}/void`, {}); toast('Payment voided'); await refreshTicket(); });
+  };
+  $('#tSearch').disabled = locked; $('#chargeBtn').disabled = locked; $('#rentalBtn').disabled = locked;
+}
+
+// ---------- add items ----------
+function showResults() {
+  const q = $('#tSearch').value.trim().toLowerCase();
+  const list = products.filter((p) => !p.is_rental && (!q || [p.name, p.barcode, p.category].some((s) => (s || '').toLowerCase().includes(q)))).slice(0, 40);
+  $('#tResults').innerHTML = list.map((p) => `<button class="res" data-pid="${p.id}"><span>${esc(p.name)}<small>${esc(p.category || '')}${p.track_stock ? ` · ${p.stock_qty} in stock` : ''}</small></span><span>${usd(p.price_cents)}</span></button>`).join('')
+    || `<div class="muted">${products.length ? 'No items match.' : 'No products yet. Add them under Manage → Products.'}</div>`;
+}
+const qtyNow = () => Math.max(1, parseInt($('#qty').value, 10) || 1);
+async function addItem(body) {
+  if (!cur || cur.is_closed) return;
+  const r = await api(`/api/jobs/${cur.id}/items`, { ...body, qty: qtyNow() });
+  if (r.found === false) { toast('No item with that barcode', 'bad'); return; }
+  if (r.rental) { rentalDialog(r.rental.id); return; }
+  toast('Added ' + r.item.name);
+  $('#qty').value = 1;
+  products = await api('/api/products').catch(() => products);
+  await refreshTicket(); showResults();
+}
+$('#tSearch').addEventListener('input', showResults);
+$('#tSearch').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const v = $('#tSearch').value.trim(); if (!v) return;
+  const exact = products.find((p) => p.barcode && p.barcode === v);
+  const matchesNow = products.filter((p) => !p.is_rental && p.name.toLowerCase().includes(v.toLowerCase()));
+  run(async () => {
+    if (exact || /^\d{6,}$/.test(v)) await addItem({ code: v });
+    else if (matchesNow.length === 1) await addItem({ kind: 'item', product_id: matchesNow[0].id });
+    else return;
+    $('#tSearch').value = ''; showResults();
+  });
+});
+$('#tResults').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-pid]'); if (!b) return;
+  run(() => addItem({ kind: 'item', product_id: Number(b.dataset.pid) }));
+});
+$('#chargeBtn').onclick = () => {
+  const f = openModal(`<h2>Extra charge</h2><p class="muted" style="margin:0">Up-charges and change orders added along the way.</p>
+    <label>Description</label><input name="name" required maxlength="120" placeholder="e.g. Change order: extra outlet">
+    <div class="presets">${['Change order', 'Labor', 'Delivery fee', 'Fuel charge', 'Disposal / dumpster', 'Permit fee'].map((s) => `<button type="button" class="dk" data-pre="${s}">${s}</button>`).join('')}</div>
+    <div class="two"><div><label>Amount</label><input name="amt" required inputmode="decimal" placeholder="0.00"></div><div><label>Quantity</label><input name="qty" type="number" min="1" value="1"></div></div>
+    <label class="check"><input type="checkbox" name="taxable"> Taxable</label>
+    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="addCharge">Add to job</button></div>`);
+  f.querySelector('.presets').onclick = (e) => { const b = e.target.closest('[data-pre]'); if (b) { f.name.value = b.dataset.pre + ': '; f.name.focus(); } };
+  $('#addCharge').onclick = () => run(async () => {
+    if (!f.reportValidity()) return;
+    const c = toCents(f.amt.value); if (!c) throw new Error('Enter the amount');
+    await api(`/api/jobs/${cur.id}/items`, { kind: 'charge', name: f.name.value, unit_cents: c, qty: f.qty.value, taxable: f.taxable.checked });
+    closeModal(); toast('Charge added'); await refreshTicket();
+  });
+};
+const PERIOD_NAMES = { half_day: 'Half day', day: 'Day', week: 'Week', month: 'Month' };
+function rentalDialog(preselect) {
+  const items = products.filter((p) => p.is_rental);
+  if (!items.length) { toast('No rental items yet. Mark products as rental items under Manage → Products.', 'bad'); return; }
+  const f = openModal(`<h2>Equipment rental</h2><p class="muted" style="margin:0">Charged to this job at your rental rates.</p>
+    <label>Equipment</label><select name="pid">${items.map((p) => `<option value="${p.id}" ${p.id === preselect ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+    <div class="two"><div><label>Period</label><select name="period"></select></div><div><label>How many periods</label><input name="count" type="number" min="1" value="1"></div></div>
+    <label>Units</label><input name="qty" type="number" min="1" value="1" style="max-width:120px">
+    <div class="summary"><div><span>Charge</span><span class="big" id="rPrice">$0.00</span></div></div>
+    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="addRent">Add to job</button></div>`);
+  const fill = () => {
+    const p = items.find((x) => x.id === Number(f.pid.value));
+    const keep = f.period.value;
+    f.period.innerHTML = Object.keys(PERIOD_NAMES).filter((k) => p['rate_' + k] != null).map((k) => `<option value="${k}" ${k === keep ? 'selected' : ''}>${PERIOD_NAMES[k]} · ${usd(p['rate_' + k])}</option>`).join('');
+    price();
+  };
+  const price = () => {
+    const p = items.find((x) => x.id === Number(f.pid.value));
+    const rate = p['rate_' + f.period.value] || 0;
+    f.count.disabled = f.period.value === 'half_day';
+    const n = f.period.value === 'half_day' ? 1 : Math.max(1, parseInt(f.count.value, 10) || 1);
+    $('#rPrice').textContent = usd(rate * n * Math.max(1, parseInt(f.qty.value, 10) || 1));
+  };
+  f.pid.onchange = fill; f.period.onchange = price; f.count.oninput = price; f.qty.oninput = price;
+  fill();
+  $('#addRent').onclick = () => run(async () => {
+    if (!f.period.value) throw new Error('This item has no rental rates set');
+    await api(`/api/jobs/${cur.id}/items`, { kind: 'rental', product_id: Number(f.pid.value), period: f.period.value, count: f.count.value, qty: f.qty.value });
+    closeModal(); toast('Rental added'); await refreshTicket();
+  });
+}
+$('#rentalBtn').onclick = () => rentalDialog();
+
+// ---------- payments (split pay) ----------
+function payDialog(afterPaid) {
+  const bal = cur.balance_cents;
+  const f = openModal(`<h2>Take payment</h2>
+    <div class="summary"><div><span>Job total</span><span>${usd(cur.total_cents)}</span></div><div><span>Paid so far</span><span>${usd(cur.paid_cents)}</span></div>
+      <div><span>Balance owed</span><span class="big">${usd(bal)}</span></div></div>
+    <div class="presets"><button type="button" class="dk" data-amt="${bal}">Full balance</button><button type="button" class="dk" data-amt="${Math.round(bal / 2)}">Half</button>
+      <button type="button" class="dk" data-amt="${Math.round(bal / 4)}">25%</button></div>
+    <div id="rows"></div>
+    <button type="button" class="dk" id="addRow" style="margin-top:8px">+ Split with another method</button>
+    <label>Note (optional)</label><input name="note" maxlength="200" placeholder="e.g. Deposit, Progress payment 2, Final payment">
+    <div class="summary"><div><span>This payment</span><b id="pSum">$0.00</b></div><div><span>Balance after</span><b id="pAfter">${usd(bal)}</b></div></div>
+    <div class="err" id="pErr"></div>
+    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="recPay">Record payment</button></div>`);
+  const rows = $('#rows');
+  const addRow = (amt) => {
+    const d = document.createElement('div');
+    d.className = 'prow';
+    d.innerHTML = `<select class="pm">${Object.entries(METHOD).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+      <input class="pa" inputmode="decimal" placeholder="Amount" value="${amt != null ? dollars(amt) : ''}">
+      <input class="px" inputmode="decimal" placeholder="Cash received">
+      <button type="button" class="xbtn" title="Remove">×</button>`;
+    rows.appendChild(d);
+    const sync = () => { const m = d.querySelector('.pm').value; const x = d.querySelector('.px'); x.hidden = !(m === 'cash' || m === 'check'); x.placeholder = m === 'check' ? 'Check #' : 'Cash received'; x.inputMode = m === 'check' ? 'text' : 'decimal'; };
+    d.querySelector('.pm').onchange = () => { d.querySelector('.px').value = ''; sync(); };
+    d.querySelector('.xbtn').onclick = () => { if (rows.children.length > 1) { d.remove(); total(); } };
+    d.querySelector('.pa').oninput = total;
+    sync();
+  };
+  const parts = () => [...rows.children].map((d) => ({ method: d.querySelector('.pm').value, amt: toCents(d.querySelector('.pa').value), x: d.querySelector('.px').value.trim() }));
+  const total = () => {
+    const s = parts().reduce((a, p) => a + (p.amt || 0), 0);
+    $('#pSum').textContent = usd(s); $('#pAfter').textContent = usd(bal - s);
+  };
+  addRow(bal);
+  total();
+  $('#addRow').onclick = () => {
+    const s = parts().reduce((a, p) => a + (p.amt || 0), 0);
+    addRow(Math.max(0, bal - s) || null); total();
+  };
+  f.querySelector('.presets').onclick = (e) => {
+    const b = e.target.closest('[data-amt]'); if (!b) return;
+    while (rows.children.length > 1) rows.lastChild.remove();
+    rows.firstChild.querySelector('.pa').value = dollars(Number(b.dataset.amt)); total();
+  };
+  $('#recPay').onclick = () => run(async () => {
+    $('#pErr').textContent = '';
+    const list = parts().map((p) => {
+      if (!p.amt) throw new Error('Enter an amount for each payment');
+      const o = { method: p.method, amount_cents: p.amt };
+      if (p.method === 'cash' && p.x) { o.tendered_cents = toCents(p.x); if (o.tendered_cents == null) throw new Error('Cash received is not a valid amount'); }
+      if (p.method === 'check') o.check_number = p.x;
+      return o;
+    });
+    const r = await api(`/api/jobs/${cur.id}/payments`, { payments: list, note: f.note.value });
+    await refreshTicket();
+    openModal(`<h2>Payment recorded</h2>
+      ${r.change_cents ? `<div class="summary"><div><span>Change due</span><span class="big">${usd(r.change_cents)}</span></div></div>` : ''}
+      <div class="summary"><div><span>Paid now</span><b>${usd(r.paid_cents)}</b></div><div><span>Balance owed</span><b>${usd(r.balance_cents)}</b></div></div>
+      <div class="actions"><button type="button" class="dk" onclick="printTicket()">🖨 Print statement</button><button class="primary" id="pDone">Done</button></div>`);
+    $('#pDone').onclick = () => { closeModal(); if (afterPaid) afterPaid(); };
+  });
+}
+
+// ---------- finish: final price, discount, last payment, close ----------
+function finishDialog() {
+  const j = cur;
+  const before = j.subtotal_cents + j.tax_cents;
+  const canClose = j.column_index === j.columns_count - 2;
+  const f = openModal(`<h2>Finish job #${j.job_number}</h2>
+    <div class="summary">
+      <div><span>Quoted price</span><span>${usd(j.quoted_cents)}</span></div>
+      <div><span>Added along the way</span><span>${usd(j.extras_cents)}</span></div>
+      <div><span>Sales tax</span><span>${usd(j.tax_cents)}</span></div>
+      <div><b>Before discount</b><b>${usd(before)}</b></div>
+    </div>
+    ${isMgr ? `<div class="two"><div><label>Discount</label><input name="disc" inputmode="decimal" value="${j.discount_cents ? dollars(j.discount_cents) : ''}" placeholder="0.00"></div>
+      <div><label>Reason</label><input name="note" maxlength="200" value="${esc(j.discount_note || '')}" placeholder="e.g. Smaller than projected"></div></div>
+      <div class="presets"><button type="button" class="dk" id="toQuote" title="Bring the final total back down to the quoted price">Finish at quoted price</button><button type="button" class="dk" id="noDisc">No discount</button></div>`
+      : `<p class="muted">Only an owner or manager can give a discount.</p>`}
+    <div class="summary"><div><span>Final total</span><span class="big" id="fTotal">${usd(j.total_cents)}</span></div>
+      <div><span>Paid so far</span><span>${usd(j.paid_cents)}</span></div><div><span>Balance owed</span><b id="fBal">${usd(j.balance_cents)}</b></div></div>
+    <p class="muted" style="font-size:13px">The discount comes off the final amount. ${canClose ? '' : `Jobs move one column at a time — the job can be closed from the column just before the last one.`}</p>
+    <div class="err" id="fErr"></div>
+    <div class="actions" style="flex-wrap:wrap">
+      <button type="button" class="dk" onclick="closeModal()">Cancel</button>
+      ${isMgr ? '<button type="button" class="dk" id="saveDisc">Save discount</button>' : ''}
+      <button type="button" class="primary" id="fPay" ${j.balance_cents > 0 ? '' : 'hidden'}>Take final payment</button>
+      ${canClose ? `<button type="button" class="primary" id="fClose" ${j.balance_cents === 0 ? '' : 'hidden'}>Close job ✓</button>` : ''}
+    </div>`);
+  const discNow = () => (f.disc && f.disc.value.trim() !== '' ? toCents(f.disc.value) : 0);
+  const preview = () => {
+    const d = discNow();
+    if (d == null) return;
+    $('#fTotal').textContent = usd(before - d); $('#fBal').textContent = usd(before - d - j.paid_cents);
+  };
+  if (f.disc) {
+    f.disc.oninput = preview;
+    $('#toQuote').onclick = () => { f.disc.value = dollars(Math.max(0, before - j.quoted_cents)); if (!f.note.value) f.note.value = 'Finished at quoted price'; preview(); };
+    $('#noDisc').onclick = () => { f.disc.value = ''; f.note.value = ''; preview(); };
+    $('#saveDisc').onclick = () => run(async () => {
+      const d = discNow(); if (d == null) throw new Error('Discount is not a valid amount');
+      await api(`/api/jobs/${j.id}/discount`, { discount_cents: d, note: f.note.value }, 'PUT');
+      await refreshTicket(); toast('Discount saved'); finishDialog();
+    });
+  }
+  $('#fPay').onclick = () => payDialog(() => finishDialog());
+  if ($('#fClose')) $('#fClose').onclick = () => run(async () => {
+    await api(`/api/jobs/${j.id}/move`, { direction: 1 });
+    closeModal(); await refreshTicket(); toast('Job closed');
+  });
+}
+
+// ---------- column settings (buttons per column) & workflow setup ----------
+function columnSettings(id) {
+  const c = cols.find((x) => x.id === id); if (!c) return;
+  const b = [0, 1, 2].map((k) => (c.buttons || [])[k] || { label: '', enabled: false, action: 'mark', color: '#3b82f6' });
+  const f = openModal(`<h2>Customize column</h2>
+    <div class="two"><div><label>Column name</label><input name="name" required maxlength="40" value="${esc(c.name)}"></div>
+      <div><label>Color</label><input name="color" type="color" value="${c.color}" style="height:44px;padding:3px"></div></div>
+    <label style="margin-top:16px">Card buttons</label><div class="muted" style="font-size:13px">Turn on up to three buttons and name them. "Mark + move" also sends the job to the next column.</div>
+    ${b.map((x, k) => `<div class="btnset"><div class="row">
+      <label class="check" style="margin:0"><input type="checkbox" name="en${k}" ${x.enabled ? 'checked' : ''}> ${k + 1}</label>
+      <input name="lb${k}" maxlength="24" value="${esc(x.label)}" placeholder="Button ${k + 1} name">
+      <input name="co${k}" type="color" value="${x.color || '#3b82f6'}" title="Button color"></div>
+      <div class="row2">
+        <label>When pressed<select name="ac${k}"><option value="mark">Just mark</option><option value="next" ${x.action === 'next' ? 'selected' : ''}>Mark + move to next column</option></select></label>
+        <label>Card goes to<select name="pl${k}"><option value="top" ${x.place === 'top' ? 'selected' : ''}>⬆ Top of column</option><option value="middle" ${!x.place || x.place === 'middle' ? 'selected' : ''}>Middle</option><option value="bottom" ${x.place === 'bottom' ? 'selected' : ''}>⬇ Bottom of column</option></select></label>
+      </div></div>`).join('')}
+    <div class="muted" style="font-size:12.5px;margin-top:6px">Cards sort themselves by the button they're marked with: top, then middle (also cards with no button pressed), then bottom. High-priority jobs come first within each group.</div>
+    <label style="margin-top:14px">Card preview</label><div id="prev"></div>
+    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="saveCol">Save</button></div>`);
+  const read = () => [0, 1, 2].map((k) => ({ label: f['lb' + k].value.trim(), enabled: f['en' + k].checked && !!f['lb' + k].value.trim(), action: f['ac' + k].value, color: f['co' + k].value, place: f['pl' + k].value }))
+    .filter((x) => x.label);
+  const prev = () => {
+    $('#prev').innerHTML = `<div class="jc" style="--c:${f.color.value};cursor:default"><div class="t"><span>#1045</span>Johnson Remodel</div><div class="d">${esc(f.name.value)}</div>
+      <div class="chips">${read().filter((x) => x.enabled).map((x, i) => `<span class="chip ${i === 0 ? 'on' : ''}" style="--b:${x.color}">${esc(x.label)}</span>`).join('') || '<span class="muted" style="font-size:13px">No buttons</span>'}</div></div>`;
+  };
+  f.oninput = prev; f.onchange = prev; prev();
+  $('#saveCol').onclick = () => run(async () => {
+    if (!f.reportValidity()) return;
+    await api('/api/job-columns/' + id, { name: f.name.value, color: f.color.value, buttons: read() }, 'PUT');
+    closeModal(); toast('Column saved'); await loadBoard();
+  });
+}
+function workflowSetup() {
+  openModal(`<h2>Workflow setup</h2><p class="muted" style="margin:0 0 8px">Columns run left to right. Jobs move one column at a time. The last column is where finished, fully paid jobs close.</p>
+    <div class="collist">${cols.map((c, i) => `<div><i style="--c:${c.color}"></i><b>${i + 1}. ${esc(c.name)}
+      <small class="muted" style="display:block;font-weight:500;font-size:12.5px">${(c.buttons || []).filter((x) => x.enabled).map((x) => esc(x.label) + (x.place === 'top' ? ' ⬆' : x.place === 'bottom' ? ' ⬇' : '')).join(' · ') || 'No buttons'}</small></b>
+      ${i > 0 && i < cols.length - 1 ? `<button type="button" class="dk" data-up="${c.id}" title="Move left">↑</button>` : ''}
+      ${i < cols.length - 2 ? `<button type="button" class="dk" data-down="${c.id}" title="Move right">↓</button>` : ''}
+      <button type="button" class="dk" data-edit="${c.id}">⚙</button>
+      ${i < cols.length - 1 ? `<button type="button" class="dk" data-rm="${c.id}" title="Remove">🗑</button>` : ''}</div>`).join('')}</div>
+    <div class="addrow" style="margin-top:12px"><input id="newCol" maxlength="40" placeholder="New column name, e.g. Permits"><button type="button" class="primary" id="addCol">+ Add column</button></div>
+    <div class="muted" style="font-size:12.5px;margin-top:4px">New columns are added just before the last column.</div>
+    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Done</button></div>`);
+  $('#mBody').onclick = (e) => {
+    const t = e.target.closest('button'); if (!t) return;
+    const d = t.dataset;
+    if (d.edit) return columnSettings(Number(d.edit));
+    if (d.up || d.down) return run(async () => { await api(`/api/job-columns/${d.up || d.down}/move`, { direction: d.up ? -1 : 1 }); await loadBoard(); workflowSetup(); });
+    if (d.rm) {
+      const c = cols.find((x) => x.id === Number(d.rm));
+      if (!confirm(`Remove the "${c.name}" column?`)) return;
+      return run(async () => { await api('/api/job-columns/' + d.rm, undefined, 'DELETE'); await loadBoard(); workflowSetup(); });
+    }
+    if (t.id === 'addCol') return run(async () => {
+      const name = $('#newCol').value.trim(); if (!name) throw new Error('Type a name for the column');
+      await api('/api/job-columns', { name, buttons: [{ label: name, enabled: true, action: 'mark' }] }); await loadBoard(); workflowSetup();
+    });
+  };
+}
+$('#setupBtn').onclick = workflowSetup;
+
+// ---------- crews (who's working the job, per phase) ----------
+const TRADES = ['Plumber', 'Electrician', 'Dirt work', 'Concrete', 'Framing', 'HVAC', 'Roofing', 'Drywall', 'Painting', 'Cleanup'];
+function crewPanel(j) {
+  const locked = j.is_closed;
+  const nowList = j.crews.filter((c) => c.column_id === j.column_id && !c.done);
+  const summary = nowList.length ? 'On the job now: ' + nowList.map((c) => esc(c.trade) + (c.name ? ' · ' + esc(c.name) : '')).join(', ')
+    : (j.crews.length ? `${j.crews.length} crew${j.crews.length === 1 ? '' : 's'} on this job` : 'No crews assigned yet');
+  if (!crewOpen) {
+    return `<div class="crewbox" id="crewBox"><div class="crewhead" data-crewtoggle="1"><b>👷 Crews</b><span class="sum">${summary}</span><span class="tog">Show ▾</span></div></div>`;
+  }
+  // Phases in board order: the current phase always shows (so you can add to it), others only if they have crews.
+  const phases = (j.columns || []).filter((c) => c.id === j.column_id || j.crews.some((x) => x.column_id === c.id));
+  const orphan = j.crews.filter((x) => !(j.columns || []).some((c) => c.id === x.column_id));
+  const row = (c) => `<div class="crow ${c.done ? 'done' : ''}">
+      <div class="who"><b>${esc(c.trade)}</b>${c.name ? ' · ' + esc(c.name) : ''}${c.done ? ' <span class="muted" style="font-size:12px">✓ done</span>' : ''}
+        <small>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : ''}${c.phone && c.note ? ' · ' : ''}${esc(c.note || '')}</small></div>
+      <div class="amt">${c.billing === 'costplus'
+        ? `${usd(c.charge_cents)}<small class="cp">COST PLUS</small><small class="cpd">cost ${usd(c.amount_cents)} + ${c.markup_type === 'dollar' ? usd(c.markup_cents || 0) : Number(c.markup_percent || 0) + '%'}</small>`
+        : `${c.amount_cents ? usd(c.amount_cents) : '<span class="muted">—</span>'}<small class="${c.billing === 'extra' ? 'ext' : 'inc'}">${c.billing === 'extra' ? 'UP-CHARGE' : 'PART OF QUOTE'}</small>`}</div>
+      ${locked ? '' : `<button class="${c.done ? '' : 'ok'}" data-crewdone="${c.id}" title="${c.done ? 'Put back on the job' : 'Mark finished'}">${c.done ? '↺' : '✓ Done'}</button>
+        <button data-crewedit="${c.id}">Edit</button><button class="xbtn" data-crewdel="${c.id}" title="Remove">×</button>`}</div>`;
+  const inc = j.crews.filter((c) => c.billing === 'included').reduce((a, c) => a + c.amount_cents, 0);
+  const ext = j.crews.filter((c) => c.billing !== 'included').reduce((a, c) => a + (c.charge_cents || c.amount_cents), 0);
+  return `<div class="crewbox" id="crewBox"><div class="crewhead" data-crewtoggle="1"><b>👷 Crews</b><span class="sum">${summary}</span><span class="tog">Hide ▴</span></div>
+    ${phases.map((p) => {
+      const list = j.crews.filter((c) => c.column_id === p.id);
+      return `<div class="phase"><h4><i style="--c:${p.color}"></i>${esc(p.name)}${p.id === j.column_id ? ' <small>(current phase)</small>' : ''}</h4>
+        ${list.map(row).join('') || '<div class="muted" style="font-size:14px;margin-bottom:6px">No crews in this phase yet.</div>'}
+        ${locked ? '' : `<button class="dk" data-crewadd="${p.id}" style="padding:7px 12px;font-size:14px">+ Add crew to ${esc(p.name)}</button>`}</div>`;
+    }).join('')}
+    ${orphan.length ? `<div class="phase"><h4>Other</h4>${orphan.map(row).join('')}</div>` : ''}
+    ${j.crews.length ? `<div class="crewtot"><span>Part of the quote: <b>${usd(inc)}</b>${j.quoted_cents ? ` of ${usd(j.quoted_cents)} quoted` : ''}</span><span>Up-charges &amp; cost plus on the ticket: <b>${usd(ext)}</b></span></div>` : ''}
+  </div>`;
+}
+function crewDialog(c, phaseId) {
+  const j = cur, isNew = !c;
+  c = c || { trade: '', name: '', phone: '', amount_cents: 0, billing: 'included', note: '', column_id: phaseId || j.column_id };
+  const f = openModal(`<h2>${isNew ? 'Add crew' : 'Edit crew'}</h2>
+    <label>Phase</label><select name="column_id">${(j.columns || []).map((p) => `<option value="${p.id}" ${p.id === c.column_id ? 'selected' : ''}>${esc(p.name)}${p.id === j.column_id ? ' (current)' : ''}</option>`).join('')}</select>
+    <label>Trade / crew</label><input name="trade" required maxlength="60" value="${esc(c.trade)}" placeholder="e.g. Plumber">
+    <div class="presets">${TRADES.map((t) => `<button type="button" class="dk" data-trade="${t}">${t}</button>`).join('')}</div>
+    <div class="two"><div><label>Name or company</label><input name="name" maxlength="100" value="${esc(c.name || '')}" placeholder="e.g. Mike's Plumbing"></div>
+      <div><label>Phone</label><input name="phone" maxlength="40" inputmode="tel" value="${esc(c.phone || '')}"></div></div>
+    <label id="amtLabel">Amount for this crew</label><input name="amt" inputmode="decimal" value="${c.amount_cents ? dollars(c.amount_cents) : ''}" placeholder="0.00" style="max-width:200px">
+    <div class="billopt">
+      <label><input type="radio" name="billing" value="included" ${c.billing !== 'extra' ? 'checked' : ''}><span>Part of the quote<small>Already in the quoted price; the job total doesn't change. Shows what this crew costs out of the quote.</small></span></label>
+      <label><input type="radio" name="billing" value="extra" ${c.billing === 'extra' ? 'checked' : ''}><span>Up-charge<small>Added to the job ticket as a charge, so the total and balance owed go up.</small></span></label>
+      <label><input type="radio" name="billing" value="costplus" ${c.billing === 'costplus' ? 'checked' : ''}><span>Cost plus<small>The amount above is the crew's cost. Add a markup (percent or dollars); cost + markup goes on the ticket as a charge.</small></span></label>
+    </div>
+    <div class="cpbox" id="cpBox" hidden>
+      <input name="mk" inputmode="decimal" placeholder="Markup" value="${c.billing === 'costplus' ? (c.markup_type === 'dollar' ? dollars(c.markup_cents || 0) : Number(c.markup_percent || 0)) : ''}">
+      <select name="mktype"><option value="percent">% of cost</option><option value="dollar" ${c.markup_type === 'dollar' ? 'selected' : ''}>$ amount</option></select>
+      <div class="prev" id="cpPrev"></div>
+    </div>
+    <label>Note</label><input name="note" maxlength="300" value="${esc(c.note || '')}" placeholder="e.g. Rough-in Tuesday, finish after drywall">
+    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="saveCrew">${isNew ? 'Add crew' : 'Save'}</button></div>`);
+  f.querySelector('.presets').onclick = (e) => { const b = e.target.closest('[data-trade]'); if (b) { f.trade.value = b.dataset.trade; f.name.focus(); } };
+  // Cost plus: show the markup fields and what will be charged.
+  const markup = () => {
+    const cost = toCents(f.amt.value) || 0, raw = f.mk.value.trim();
+    if (f.mktype.value === 'percent') { const pct = raw === '' ? 0 : Number(raw); return Number.isFinite(pct) && pct >= 0 ? { cost, mk: Math.round(cost * pct / 100 + 1e-9), pct } : null; }
+    const mk = raw === '' ? 0 : toCents(raw); return mk == null ? null : { cost, mk };
+  };
+  const cpSync = () => {
+    const on = f.billing.value === 'costplus';
+    $('#cpBox').hidden = !on;
+    $('#amtLabel').textContent = on ? "Crew's cost" : 'Amount for this crew';
+    if (!on) return;
+    const m = markup();
+    $('#cpPrev').innerHTML = m ? `Cost ${usd(m.cost)} + markup ${usd(m.mk)}${m.pct != null ? ` (${m.pct}%)` : ''} = <b>${usd(m.cost + m.mk)}</b> charged on the ticket` : 'Markup is not valid';
+  };
+  f.oninput = cpSync; f.onchange = cpSync; cpSync();
+  $('#saveCrew').onclick = () => run(async () => {
+    if (!f.reportValidity()) return;
+    const amt = f.amt.value.trim() === '' ? 0 : toCents(f.amt.value);
+    if (amt == null) throw new Error('Amount is not valid');
+    const body = { column_id: Number(f.column_id.value), trade: f.trade.value, name: f.name.value, phone: f.phone.value,
+      amount_cents: amt, billing: f.billing.value, note: f.note.value };
+    if (body.billing === 'costplus') {
+      const m = markup(); if (!m) throw new Error('Markup is not valid');
+      body.markup_type = f.mktype.value;
+      if (f.mktype.value === 'percent') body.markup_percent = m.pct; else body.markup_cents = m.mk;
+    }
+    if (isNew) await api(`/api/jobs/${j.id}/crews`, body); else await api(`/api/jobs/${j.id}/crews/${c.id}`, body, 'PUT');
+    closeModal(); crewOpen = true; toast(isNew ? 'Crew added' : 'Saved'); await refreshTicket();
+  });
+}
+
+// ---------- plans, photos & Claude estimates ----------
+const fileUrl = (f) => `/api/jobs/${f.job_id}/files/${f.id}`;
+const kb = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
+function fileRow(f) {
+  const by = `${shortDate(f.created_at)}${f.created_by_name ? ' · ' + esc(f.created_by_name) : ''}`;
+  if (f.kind === 'answer') {
+    const n = (f.estimate && f.estimate.thread || []).length;
+    return `<div class="frow est"><span class="ficon">💬</span><div class="fname"><b>${esc(f.name)}</b><small>${n} question${n === 1 ? '' : 's'} about ${esc((f.estimate && f.estimate.source_name) || 'a file')} · ${by}</small></div>
+      <div class="fact"><button data-fview="${f.id}">Open</button><button class="xbtn" data-fdel="${f.id}" title="Remove">×</button></div></div>`;
+  }
+  if (f.kind === 'estimate') {
+    const n = (f.estimate && f.estimate.materials || []).length;
+    return `<div class="frow est"><span class="ficon">✨</span><div class="fname"><b>${esc(f.name)}</b><small>${n} material${n === 1 ? '' : 's'} · ${by}</small></div>
+      <div class="fact"><button data-fview="${f.id}">Open</button><button class="xbtn" data-fdel="${f.id}" title="Remove">×</button></div></div>`;
+  }
+  return `<div class="frow">${f.kind === 'photo' ? `<a href="${fileUrl(f)}" target="_blank" rel="noopener"><img class="fthumb" src="${fileUrl(f)}" alt="" loading="lazy"></a>` : '<span class="ficon">📄</span>'}
+    <div class="fname"><b>${esc(f.name)}</b><small>${f.kind === 'pdf' ? 'PDF' : 'Photo'} · ${kb(f.size_bytes)} · ${by}</small></div>
+    <div class="fact"><a href="${fileUrl(f)}" target="_blank" rel="noopener">Open</a>${aiOn() ? `<button class="estb" data-fest="${f.id}" title="Ask Claude about this file">✨ Ask Claude</button>` : ''}
+      <button class="xbtn" data-fdel="${f.id}" title="Remove">×</button></div></div>`;
+}
+async function uploadFile(file, kind) {
+  let body = file, type = file.type, name = file.name || (kind === 'pdf' ? 'Plans.pdf' : 'Photo.jpg');
+  if (kind === 'photo') {
+    // Big enough to read a blueprint, small enough to store and send to Claude.
+    const dataUrl = await resizeImage(file, 2000);
+    body = await (await fetch(dataUrl)).blob(); type = 'image/jpeg'; name = name.replace(/\.[^.]+$/, '') + '.jpg';
+  } else {
+    if (!(file.type === 'application/pdf' || /\.pdf$/i.test(name))) throw new Error(`${name} is not a PDF`);
+    type = 'application/pdf';
+  }
+  if (body.size > 20 * 1024 * 1024) throw new Error(`${name} is larger than 20 MB`);
+  const res = await fetch(`/api/jobs/${cur.id}/files?name=${encodeURIComponent(name)}`, { method: 'POST', headers: { 'Content-Type': type }, body, credentials: 'same-origin' });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || `Upload failed (${res.status})`);
+  return d;
+}
+async function uploadPicked(input, kind) {
+  const list = [...input.files]; input.value = '';
+  if (!list.length || !cur) return [];
+  const out = [];
+  for (const [i, f] of list.entries()) {
+    toast(`Uploading ${list.length > 1 ? `${i + 1} of ${list.length}` : f.name}…`);
+    try { out.push(await uploadFile(f, kind)); } catch (e) { toast(e.message, 'bad'); }
+  }
+  if (out.length) { toast(`${out.length} file${out.length === 1 ? '' : 's'} attached`); await refreshTicket(); }
+  return out;
+}
+let afterUpload = null;
+$('#pdfBtn').onclick = () => { afterUpload = null; $('#pdfFile').click(); };
+$('#photoBtn').onclick = () => { afterUpload = null; $('#photoFile').click(); };
+$('#pdfFile').onchange = () => run(async () => { const r = await uploadPicked($('#pdfFile'), 'pdf'); if (afterUpload && r[0]) afterUpload(r[0].id); });
+$('#photoFile').onchange = () => run(async () => { const r = await uploadPicked($('#photoFile'), 'photo'); if (afterUpload && r[0]) afterUpload(r[0].id); });
+$('#aiBtn').onclick = () => claudeDialog();
+
+const aiOn = () => !!(me && me.features && me.features.ai_estimates);
+const ASK_IDEAS = ['Make a materials list', 'What is the square footage of each room?', 'List the electrical outlets, switches and fixtures',
+  'Check the plans for anything missing or unclear', 'Write a scope of work I can use in the quote', 'What will the dirt work and concrete need?'];
+// The Ask Claude window: pick a plan or photo, tell Claude what you want.
+function claudeDialog(fileId, text) {
+  if (!aiOn()) { toast('Claude is not turned on for this business', 'bad'); return; }
+  const src = files.filter((f) => f.kind === 'pdf' || f.kind === 'photo');
+  const f = openModal(`<h2>✨ Ask Claude</h2>
+    <p class="muted" style="margin:0">Pick a blueprint, plan or photo and tell Claude what you want. The answer is saved on this job, and you can ask follow-up questions.</p>
+    <label>Plan, blueprint or photo</label>
+    ${src.length ? `<select name="fid">${src.map((x) => `<option value="${x.id}" ${x.id === fileId ? 'selected' : ''}>${x.kind === 'pdf' ? '📄' : '📷'} ${esc(x.name)}</option>`).join('')}</select>`
+      : '<div class="muted">No plans or photos on this job yet. Attach one first:</div>'}
+    <div class="presets"><button type="button" class="dk" id="eNewPdf">📄 Attach a PDF</button><button type="button" class="dk" id="eNewPhoto">📷 Take / pick a photo</button></div>
+    <label>What do you want Claude to do with it?</label>
+    <textarea name="q" rows="4" maxlength="2000" placeholder="e.g. How many sheets of drywall for the addition? Walls are 9 ft.">${esc(text || '')}</textarea>
+    <div class="presets" id="ideas">${ASK_IDEAS.map((x) => `<button type="button" class="dk" data-idea="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+    <div class="actions" style="flex-wrap:wrap">
+      <button type="button" class="dk" onclick="closeModal()">Cancel</button>
+      <button type="button" class="dk" id="eList" ${src.length ? '' : 'disabled'} title="A list of materials with quantities that you can add to the job ticket">📋 Materials list for the ticket</button>
+      <button class="primary" id="eAsk" ${src.length ? '' : 'disabled'}>✨ Ask Claude</button></div>`);
+  const pickNew = (input) => { const q = f.q.value; afterUpload = (id) => claudeDialog(id, q); closeModal(); $(input).click(); };
+  $('#eNewPdf').onclick = () => pickNew('#pdfFile');
+  $('#eNewPhoto').onclick = () => pickNew('#photoFile');
+  $('#ideas').onclick = (e) => { const b = e.target.closest('[data-idea]'); if (b) { f.q.value = b.dataset.idea; f.q.focus(); } };
+  $('#eAsk').onclick = () => {
+    if (!f.q.value.trim()) { f.q.focus(); toast('Type what you want Claude to do', 'bad'); return; }
+    if (/^make a materials list$/i.test(f.q.value.trim())) return runEstimate(Number(f.fid.value), '');
+    runAsk(Number(f.fid.value), f.q.value);
+  };
+  $('#eList').onclick = () => runEstimate(Number(f.fid.value), f.q.value);
+}
+const estimateDialog = (fid) => claudeDialog(fid);
+function working(src, what) {
+  openModal(`<h2>✨ Claude is reading ${esc(src ? src.name : 'the file')}</h2>
+    <p><span class="spin"></span>${what} This usually takes 30 seconds to 2 minutes for a set of plans.</p>
+    <p class="muted">You can leave this open. The answer is saved to the job when it's done.</p>`);
+}
+function failed(e, retry) {
+  openModal(`<h2>Claude didn't finish</h2><p>${esc(e.message)}</p>
+    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Close</button><button class="primary" id="eRetry">Try again</button></div>`);
+  $('#eRetry').onclick = retry;
+}
+async function runEstimate(fid, notes) {
+  working(files.find((x) => x.id === fid), 'Working out the materials…');
+  try {
+    const r = await api(`/api/jobs/${cur.id}/files/${fid}/estimate`, { notes });
+    await refreshTicket();
+    showEstimate(files.find((x) => x.id === r.id) || { id: r.id, name: r.name, estimate: r.estimate, job_id: cur.id });
+  } catch (e) { failed(e, () => claudeDialog(fid, notes)); }
+}
+async function runAsk(fid, question, answerId) {
+  working(files.find((x) => x.id === fid), 'Working on your request…');
+  try {
+    const r = await api(`/api/jobs/${cur.id}/files/${fid}/ask`, { question, answer_id: answerId || undefined });
+    await refreshTicket();
+    showAnswer(files.find((x) => x.id === r.id) || { id: r.id, kind: 'answer', name: 'Claude', source_file_id: fid, estimate: r });
+  } catch (e) { failed(e, () => (answerId ? showAnswer(files.find((x) => x.id === answerId), question) : claudeDialog(fid, question))); }
+}
+// Shows Claude's answers (simple formatting: headings, bold, lists, tables).
+function mdLite(t) {
+  const lines = String(t || '').split('\n'); let html = '', list = null, table = null;
+  const inline = (x) => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
+  const close = () => {
+    if (list) { html += `</${list}>`; list = null; }
+    if (table) { html += '<table class="mdt">' + table.map((r, i) => `<tr>${r.map((c) => `<${i ? 'td' : 'th'}>${inline(c)}</${i ? 'td' : 'th'}>`).join('')}</tr>`).join('') + '</table>'; table = null; }
+  };
+  for (const raw of lines) {
+    const l = raw.trimEnd(); let m;
+    if (/^\s*\|/.test(l)) {
+      if (list) { html += `</${list}>`; list = null; }
+      const cells = l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+      if (cells.every((c) => /^:?-{2,}:?$/.test(c))) continue;
+      (table = table || []).push(cells); continue;
+    }
+    if ((m = /^\s*[-*•]\s+(.*)/.exec(l))) { if (table) close(); if (list !== 'ul') { close(); html += '<ul>'; list = 'ul'; } html += `<li>${inline(m[1])}</li>`; continue; }
+    if ((m = /^\s*\d+[.)]\s+(.*)/.exec(l))) { if (table) close(); if (list !== 'ol') { close(); html += '<ol>'; list = 'ol'; } html += `<li>${inline(m[1])}</li>`; continue; }
+    close();
+    if ((m = /^#{1,6}\s+(.*)/.exec(l))) html += `<h4>${inline(m[1])}</h4>`;
+    else if (/^-{3,}$/.test(l.trim())) html += '<hr>';
+    else if (l.trim()) html += `<p>${inline(l)}</p>`;
+  }
+  close();
+  return html;
+}
+function showAnswer(f, draft) {
+  if (!f || !f.estimate) return;
+  const th = f.estimate.thread || [];
+  const fid = f.source_file_id;
+  const srcOk = files.some((x) => x.id === fid);
+  const dlg = openModal(`<h2>💬 ${esc(f.name)}</h2>
+    <p class="muted" style="margin:0 0 8px">About ${esc(f.estimate.source_name || 'a file')}${srcOk ? '' : ' (that file was removed, so no more follow-ups)'}</p>
+    <div class="chat">${th.map((t) => `<div class="q"><b>${esc(t.by || 'You')}:</b> ${esc(t.q)}</div><div class="a">${mdLite(t.a)}</div>`).join('')}</div>
+    ${srcOk && aiOn() ? `<label>Ask a follow-up</label><textarea name="q" rows="2" maxlength="2000" placeholder="e.g. Now do the same for the garage">${esc(draft || '')}</textarea>` : ''}
+    <p class="muted" style="font-size:12.5px">Answers by Claude. Check measurements and quantities before ordering or quoting.</p>
+    <div class="actions" style="flex-wrap:wrap"><button type="button" class="dk" onclick="closeModal()">Close</button>
+      ${srcOk && aiOn() ? `<button type="button" class="dk" id="aList">📋 Materials list for the ticket</button><button class="primary" id="aAsk">Ask follow-up</button>` : ''}</div>`);
+  dlg.classList.add('wide');
+  const chat = dlg.querySelector('.chat'); chat.scrollTop = chat.scrollHeight;
+  if (!(srcOk && aiOn())) return;
+  $('#aAsk').onclick = () => { if (!dlg.q.value.trim()) { dlg.q.focus(); return; } runAsk(fid, dlg.q.value, f.id); };
+  // A materials list from this conversation: uses what was asked as the instructions.
+  $('#aList').onclick = () => runEstimate(fid, [...th.map((t) => t.q), dlg.q.value].filter(Boolean).join('. ').slice(0, 1000));
+}
+// Words in a name, for matching Claude's material names to your products.
+const words = (s) => String(s || '').toLowerCase().replace(/(\d)\s*x\s*(\d)/g, '$1x$2').split(/[^a-z0-9/".x]+/).filter((w) => w.length > 1 || /\d/.test(w));
+function bestProducts(name) {
+  const w = new Set(words(name));
+  if (!w.size) return [];
+  return products.filter((p) => !p.is_rental).map((p) => {
+    if (p.name.toLowerCase() === String(name).toLowerCase()) return { p, s: 1 };
+    const pw = words(p.name); const hit = pw.filter((x) => w.has(x)).length;
+    return { p, s: hit / Math.max(w.size, pw.length) };
+  }).filter((x) => x.s > 0.2).sort((a, b) => b.s - a.s).slice(0, 5);
+}
+function showEstimate(f) {
+  if (!f || !f.estimate) return;
+  const e = f.estimate, locked = cur.is_closed;
+  const rows = e.materials.map((m, i) => {
+    const best = bestProducts(m.name);
+    const pick = best[0] && best[0].s >= 0.6 ? 'p' + best[0].p.id : 'charge';
+    return { m, i, best, pick, on: pick !== 'charge' };
+  });
+  const dlg = openModal(`<h2>✨ ${esc(f.name)}</h2>
+    ${e.summary ? `<p style="margin:4px 0 10px">${esc(e.summary)}</p>` : ''}
+    ${e.notes ? `<p class="muted" style="margin:0 0 8px">Asked for: ${esc(e.notes)}</p>` : ''}
+    <div style="overflow-x:auto"><table class="est"><thead><tr><th>${locked ? '' : '<input type="checkbox" id="eAll" title="Select all">'}</th><th>Material</th><th>Qty</th><th>Add to job as</th><th>Price</th><th class="num">Amount</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr data-i="${r.i}">
+      <td>${locked ? '' : `<input type="checkbox" class="on" ${r.on ? 'checked' : ''}>`}</td>
+      <td><b>${esc(r.m.name)}</b><small>${esc([r.m.category, r.m.notes].filter(Boolean).join(' · '))}</small></td>
+      <td><input class="q" inputmode="decimal" value="${r.m.qty}"> <small>${esc(r.m.unit)}</small></td>
+      <td><select class="as">${r.best.map((b) => `<option value="p${b.p.id}" ${r.pick === 'p' + b.p.id ? 'selected' : ''}>${esc(b.p.name)} · ${usd(b.p.price_cents)}</option>`).join('')}
+        <option value="charge" ${r.pick === 'charge' ? 'selected' : ''}>Extra charge (enter price)</option></select></td>
+      <td><input class="pr" inputmode="decimal" placeholder="0.00"></td><td class="num amt"></td></tr>`).join('')}
+    </tbody></table></div>
+    ${e.assumptions && e.assumptions.length ? `<h3 style="margin:14px 0 0;font-size:14px">Assumptions</h3><ul class="estlist">${e.assumptions.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    ${e.questions && e.questions.length ? `<h3 style="margin:14px 0 0;font-size:14px">To confirm</h3><ul class="estlist">${e.questions.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    <p class="muted" style="font-size:12.5px">Estimated by Claude${e.model ? ` (${esc(e.model)})` : ''} from ${esc(e.source_name || 'the attached file')}. Check quantities before ordering. Quantities are rounded up to whole units when added.</p>
+    <div class="summary"><div><span>Selected</span><b id="eSel">$0.00</b></div></div>
+    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Close</button>${locked ? '' : '<button class="primary" id="eAdd">Add selected to job</button>'}</div>`);
+  dlg.classList.add('wide');
+  const prodOf = (v) => products.find((p) => 'p' + p.id === v);
+  const lineOf = (tr) => {
+    const v = tr.querySelector('.as').value, p = prodOf(v);
+    const qty = Math.ceil(Number(String(tr.querySelector('.q').value).replace(/,/g, '')) || 0);
+    const pr = tr.querySelector('.pr');
+    pr.disabled = !!p; if (p) pr.value = (p.price_cents / 100).toFixed(2);
+    const price = p ? p.price_cents : toCents(pr.value);
+    return { tr, p, qty, price, on: tr.querySelector('.on') ? tr.querySelector('.on').checked : false };
+  };
+  const recalc = () => {
+    let sel = 0;
+    $$('table.est tbody tr', dlg).forEach((tr) => {
+      const l = lineOf(tr);
+      tr.querySelector('.amt').textContent = l.price != null && l.qty ? usd(l.price * l.qty) : '';
+      if (l.on && l.price != null) sel += l.price * l.qty;
+    });
+    $('#eSel').textContent = usd(sel);
+  };
+  dlg.oninput = recalc; dlg.onchange = (ev) => {
+    if (ev.target.id === 'eAll') $$('.on', dlg).forEach((c) => (c.checked = ev.target.checked));
+    if (ev.target.classList.contains('pr') && ev.target.value) { const c = ev.target.closest('tr').querySelector('.on'); if (c) c.checked = true; }
+    recalc();
+  };
+  recalc();
+  if (locked) return;
+  $('#eAdd').onclick = () => run(async () => {
+    const lines = $$('table.est tbody tr', dlg).map(lineOf).filter((l) => l.on);
+    if (!lines.length) throw new Error('Check the materials you want to add');
+    const bad = lines.find((l) => !l.qty || (!l.p && !l.price));
+    if (bad) { bad.tr.querySelector(bad.qty ? '.pr' : '.q').focus(); throw new Error(`Enter a ${bad.qty ? 'price' : 'quantity'} for ${e.materials[bad.tr.dataset.i].name}`); }
+    let n = 0;
+    for (const l of lines) {
+      const m = e.materials[l.tr.dataset.i];
+      if (l.p) await api(`/api/jobs/${cur.id}/items`, { kind: 'item', product_id: l.p.id, qty: l.qty });
+      else await api(`/api/jobs/${cur.id}/items`, { kind: 'charge', name: `${m.name}${m.unit ? ` (${m.unit})` : ''}`.slice(0, 120), unit_cents: l.price, qty: l.qty, taxable: true });
+      n++;
+    }
+    closeModal(); toast(`Added ${n} line${n === 1 ? '' : 's'} to the job`);
+    products = await api('/api/products').catch(() => products);
+    await refreshTicket();
+  });
+}
+
+// ---------- printed statement / invoice ----------
+function printTicket() {
+  const j = cur, b = me.business;
+  $('#printArea').innerHTML = `<div class="head"><div>${b.logo_url ? `<img src="${esc(b.logo_url)}" style="height:50px"><br>` : ''}<h1>${esc(b.name)}</h1>
+      ${j.location ? `<div>${esc(j.location.address || '')}</div><div>${esc(j.location.phone || '')}</div>` : ''}</div>
+    <div style="text-align:right"><h1>Job #${j.job_number}</h1><div>${new Date().toLocaleDateString()}</div><div>Status: ${esc(j.column ? j.column.name : '')}</div></div></div>
+    <hr><div><b>${esc(j.name)}</b>${j.description ? ' — ' + esc(j.description) : ''}</div>
+    ${j.customer_name ? `<div>Customer: ${esc(j.customer_name)} ${esc(j.customer_phone || '')}</div>` : ''}
+    ${j.job_address ? `<div>Job site: ${esc(j.job_address)}</div>` : ''}${j.po_number ? `<div>PO #: ${esc(j.po_number)}</div>` : ''}
+    <table><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th></tr></thead><tbody>
+      <tr><td>Quoted price</td><td></td><td></td><td class="num">${usd(j.quoted_cents)}</td></tr>
+      ${j.items.map((it) => `<tr><td>${esc(it.name)}${it.taxable ? ' (T)' : ''}</td><td class="num">${it.qty}</td><td class="num">${usd(it.unit_cents)}</td><td class="num">${usd(it.qty * it.unit_cents)}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="totals"><div><span>Subtotal</span><span>${usd(j.subtotal_cents)}</span></div>
+      <div><span>Sales tax${j.tax_exempt ? ' (exempt)' : ` ${Number(j.tax_rate)}%`}</span><span>${usd(j.tax_cents)}</span></div>
+      ${j.discount_cents ? `<div><span>Discount${j.discount_note ? ' (' + esc(j.discount_note) + ')' : ''}</span><span>−${usd(j.discount_cents)}</span></div>` : ''}
+      <div class="b"><span>Job total</span><span>${usd(j.total_cents)}</span></div></div>
+    ${j.payments.filter((p) => !p.voided).length ? `<table><thead><tr><th>Payments</th><th></th><th class="num">Amount</th></tr></thead><tbody>
+      ${j.payments.filter((p) => !p.voided).map((p) => `<tr><td>${new Date(p.created_at).toLocaleDateString()}</td><td>${METHOD[p.method]}${p.check_number ? ' #' + esc(p.check_number) : ''}${p.note ? ' — ' + esc(p.note) : ''}</td><td class="num">${usd(p.amount_cents)}</td></tr>`).join('')}</tbody></table>` : ''}
+    <div class="totals"><div><span>Paid</span><span>${usd(j.paid_cents)}</span></div><div class="b"><span>Balance due</span><span>${usd(j.balance_cents)}</span></div></div>
+    <p style="margin-top:30px">Thank you for your business.</p>`;
+  window.print();
+}
+
+// ---------- live updates from other screens ----------
+let reloadTimer;
+function listen() {
+  const es = new EventSource('/api/jobs/events');
+  es.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'hello') return;
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+      if (openId && m.type === 'job' && m.id === openId) {
+        if (m.deleted) { toast('This job was deleted', 'bad'); closeTicket(); } else refreshTicket().catch(() => {});
+      }
+      if (!openId) loadBoard().catch(() => {});
+      else if (m.type === 'columns') loadBoard().catch(() => {});
+    }, 250);
+  };
+}
+function tick() { $('#clock').textContent = new Date().toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+
+(async () => {
+  me = await api('/api/me');
+  if (!me.business) { location.href = '/admin#businesses'; return; }
+  applyBrand(me.business);
+  $('#bizName').textContent = me.business.name;
+  if (me.business.logo_url) { $('#logo').src = me.business.logo_url; $('#logo').hidden = false; }
+  if (!me.business.jobs_enabled) {
+    $('#board').innerHTML = '<div class="empty" style="padding:40px">The job board is not turned on for this business. The platform administrator can turn on the Jobs add-on.</div>';
+    $('#newJob').hidden = true; return;
+  }
+  isMgr = ['admin', 'owner', 'manager'].includes(me.user.role);
+  rentalsOn = !!me.business.rentals_enabled;
+  $('#rentalBtn').hidden = !rentalsOn;
+  $('#aiBtn').hidden = !aiOn();
+  $('#setupBtn').hidden = !isMgr; $('#manageLink').hidden = !isMgr;
+  tick(); setInterval(tick, 30000);
+  await loadBoard();
+  listen();
+  const m = /^#job-(\d+)$/.exec(location.hash);
+  if (m) openTicket(Number(m[1]));
+})().catch((e) => toast(e.message, 'bad'));
+</script>
+</body>
+</html>
