@@ -445,11 +445,11 @@ async function showCustomer(id) {
         <td>${a.kind === 'charge' ? `Sale #${a.ref_id}${a.po_number ? ' · PO ' + esc(a.po_number) : ''}${a.job_address ? `<div class="muted" style="font-size:12px">${esc(a.job_address)}</div>` : ''}`
           : `${esc(PAY_NAMES[a.method] || a.method)}${a.check_number ? ' #' + esc(a.check_number) : ''}`}</td>
         <td class="num">${a.kind === 'charge' ? money(a.amount_cents) : ''}</td><td class="num">${a.kind === 'payment' ? money(a.amount_cents) : ''}</td>
-        <td>${a.kind === 'charge' ? `<button data-receipt="${a.ref_id}">Receipt</button>` : !a.voided ? `<button data-voidpay="${a.ref_id}">Void</button>` : ''}</td></tr>`).join('')
+        <td>${a.kind === 'charge' ? `<button data-invoice="${a.ref_id}">Invoice</button>` : !a.voided ? `<button data-voidpay="${a.ref_id}">Void</button>` : ''}</td></tr>`).join('')
         || '<tr><td colspan="6" class="muted">No account activity yet.</td></tr>'}</tbody></table></div>` : ''}
     <h3>Recent sales</h3><div class="tablewrap"><table class="list"><thead><tr><th>#</th><th>Date</th><th>PO</th><th>Paid by</th><th class="num">Total</th><th></th></tr></thead><tbody>
       ${c.sales.map((s) => `<tr class="${s.voided ? 'off' : ''}"><td>${s.id}</td><td>${new Date(s.created_at).toLocaleString()}</td><td>${esc(s.po_number || '')}</td><td>${esc(PAY_NAMES[s.payment_method] || s.payment_method)}</td>
-        <td class="num">${money(s.total_cents)}</td><td><button data-receipt="${s.id}">Receipt</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">No sales yet.</td></tr>'}</tbody></table></div>
+        <td class="num">${money(s.total_cents)}</td><td style="white-space:nowrap"><button data-invoice="${s.id}">Invoice</button> <button data-receipt="${s.id}">Receipt</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">No sales yet.</td></tr>'}</tbody></table></div>
     ${c.quotes.length ? `<h3>Quotes</h3><div class="tablewrap"><table class="list"><thead><tr><th>#</th><th>Date</th><th>PO</th><th>Status</th><th class="num">Total</th><th></th></tr></thead><tbody>
       ${c.quotes.map((q) => `<tr><td>${q.id}</td><td>${new Date(q.created_at).toLocaleDateString()}</td><td>${esc(q.po_number || '')}</td><td>${esc(q.status)}</td>
         <td class="num">${money(q.total_cents)}</td><td><button data-quote="${q.id}">Print</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
@@ -469,6 +469,7 @@ async function showCustomer(id) {
   $('#view').onclick = async (e) => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.receipt) window.open('/receipt?id=' + b.dataset.receipt, '_blank', 'width=420,height=700');
+    if (b.dataset.invoice) window.open('/invoice?id=' + b.dataset.invoice, '_blank', 'width=900,height=900');
     if (b.dataset.quote) window.open('/quote?id=' + b.dataset.quote, '_blank', 'width=420,height=700');
     if (b.dataset.voidpay && confirm('Void this payment? The amount goes back on the balance.')) {
       try { await api(`/api/account-payments/${b.dataset.voidpay}/void`, {}); toast('Payment voided'); showCustomer(id); } catch (err) { toast(err.message, 'bad'); }
@@ -887,13 +888,14 @@ async function showSales() {
     <div class="tablewrap"><table class="list"><thead><tr><th>#</th><th>Time</th><th>Location</th><th>Cashier</th><th>Paid by</th><th class="num">Total</th><th></th></tr></thead><tbody>
     ${data.sales.map((s) => `<tr class="${s.voided ? 'off' : ''}"><td>${s.id}</td><td>${new Date(s.created_at).toLocaleString()}</td><td>${esc(s.location_name)} · ${esc(s.register_name || '')}</td>
       <td>${esc(s.cashier || '')}</td><td>${esc(paidByText(s))}</td><td class="num">${money(s.total_cents)}${s.voided ? ' <span class="pill off">Void</span>' : ''}</td>
-      <td style="white-space:nowrap"><button data-receipt="${s.id}">Receipt</button> <button class="wa" data-send="${s.id}">Send</button>${s.voided ? '' : ` <button data-void="${s.id}">Void</button>`}</td></tr>`).join('')
+      <td style="white-space:nowrap"><button data-receipt="${s.id}">Receipt</button> <button data-invoice="${s.id}">Invoice</button> <button class="wa" data-send="${s.id}">Send</button>${s.voided ? '' : ` <button data-void="${s.id}">Void</button>`}</td></tr>`).join('')
       || '<tr><td colspan="7" class="muted">No sales in this period.</td></tr>'}</tbody></table></div>`;
   const refresh = () => { salesFilter = { from: $('#sFrom').value, to: $('#sTo').value, location_id: $('#sLoc').value }; showSales(); };
   $('#sFrom').onchange = refresh; $('#sTo').onchange = refresh; $('#sLoc').onchange = refresh;
   $('#view').onclick = async (e) => {
     const t = e.target;
     if (t.dataset.receipt) window.open('/receipt?id=' + t.dataset.receipt, '_blank', 'width=420,height=700');
+    if (t.dataset.invoice) window.open('/invoice?id=' + t.dataset.invoice, '_blank', 'width=900,height=900');
     if (t.dataset.send) openSendChooser(t.dataset.send);
     if (t.dataset.void && confirm(`Void sale #${t.dataset.void}? It will be removed from the totals and tracked stock is put back.`)) {
       try { await api(`/api/sales/${t.dataset.void}/void`, {}); toast('Sale voided'); showSales(); } catch (err) { toast(err.message, 'bad'); }
