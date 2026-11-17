@@ -672,12 +672,13 @@ app.post('/api/registers/:id/checkout', ...biz, wrap(async (req, res) => {
     const s = await client.query(
       `INSERT INTO sales (business_id, location_id, register_id, user_id, subtotal_cents, tax_cents, total_cents,
          tax_rate, payment_method, tendered_cents, change_cents, receipt_token,
-         customer_id, customer_name, customer_phone, po_number, job_address, job_lat, job_lng, quote_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING id`,
+         customer_id, customer_name, customer_phone, po_number, job_address, job_lat, job_lng, quote_id, fulfillment, invoice_note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING id`,
       [req.user.business_id, reg.location_id, reg.id, req.user.id, t.subtotal_cents, t.tax_cents, t.total_cents,
         reg.tax_rate, method, tendered, change, token(16),
         cust ? cust.id : null, cust ? cust.name : (info.customer_name || null), cust ? cust.phone : (info.customer_phone || null),
-        info.po_number || null, info.job_address || null, info.job_lat ?? null, info.job_lng ?? null, info.quote_id || null]);
+        info.po_number || null, info.job_address || null, info.job_lat ?? null, info.job_lng ?? null, info.quote_id || null,
+        info.fulfillment || null, info.invoice_note || null]);
     saleId = s.rows[0].id;
     if (info.quote_id) {
       await client.query(`UPDATE quotes SET status='sold', sale_id=$1 WHERE id=$2 AND business_id=$3`,
@@ -1150,7 +1151,7 @@ async function saleInfoView(info, businessId) {
   info = info || {};
   if (!info.customer_id) return info;
   const c = await pool.query(
-    `SELECT c.id, c.name, c.company, c.phone, c.address, c.charge_account, c.credit_limit_cents, ${BALANCE_SQL} AS balance_cents
+    `SELECT c.id, c.name, c.company, c.phone, c.email, c.address, c.charge_account, c.credit_limit_cents, ${BALANCE_SQL} AS balance_cents
        FROM customers c WHERE c.id=$1 AND c.business_id=$2`, [info.customer_id, businessId]);
   return { ...info, customer: c.rows[0] || null };
 }
@@ -1177,6 +1178,8 @@ app.put('/api/registers/:id/sale-info', ...biz, wrap(async (req, res) => {
     job_address: text(b.job_address, 'Job site address', { required: false, max: 300 }) || null,
     job_lat: parseCoord(b.job_lat, 90), job_lng: parseCoord(b.job_lng, 180),
     quote_id: b.quote_id ? Number(b.quote_id) || null : null,
+    fulfillment: ['pickup', 'delivery'].includes(b.fulfillment) ? b.fulfillment : null,
+    invoice_note: text(b.invoice_note, 'Invoice note', { required: false, max: 1000 }) || null,
   };
   if ((info.job_lat == null) !== (info.job_lng == null)) fail(400, 'GPS needs both latitude and longitude');
   await pool.query('UPDATE registers SET sale_info=$1 WHERE id=$2', [JSON.stringify(info), req.params.id]);
@@ -1199,11 +1202,11 @@ app.post('/api/registers/:id/quote', ...biz, wrap(async (req, res) => {
   const t = computeTotals(reg.cart, reg.tax_rate);
   const q = await pool.query(
     `INSERT INTO quotes (business_id, location_id, customer_id, customer_name, customer_phone, po_number, job_address, job_lat, job_lng,
-       cart, subtotal_cents, tax_cents, total_cents, tax_rate, note, valid_until, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15, (now() + ($16 || ' days')::interval)::date, $17) RETURNING id`,
+       cart, subtotal_cents, tax_cents, total_cents, tax_rate, note, valid_until, created_by, fulfillment)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15, (now() + ($16 || ' days')::interval)::date, $17, $18) RETURNING id`,
     [req.user.business_id, reg.location_id, cust ? cust.id : null, name, phone, info.po_number || null, info.job_address || null,
       info.job_lat ?? null, info.job_lng ?? null, JSON.stringify(reg.cart), t.subtotal_cents, t.tax_cents, t.total_cents,
-      reg.tax_rate, text(req.body.note, 'Note', { required: false, max: 500 }) || null, String(days), req.user.id]);
+      reg.tax_rate, text(req.body.note, 'Note', { required: false, max: 500 }) || null, String(days), req.user.id, info.fulfillment || null]);
   await pool.query(`UPDATE registers SET cart='[]'::jsonb, sale_info='{}'::jsonb WHERE id=$1`, [reg.id]);
   broadcast(reg.id, { type: 'cart', cart: [], totals: computeTotals([], reg.tax_rate), source: 'register' });
   broadcast(reg.id, { type: 'sale-info', info: {} });
@@ -1254,7 +1257,8 @@ app.post('/api/quotes/:id/load', ...biz, wrap(async (req, res) => {
     return copy;
   });
   const info = { customer_id: quote.customer_id, customer_name: quote.customer_name, customer_phone: quote.customer_phone,
-    po_number: quote.po_number, job_address: quote.job_address, job_lat: quote.job_lat, job_lng: quote.job_lng, quote_id: quote.id };
+    po_number: quote.po_number, job_address: quote.job_address, job_lat: quote.job_lat, job_lng: quote.job_lng, quote_id: quote.id,
+    fulfillment: quote.fulfillment || null };
   await pool.query('UPDATE registers SET cart=$1, sale_info=$2 WHERE id=$3', [JSON.stringify(cart), JSON.stringify(info), reg.id]);
   const totals = computeTotals(cart, reg.tax_rate);
   const view = await saleInfoView(info, req.user.business_id);
@@ -1532,9 +1536,12 @@ app.get('/api/sales', ...managers, wrap(async (req, res) => {
     summary: sum.rows.map((r) => ({ ...r, total: Number(r.total) })) });
 }));
 const SALE_SELECT = `SELECT s.*, l.name AS location_name, l.address AS location_address, l.phone AS location_phone,
-            b.name AS business_name, b.logo_url, u.name AS cashier, r.name AS register_name
+            b.name AS business_name, b.logo_url, u.name AS cashier, r.name AS register_name,
+            cu.company AS customer_company, cu.address AS customer_address, cu.email AS customer_email,
+            COALESCE(s.customer_phone, cu.phone) AS customer_phone_any
        FROM sales s JOIN locations l ON l.id = s.location_id JOIN businesses b ON b.id = s.business_id
-       LEFT JOIN users u ON u.id = s.user_id LEFT JOIN registers r ON r.id = s.register_id`;
+       LEFT JOIN users u ON u.id = s.user_id LEFT JOIN registers r ON r.id = s.register_id
+       LEFT JOIN customers cu ON cu.id = s.customer_id`;
 async function saleWithItems(sale) {
   const items = await pool.query('SELECT name, barcode, qty, unit_cents, taxable, line_cents FROM sale_items WHERE sale_id = $1 ORDER BY id', [sale.id]);
   const pays = await pool.query('SELECT method, amount_cents, tendered_cents, change_cents, check_number FROM sale_payments WHERE sale_id = $1 ORDER BY id', [sale.id]);
@@ -1573,7 +1580,8 @@ app.get('/api/receipt/:token', wrap(async (req, res) => {
   const sale = await saleWithItems(s.rows[0]);
   const keep = ['id', 'created_at', 'subtotal_cents', 'tax_cents', 'total_cents', 'tax_rate', 'payment_method',
     'tendered_cents', 'change_cents', 'voided', 'location_name', 'location_address', 'location_phone',
-    'business_name', 'logo_url', 'items', 'payments', 'rentals', 'customer_name', 'po_number', 'job_address', 'job_lat', 'job_lng'];
+    'business_name', 'logo_url', 'items', 'payments', 'rentals', 'customer_name', 'customer_company', 'po_number', 'job_address', 'job_lat', 'job_lng',
+    'fulfillment', 'invoice_note'];
   const out = Object.fromEntries(keep.map((k) => [k, sale[k]]));
   out.cashier = sale.cashier ? sale.cashier.split(' ')[0] : null; // first name only
   res.set('Cache-Control', 'no-store');
@@ -1612,6 +1620,45 @@ require('./jobfiles')(app, { pool, wrap, fail, text, ...jobsApi });
 
 // ---------- QuickBooks Online (see qbo.js) ----------
 require('./qbo')(app, { pool, wrap, fail, text, requireLogin, requireBusiness, requireRole, requireAdmin, publicOrigin });
+// Note printed on an invoice (can be added or changed after the sale).
+app.put('/api/sales/:id/note', ...biz, wrap(async (req, res) => {
+  const note = text(req.body.invoice_note, 'Note', { required: false, max: 1000 }) || null;
+  const r = await pool.query('UPDATE sales SET invoice_note=$1 WHERE id=$2 AND business_id=$3', [note, req.params.id, req.user.business_id]);
+  if (!r.rowCount) fail(404, 'Sale not found');
+  res.json({ ok: true, invoice_note: note });
+}));
+
+// Customer statement for a date range (dates are the business's local days).
+app.get('/api/customers/:id/statement', ...biz, wrap(async (req, res) => {
+  const day = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : null);
+  const from = day(req.query.from), to = day(req.query.to);
+  if (!from || !to) fail(400, 'Pick a start and end date');
+  if (from > to) fail(400, 'The start date is after the end date');
+  const c = await pool.query(`SELECT c.*, ${BALANCE_SQL} AS balance_cents, COALESCE(b.time_zone,'America/Chicago') AS tz
+      FROM customers c JOIN businesses b ON b.id=c.business_id WHERE c.id=$1 AND c.business_id=$2`, [req.params.id, req.user.business_id]);
+  const cust = c.rows[0] || fail(404, 'Customer not found');
+  const ACT = `SELECT * FROM (
+       SELECT 'charge' AS kind, s.id AS ref_id, s.created_at, p.amount_cents, s.po_number, s.job_address, s.invoice_note AS note,
+              NULL AS method, NULL AS check_number, s.voided
+         FROM sale_payments p JOIN sales s ON s.id = p.sale_id WHERE s.customer_id = $1 AND p.method = 'account'
+       UNION ALL
+       SELECT 'payment', a.id, a.created_at, a.amount_cents, NULL, NULL, a.note, a.method, a.check_number, a.voided
+         FROM account_payments a WHERE a.customer_id = $1) x`;
+  const local = `(x.created_at AT TIME ZONE $2)::date`;
+  const open = await pool.query(`SELECT COALESCE(sum(CASE WHEN kind='charge' THEN amount_cents ELSE -amount_cents END),0)::int AS bal
+      FROM (${ACT}) x WHERE NOT x.voided AND ${local} < $3::date`, [cust.id, cust.tz, from]);
+  const rows = await pool.query(`SELECT x.* FROM (${ACT}) x WHERE ${local} BETWEEN $3::date AND $4::date ORDER BY x.created_at LIMIT 2000`,
+    [cust.id, cust.tz, from, to]);
+  let bal = open.rows[0].bal, charges = 0, payments = 0;
+  const activity = rows.rows.map((a) => {
+    if (!a.voided) { if (a.kind === 'charge') { bal += a.amount_cents; charges += a.amount_cents; } else { bal -= a.amount_cents; payments += a.amount_cents; } }
+    return { ...a, balance_cents: bal };
+  });
+  delete cust.tz;
+  res.json({ customer: cust, from, to, opening_cents: open.rows[0].bal, charges_cents: charges, payments_cents: payments,
+    closing_cents: bal, activity });
+}));
+
 require('./email')(app, { pool, wrap, fail, requireLogin, requireBusiness, publicOrigin, SALE_SELECT, saleWithItems, token });
 
 // ---------- errors ----------
