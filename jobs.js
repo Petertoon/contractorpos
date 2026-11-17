@@ -138,7 +138,7 @@ module.exports = function setupJobs(app, deps) {
     const { rows } = await pool.query(
       `SELECT j.id, j.job_number, j.name, j.description, j.customer_name, j.customer_phone, j.job_address, j.column_id,
               j.status_label, j.priority, j.crew, j.start_date, j.progress, j.quoted_cents, j.tax_rate, j.tax_exempt,
-              j.discount_cents, j.column_entered_at, j.closed_at, j.updated_at, ${JOB_SUMS},
+              j.discount_cents, j.column_entered_at, j.closed_at, j.updated_at, j.back_reason, j.back_at, j.back_by, ${JOB_SUMS},
               (SELECT count(*) FROM job_files f WHERE f.job_id = j.id)::int AS file_count,
               (SELECT string_agg(c.trade || COALESCE(' · ' || c.name, ''), ', ' ORDER BY c.id) FROM job_crews c
                 WHERE c.job_id = j.id AND c.column_id = j.column_id AND NOT c.done) AS crews_now
@@ -326,20 +326,24 @@ module.exports = function setupJobs(app, deps) {
   }));
 
   // Moves a job one column left or right. Jobs can't skip columns.
-  async function moveJob(db, job, cols, direction, user) {
+  async function moveJob(db, job, cols, direction, user, reason) {
     const from = job.column_index < 0 ? 0 : job.column_index;
     const to = from + (direction < 0 ? -1 : 1);
     if (to < 0 || to >= cols.length) fail(400, direction < 0 ? 'This job is already in the first column' : 'This job is already in the last column');
     const last = cols.length - 1;
     if (direction < 0 && !isManager(user)) fail(403, 'Only an owner or manager can move a job back');
+    const why = direction < 0 ? text(reason, 'Reason for moving back', { required: false, max: 500 }) : null;
+    if (direction < 0 && (!why || why.length < 3)) fail(400, 'Write a note explaining why this job is moving back');
     if (to === last) {
       if (job.balance_cents > 0) fail(400, `${usd(job.balance_cents)} is still owed on this job. Take the payment or finish with a discount first.`);
       if (job.balance_cents < 0) fail(400, `The customer has paid ${usd(-job.balance_cents)} more than the total. Void a payment or lower the discount first.`);
     }
     await db.query(
       `UPDATE jobs SET column_id=$1, status_label=NULL, column_entered_at=now(), updated_at=now(),
-         closed_at = CASE WHEN $2 THEN now() ELSE NULL END WHERE id=$3`, [cols[to].id, to === last, job.id]);
-    await log(db, job.id, user, `Moved ${direction < 0 ? 'back ' : ''}from ${cols[from].name} to ${cols[to].name}` + (to === last ? ' (job closed)' : ''));
+         closed_at = CASE WHEN $2 THEN now() ELSE NULL END, back_reason=$4, back_at=CASE WHEN $4::text IS NULL THEN NULL ELSE now() END,
+       back_by=$5 WHERE id=$3`, [cols[to].id, to === last, job.id, why, why ? user.name : null]);
+    await log(db, job.id, user, `Moved ${direction < 0 ? 'back ' : ''}from ${cols[from].name} to ${cols[to].name}` + (to === last ? ' (job closed)' : '')
+      + (why ? ` · Reason: ${why}` : ''));
   }
   app.post('/api/jobs/:id/move', ...J, wrap(async (req, res) => {
     await withTx(async (db) => {
@@ -355,7 +359,7 @@ module.exports = function setupJobs(app, deps) {
         direction = diff;
       }
       if (direction !== 1 && direction !== -1) fail(400, 'Choose which way to move the job');
-      await moveJob(db, job, cols, direction, req.user);
+      await moveJob(db, job, cols, direction, req.user, req.body.reason);
     });
     notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
     res.json({ ok: true });
