@@ -1,4 +1,4 @@
-[HANDOVER (5).md](https://github.com/user-attachments/files/34826641/HANDOVER.5.md)
+[HANDOVER (18).md](https://github.com/user-attachments/files/34998536/HANDOVER.18.md)
 # ContractorPOS — Build Handover
 
 Last updated: 2026-11-13 · Current version: **ContractorPOS v1.7.1** (split from MultiPOS v1.10 + job board)
@@ -307,3 +307,15 @@ Stored on `job_columns`: `color` (header), `text_color`, `bg_color`, `card_color
 The job ticket takes its column's colors (colored top bar, tinted background, colored pane edges), so it's obvious which phase you're in.
 The middle **Job ticket** panel (what's on the ticket) uses the column's card colors; the left (add items) and right (totals, payments,
 details) panels stay dark because they're information, not ticket lines.
+
+## 18. From MultiPOS v1.11: pickup/delivery, notes, fuel by the gallon, invoices, statements (ContractorPOS v1.8)
+Merged from MultiPOS v1.11 (three-way merge against v1.10, no conflicts).
+- **Register bar:** 📦 Pickup / Delivery (delivery address, "Use customer's address", + Add delivery fee) and 🗒 Note. Stored on `sales.fulfillment` / `sales.invoice_note`; quotes keep `fulfillment` too.
+- **Fuel charge** is gallons × price per gallon (price remembered); prints as "Fuel charge (12.5 gal @ $3.49/gal)".
+- **Full-page invoice** `public/invoice.html` (`/invoice?id=`): SOLD TO box, deliver-to/job site, store, invoice #, PO, items, note, totals, "Charged to account" with signature line or "Paid in full". Note can be changed after the sale (`PUT /api/sales/:id/note`).
+- **Statements:** `GET /api/customers/:id/statement?from=&to=` → previous balance, charges/payments with running balance, notes, balance due; statement note remembered per customer.
+- Job-board payments do not use charge accounts, so statements only cover register sales and account payments.
+
+## 19. Moving a job back needs a reason (ContractorPOS v1.8)
+- Owners/managers can move a job back one column (‹ Move back on the ticket, or drag the card to the previous column). A dialog asks why; the server refuses a back move without a note (`POST /api/jobs/:id/move` with `direction:-1, reason`).
+- Saved on `jobs.back_reason / back_at / back_by` and in history ("Moved back from X to Y · Reason: …"). The card and ticket header show an orange "↩ Moved back: …" tag; it clears when the job moves forward again. Never shown on the customer page.
