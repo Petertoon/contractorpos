@@ -51,6 +51,8 @@
   .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .chip { border: 1.5px solid var(--b); color: var(--b); background: transparent; padding: 4px 10px; font-size: 12.5px; border-radius: 7px; font-weight: 800; }
   .chip.on { background: var(--b); color: #0b1220; }
+  .back { background: #7c2d12; color: #fed7aa; border-radius: 6px; padding: 3px 7px; font-size: 12.5px; font-weight: 700; margin: 4px 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .nx { position: absolute; right: 6px; top: 6px; background: #22304d; color: #dbe6ff; padding: 1px 8px; font-size: 16px; border-radius: 6px; }
   .nx:hover { background: #2f4170; }
 
@@ -303,6 +305,28 @@ function openModal(html) {
 function closeModal() { $('#m').classList.remove('open'); $('#mBody').innerHTML = ''; }
 $('#m').addEventListener('mousedown', (e) => { if (e.target.id === 'm') closeModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if ($('#m').classList.contains('open')) closeModal(); else if (openId) closeTicket(); } });
+// Moving a job back needs a note saying why. Resolves true when the job moved.
+function moveBackDialog(j) {
+  const ci = cols.findIndex((c) => c.id === j.column_id);
+  const from = cols[ci], to = cols[ci - 1];
+  return new Promise((resolve) => {
+    const f = openModal(`<h2>Move job back</h2>
+      <p class="muted" style="margin-top:0">#${j.job_number} ${esc(j.name)}: <b>${esc(from ? from.name : '')}</b> → <b>${esc(to ? to.name : '')}</b></p>
+      <label>Why is this job moving back? (required)</label>
+      <textarea name="reason" rows="3" maxlength="500" placeholder="e.g. Customer changed the cabinet order, needs a new quote"></textarea>
+      <div class="err" id="mbErr" style="color:#ff8a8a;min-height:18px"></div>
+      <div class="actions"><button type="button" class="dk" id="mbCancel">Cancel</button><button class="primary" id="mbGo">Move back</button></div>`);
+    f.onclick = async (e) => {
+      if (e.target.id === 'mbCancel') { closeModal(); resolve(false); }
+      if (e.target.id !== 'mbGo') return;
+      const reason = f.reason.value.trim();
+      if (reason.length < 3) { $('#mbErr').textContent = 'Write a note explaining why it is moving back.'; f.reason.focus(); return; }
+      e.target.disabled = true;
+      try { await api(`/api/jobs/${j.id}/move`, { direction: -1, reason }); closeModal(); toast('Moved back'); resolve(true); }
+      catch (err) { $('#mbErr').textContent = err.message; e.target.disabled = false; }
+    };
+  });
+}
 async function run(fn) { try { return await fn(); } catch (e) { toast(e.message, 'bad'); return null; } }
 
 // ---------- board ----------
@@ -341,6 +365,7 @@ function card(j, c, i) {
     <div class="t"><span>#${j.job_number}</span>${esc(j.name)}</div>
     ${j.priority === 'high' ? '<div class="flag">⚑ High</div>' : ''}
     ${!last && next ? `<button class="nx" data-next="${j.id}" title="Move to ${esc(next.name)}">›</button>` : ''}
+    ${j.back_reason ? `<div class="back" title="Moved back ${shortDate(j.back_at)}${j.back_by ? ' by ' + esc(j.back_by) : ''}">↩ Moved back: ${esc(j.back_reason)}</div>` : ''}
     ${j.description ? `<div class="d">${esc(j.description.split('\n')[0])}</div>` : ''}
     ${j.customer_name && j.customer_name !== j.name ? `<div class="d">👤 ${esc(j.customer_name)}</div>` : ''}
     ${moneyLines(j, i)}
@@ -410,6 +435,11 @@ $('#board').addEventListener('drop', (e) => {
   const id = dragId;
   const j = jobs.find((x) => x.id === id);
   if (j && j.column_id === Number(col.dataset.col)) return;
+  const ci = cols.findIndex((c) => j && c.id === j.column_id);
+  if (j && cols[ci - 1] && cols[ci - 1].id === Number(col.dataset.col)) {
+    if (!isMgr) return toast('Only an owner or manager can move a job back', 'bad');
+    return moveBackDialog(j).then((ok) => ok && loadBoard());
+  }
   run(async () => { await api(`/api/jobs/${id}/move`, { column_id: Number(col.dataset.col) }); await loadBoard(); });
 });
 $('#search').addEventListener('input', renderBoard);
@@ -514,6 +544,7 @@ function renderTicket() {
     <div class="tt"><span>#${j.job_number}</span>${esc(j.name)}</div>
     <span class="colchip" style="--c:${c.color}">${esc(c.name)}</span>
     ${j.priority === 'high' ? '<span class="flag" style="position:static">⚑ High</span>' : ''}
+    ${j.back_reason ? `<span class="back" style="margin:0;max-width:340px" title="${esc(j.back_reason)}">↩ Moved back${j.back_by ? ' by ' + esc(j.back_by) : ''}: ${esc(j.back_reason)}</span>` : ''}
     <div class="chips" style="margin:0">${btns.map((b) => `<button class="chip ${j.status_label === b.label ? 'on' : ''}" style="--b:${b.color || '#3b82f6'}" data-tbtn="${b.k}">${esc(b.label)}</button>`).join('')}</div>
     <div class="spacer" style="flex:1"></div>
     ${i > 0 && isMgr ? '<button class="dk" id="tPrev">‹ Move back</button>' : ''}
@@ -527,7 +558,7 @@ function renderTicket() {
     if (b) return run(async () => { const r = await api(`/api/jobs/${j.id}/button`, { index: Number(b.dataset.tbtn) }); if (r.moved) toast('Moved to the next column'); await refreshTicket(); });
     if (e.target.id === 'tCrews') { crewOpen = !crewOpen; renderTicket(); if (crewOpen) $('#crewBox').scrollIntoView({ block: 'nearest' }); return; }
     if (e.target.id === 'tNext') return run(async () => { await api(`/api/jobs/${j.id}/move`, { direction: 1 }); toast('Moved'); await refreshTicket(); });
-    if (e.target.id === 'tPrev') return run(async () => { await api(`/api/jobs/${j.id}/move`, { direction: -1 }); toast('Moved back'); await refreshTicket(); });
+    if (e.target.id === 'tPrev') return moveBackDialog(j).then((ok) => ok && refreshTicket());
   };
   // Center: the job's lines, starting with the quoted price.
   $('#tLines').innerHTML = `${crewPanel(j)}<h3>Job ticket</h3>
