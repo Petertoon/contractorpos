@@ -295,6 +295,11 @@ CREATE INDEX IF NOT EXISTS quotes_business ON quotes(business_id, status, create
 
 ALTER TABLE locations ADD COLUMN IF NOT EXISTS hours JSONB;
 
+-- ===== Pickup/delivery and invoice notes =====
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS fulfillment TEXT;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS invoice_note TEXT;
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS fulfillment TEXT;
+
 -- ===== Email receipts =====
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS receipt_reply_email TEXT;
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS receipt_emailed_to TEXT;
@@ -531,6 +536,9 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS share_token TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS jobs_share_token ON jobs(share_token) WHERE share_token IS NOT NULL;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS statement_emailed_to TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS statement_email_count INT NOT NULL DEFAULT 0;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS back_reason TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS back_at TIMESTAMPTZ;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS back_by TEXT;
 
 -- Claude add-on: switched on per business by the platform admin. Every request is logged (for usage and billing).
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT FALSE;
