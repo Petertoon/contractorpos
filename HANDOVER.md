@@ -1,7 +1,7 @@
-[HANDOVER (24).md](https://github.com/user-attachments/files/35042328/HANDOVER.24.md)
+[HANDOVER (25).md](https://github.com/user-attachments/files/35044515/HANDOVER.25.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-18 · Current version: **ContractorPOS v1.10**
+Last updated: 2026-11-18 · Current version: **ContractorPOS v1.11**
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -341,3 +341,8 @@ Merged from MultiPOS v1.11 (three-way merge against v1.10, no conflicts).
 - **Review:** table of subs (bid, charge, markup, files) + "Your own work / overhead" amount and note → quote total → **Set as the quoted price** (`POST /api/jobs/:id/gc-quote`; quoted = sum of subs' `quote_cents` + `gc_own_cents`).
 - Each sub is a normal crew (`billing='included'`, `amount_cents` = bid, new `job_crews.quote_cents` = customer charge), placed in the "In Progress" phase, so 💵 Sub payments and change orders work on it.
 - Crew rows now wrap: buttons drop below the name when the middle column is narrow.
+
+## 22. GC Quote on the board + detailed print behind a password (ContractorPOS v1.11)
+- **🏗 GC Quote** button on the job board's top bar (GC add-on only): **+ Start a new job** (job form → "Next: add subs ›" → wizard) or pick a job in the first column to continue its GC quote.
+- **🖨 Print** on a GC job with sub charges asks: **Customer copy: quoted price only** (default) or **🔒 Detailed: each trade's price**. Detailed needs the user's password (`POST /api/jobs/:id/detail-print`, 5 wrong tries → 15-minute lockout, logged in history). Lines: each sub's charge (trade + what's included), own work, and "Other / adjustment" if the quoted price was changed by hand. The detailed page is wiped from the screen after printing.
+- The customer link (Send) still shows the quoted price only. Bids and markup are never printed or sent.
