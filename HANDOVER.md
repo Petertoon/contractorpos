@@ -1,7 +1,7 @@
-[HANDOVER (18).md](https://github.com/user-attachments/files/34998536/HANDOVER.18.md)
+[HANDOVER (23).md](https://github.com/user-attachments/files/35040774/HANDOVER.23.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-13 · Current version: **ContractorPOS v1.7.1** (split from MultiPOS v1.10 + job board)
+Last updated: 2026-11-18 · Current version: **ContractorPOS v1.9**
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -319,3 +319,14 @@ Merged from MultiPOS v1.11 (three-way merge against v1.10, no conflicts).
 ## 19. Moving a job back needs a reason (ContractorPOS v1.8)
 - Owners/managers can move a job back one column (‹ Move back on the ticket, or drag the card to the previous column). A dialog asks why; the server refuses a back move without a note (`POST /api/jobs/:id/move` with `direction:-1, reason`).
 - Saved on `jobs.back_reason / back_at / back_by` and in history ("Moved back from X to Y · Reason: …"). The card and ticket header show an orange "↩ Moved back: …" tag; it clears when the job moves forward again. Never shown on the customer page.
+
+## 20. Subcontracts: bids, change orders, payments to subs, sub files (ContractorPOS v1.9)
+- A crew's **amount is the sub's bid** (their contract). On each crew row: "Bid · change orders · Paid · Owe" and a **💵 Sub** button.
+- **Sub window:** Original bid, Change orders, Contract now, Paid to sub, Still owed.
+  - **Payments to the sub:** amount, date, check/cash/card/bank transfer/other, check #, note. Void needs a reason. Can't pay more than is owed when there's a bid.
+  - **Change orders:** numbered per sub (CO #1, #2…), amount that adds or credits, required note on what it's for. Optional **"Also charge the customer"** adds a "Change order: Trade: note" charge line to the job ticket (removed with the CO).
+  - **Files for this sub:** PDFs/photos tagged to that crew (`job_files.crew_id`); also listed in the job's files with a 👷 tag.
+- Right panel **Subcontractors** box: owed per sub, total contracts, paid to subs, still owed to subs.
+- Rules: owners/managers only; allowed after the job is closed (except charging the customer); a crew with payments can't be deleted; a bid can't be lowered below what's been paid.
+- Tables: `job_crew_payments`, `job_crew_changes`. Routes: `POST /api/jobs/:id/crews/:cid/payments`, `…/payments/:pid/void`, `…/changes`, `DELETE …/changes/:chid`; upload with `?crew_id=`.
+- Not in QuickBooks yet (sub payments are money out: a future "bills/expenses" phase).
