@@ -55,6 +55,19 @@
   .photofield img { width: 84px; height: 84px; border-radius: 10px; object-fit: cover; background: #eef1ec; flex: none; }
   .photofield .thumb { width: 84px; height: 84px; font-size: 28px; flex: none; }
   .photobtns { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+
+  /* ---- Dark look ---- */
+  @media screen {
+    html[data-theme=dark] .banner, html[data-theme=dark] .warn { background: #3a2f12; color: #f0d27a; }
+    html[data-theme=dark] .stat, html[data-theme=dark] .locbox, html[data-theme=dark] .settings, html[data-theme=dark] .pcard { background: #1d2027; border: 1px solid #2a2e36; }
+    html[data-theme=dark] .thumb, html[data-theme=dark] .photo-preview, html[data-theme=dark] .pcard > img, html[data-theme=dark] .pnone, html[data-theme=dark] .photofield img { background: #2a2e36; }
+    html[data-theme=dark] tr.totrow td { background: #191b20; }
+    html[data-theme=dark] button.qboon { background: #1f3a24; color: #8fe3a5; }
+    html[data-theme=dark] .rentpill, html[data-theme=dark] button.rentson { background: #3a2a12; color: #f0b46a; }
+    html[data-theme=dark] button.jobson { background: #1b2a48; color: #9cc8ff; }
+    html[data-theme=dark] button.aion { background: #2b2040; color: #d6b4ff; }
+    html[data-theme=dark] button.gcon { background: #3a2412; color: #fdba74; }
+  }
 </style>
 </head>
 <body class="cp">
