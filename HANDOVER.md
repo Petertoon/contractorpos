@@ -1,7 +1,7 @@
-[HANDOVER (23).md](https://github.com/user-attachments/files/35040774/HANDOVER.23.md)
+[HANDOVER (24).md](https://github.com/user-attachments/files/35042328/HANDOVER.24.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-18 · Current version: **ContractorPOS v1.9**
+Last updated: 2026-11-18 · Current version: **ContractorPOS v1.10**
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -330,3 +330,14 @@ Merged from MultiPOS v1.11 (three-way merge against v1.10, no conflicts).
 - Rules: owners/managers only; allowed after the job is closed (except charging the customer); a crew with payments can't be deleted; a bid can't be lowered below what's been paid.
 - Tables: `job_crew_payments`, `job_crew_changes`. Routes: `POST /api/jobs/:id/crews/:cid/payments`, `…/payments/:pid/void`, `…/changes`, `DELETE …/changes/:chid`; upload with `?crew_id=`.
 - Not in QuickBooks yet (sub payments are money out: a future "bills/expenses" phase).
+
+## 21. General Contractor add-on: GC Quote wizard (ContractorPOS v1.10)
+- Switched on per business by the platform admin (Businesses list → **🏗 GC on/off**, `businesses.gc_enabled`). Off by default, so other contractors never see it.
+- Job ticket header gets one **🏗 GC Quote** button. It opens a step-by-step screen, **one sub per screen**:
+  - Trade (preset chips), subcontractor company, phone.
+  - **Sub's bid (your cost)** and **Charge the customer**, with quick buttons (Bid + 10/15/20/25%, Same as bid). Shows the markup.
+  - What's included (optional), **📄 Attach bid**, **📷 Add picture** (tagged to that sub).
+  - ‹ Back · Close · **Review quote ✓** · **Next sub ›**. Numbered chips jump to any sub.
+- **Review:** table of subs (bid, charge, markup, files) + "Your own work / overhead" amount and note → quote total → **Set as the quoted price** (`POST /api/jobs/:id/gc-quote`; quoted = sum of subs' `quote_cents` + `gc_own_cents`).
+- Each sub is a normal crew (`billing='included'`, `amount_cents` = bid, new `job_crews.quote_cents` = customer charge), placed in the "In Progress" phase, so 💵 Sub payments and change orders work on it.
+- Crew rows now wrap: buttons drop below the name when the middle column is narrow.
