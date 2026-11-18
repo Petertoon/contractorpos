@@ -277,6 +277,7 @@
 <header class="jtop">
   <div class="brand"><img id="logo" alt="" hidden><span>🏗</span><span id="bizName">Job Board</span><small>Job Board</small></div>
   <button class="primary" id="newJob">+ New job</button>
+  <button class="dk gcbtn" id="gcBoardBtn" hidden>🏗 GC Quote</button>
   <input id="search" placeholder="Search job #, name, customer…" autocomplete="off">
   <select id="viewSel" aria-label="Which jobs">
     <option value="">All jobs</option><option value="high">High priority</option><option value="owed">Balance owed</option>
@@ -596,7 +597,7 @@ function renderTicket() {
     <button class="dk" id="tCrews">👷 Crews (${j.crews.length})</button>
     <button class="dk" onclick="editDetails()">Edit details</button>
     <button class="dk" onclick="sendJob()">📤 Send</button>
-    <button class="dk" onclick="printTicket()">🖨 Print</button>`;
+    <button class="dk" onclick="printChoice()">🖨 Print</button>`;
   $('#tHead').onclick = (e) => {
     const b = e.target.closest('[data-tbtn]');
     if (b) return run(async () => { const r = await api(`/api/jobs/${j.id}/button`, { index: Number(b.dataset.tbtn) }); if (r.moved) toast('Moved to the next column'); await refreshTicket(); });
@@ -1347,6 +1348,70 @@ function gcReview() {
   };
 }
 
+// ---------- print: total only (normal) or detailed by trade (password required) ----------
+function detailLines(j) {
+  const lines = [...j.crews].sort((a, b) => a.id - b.id).filter((c) => c.quote_cents).map((c) => ({ name: `${c.trade}${c.note ? ' — ' + c.note : ''}`, cents: c.quote_cents }));
+  if (j.gc_own_cents) lines.push({ name: j.gc_own_note || 'General conditions / supervision', cents: j.gc_own_cents });
+  const diff = j.quoted_cents - lines.reduce((a, l) => a + l.cents, 0);
+  if (diff) lines.push({ name: 'Other / adjustment', cents: diff });
+  return lines;
+}
+const detailRows = (j) => detailLines(j).map((l) => `<tr><td style="padding-left:18px">${esc(l.name)}</td><td></td><td></td><td class="num">${usd(l.cents)}</td></tr>`).join('');
+function printChoice() {
+  const j = cur;
+  if (!gcOn() || !j.crews.some((c) => c.quote_cents)) return printTicket(false);
+  const f = openModal(`<h2>Print</h2>
+    <button type="button" class="primary" data-pr="total" style="width:100%;padding:14px;font-size:16px;margin-bottom:8px">🖨 Customer copy: quoted price only</button>
+    <button type="button" class="dk" data-pr="detail" style="width:100%;padding:14px;font-size:16px">🔒 Detailed: each trade's price</button>
+    <div id="prPw" hidden style="margin-top:12px">
+      <div class="muted" style="font-size:13.5px">Shows each subcontractor's price (with your markup) on the printout. Enter your password to confirm.</div>
+      <label>Your password</label><input type="password" name="pw" autocomplete="current-password">
+      <div id="prErr" style="color:#ff8a8a;min-height:18px"></div>
+      <div class="actions"><button type="button" class="dk" data-pr="cancel">Cancel</button><button class="primary" data-pr="go">Print detailed</button></div>
+    </div>`);
+  f.onclick = async (e) => {
+    const b = e.target.closest('[data-pr]'); if (!b) return;
+    const k = b.dataset.pr;
+    if (k === 'total') { closeModal(); return printTicket(false); }
+    if (k === 'cancel') return closeModal();
+    if (k === 'detail') { $('#prPw').hidden = false; f.pw.focus(); return; }
+    if (k === 'go') {
+      if (!f.pw.value) { $('#prErr').textContent = 'Enter your password'; return; }
+      b.disabled = true;
+      try { await api(`/api/jobs/${j.id}/detail-print`, { password: f.pw.value }); }
+      catch (err) { $('#prErr').textContent = err.message; f.pw.value = ''; f.pw.focus(); b.disabled = false; return; }
+      f.pw.value = ''; closeModal(); printTicket(true); refreshTicket().catch(() => {});
+    }
+  };
+  f.onsubmit = (e) => { e.preventDefault(); if (!$('#prPw').hidden) f.querySelector('[data-pr=go]').click(); return false; };
+}
+
+// ---------- GC Quote from the board: start a new job or pick one being quoted ----------
+$('#gcBoardBtn').onclick = () => {
+  const first = cols[0];
+  const list = jobs.filter((j) => first && j.column_id === first.id);
+  const f = openModal(`<h2>🏗 GC Quote</h2>
+    <button type="button" class="primary" data-gcnew="1" style="width:100%;padding:14px;font-size:16px">+ Start a new job</button>
+    ${list.length ? `<label style="margin-top:14px">Or continue a job in ${esc(first.name)}</label>
+      <div class="sublist" style="max-height:340px;overflow:auto">${list.map((j) => `<div data-gcjob="${j.id}" style="cursor:pointer"><span><b>#${j.job_number}</b> ${esc(j.name)}<small>${esc(j.customer_name || '')}</small></span>
+        <span class="amt">${j.quoted_cents ? usd(j.quoted_cents) : ''}</span></div>`).join('')}</div>` : ''}
+    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button></div>`);
+  f.onclick = async (e) => {
+    const pick = e.target.closest('[data-gcjob]');
+    if (pick) { closeModal(); await openTicket(Number(pick.dataset.gcjob)); return gcWizard(0); }
+    if (!e.target.closest('[data-gcnew]')) return;
+    const g = openModal(jobForm());
+    wireCustomerFind(g);
+    $('#saveJob').textContent = 'Next: add subs ›';
+    $('#saveJob').onclick = () => run(async () => {
+      if (!g.reportValidity()) return;
+      const r = await api('/api/jobs', readJobForm(g));
+      closeModal(); toast(`Job #${r.job_number} created`); await loadBoard();
+      await openTicket(r.id); gcWizard(0);
+    });
+  };
+};
+
 // ---------- plans, photos & Claude estimates ----------
 const fileUrl = (f) => `/api/jobs/${f.job_id}/files/${f.id}`;
 const kb = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
@@ -1658,7 +1723,7 @@ async function sendJob(how) {
 }
 
 // ---------- printed statement / invoice ----------
-function printTicket() {
+function printTicket(detail) {
   const j = cur, b = me.business;
   $('#printArea').innerHTML = `<div class="head"><div>${b.logo_url ? `<img src="${esc(b.logo_url)}" style="height:50px"><br>` : ''}<h1>${esc(b.name)}</h1>
       ${j.location ? `<div>${esc(j.location.address || '')}</div><div>${esc(j.location.phone || '')}</div>` : ''}</div>
@@ -1667,7 +1732,8 @@ function printTicket() {
     ${j.customer_name ? `<div>Customer: ${esc(j.customer_name)} ${esc(j.customer_phone || '')}</div>` : ''}
     ${j.job_address ? `<div>Job site: ${esc(j.job_address)}</div>` : ''}${j.po_number ? `<div>PO #: ${esc(j.po_number)}</div>` : ''}
     <table><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th></tr></thead><tbody>
-      <tr><td>Quoted price</td><td></td><td></td><td class="num">${usd(j.quoted_cents)}</td></tr>
+      <tr><td>${detail ? '<b>Quoted price</b>' : 'Quoted price'}</td><td></td><td></td><td class="num">${detail ? '' : usd(j.quoted_cents)}</td></tr>
+      ${detail ? detailRows(j) : ''}
       ${j.items.map((it) => `<tr><td>${esc(it.name)}${it.taxable ? ' (T)' : ''}</td><td class="num">${it.qty}</td><td class="num">${usd(it.unit_cents)}</td><td class="num">${usd(it.qty * it.unit_cents)}</td></tr>`).join('')}
     </tbody></table>
     <div class="totals"><div><span>Subtotal</span><span>${usd(j.subtotal_cents)}</span></div>
@@ -1679,6 +1745,8 @@ function printTicket() {
     <div class="totals"><div><span>Paid</span><span>${usd(j.paid_cents)}</span></div><div class="b"><span>Balance due</span><span>${usd(j.balance_cents)}</span></div></div>
     <p style="margin-top:30px">Thank you for your business.</p>`;
   window.print();
+  // The detailed copy only lives on the page for this one print.
+  if (detail) { const clear = () => { $('#printArea').innerHTML = ''; window.removeEventListener('afterprint', clear); }; window.addEventListener('afterprint', clear); setTimeout(clear, 60000); }
 }
 
 // ---------- live updates from other screens ----------
@@ -1714,6 +1782,7 @@ function tick() { $('#clock').textContent = new Date().toLocaleString([], { week
   rentalsOn = !!me.business.rentals_enabled;
   $('#rentalBtn').hidden = !rentalsOn;
   $('#aiBtn').hidden = !aiOn();
+  $('#gcBoardBtn').hidden = !gcOn();
   $('#setupBtn').hidden = !isMgr; $('#manageLink').hidden = !isMgr;
   tick(); setInterval(tick, 30000);
   await loadBoard();
