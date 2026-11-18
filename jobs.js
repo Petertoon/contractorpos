@@ -708,6 +708,66 @@ module.exports = function setupJobs(app, deps) {
     res.json({ ok: true });
   }));
 
+  // Bid Builder: saves the whole bid at once. Each row is a sub (crew, part of the quote): amount = sub's price,
+  // markup % (its own, or one overall %) gives the customer price; the quoted price becomes the sum of the rows.
+  app.post('/api/jobs/:id/bid', ...J, wrap(async (req, res) => {
+    const biz = (await pool.query('SELECT gc_enabled FROM businesses WHERE id=$1', [req.user.business_id])).rows[0];
+    if (!biz || !biz.gc_enabled) fail(403, 'The General Contractor add-on is not turned on for this business');
+    const b = req.body || {};
+    const pct = (v, label) => { const n = Number(v ?? 0); if (!(n >= 0 && n <= 1000)) fail(400, `${label} is not valid`); return Math.round(n * 1000) / 1000; };
+    const each = b.markup_each !== false;
+    const all = pct(b.markup_all, 'Overall markup %');
+    const rows = Array.isArray(b.rows) ? b.rows : [];
+    if (rows.length > 100) fail(400, 'A bid can have up to 100 lines');
+    const removed = (Array.isArray(b.removed) ? b.removed : []).map(Number).filter(Boolean);
+    const out = await withTx(async (db) => {
+      const { job, cols } = await loadJob(db, req.params.id, req.user.business_id, true);
+      notClosed(job);
+      const phase = (cols.find((c) => /progress/i.test(c.name)) || cols[job.column_index] || cols[0]).id;
+      for (const id of removed) {
+        const c = (await db.query('SELECT * FROM job_crews WHERE id=$1 AND job_id=$2', [id, job.id])).rows[0];
+        if (!c) continue;
+        const paid = await db.query('SELECT count(*)::int AS n FROM job_crew_payments WHERE crew_id=$1 AND NOT voided', [id]);
+        if (paid.rows[0].n) fail(400, `${c.trade} has payments recorded, so it can't be removed from the bid`);
+        await db.query(`DELETE FROM job_items WHERE id IN (SELECT job_item_id FROM job_crew_changes WHERE crew_id=$1)`, [id]);
+        await db.query('DELETE FROM job_crews WHERE id=$1', [id]);
+        await log(db, job.id, req.user, `Bid: removed ${c.trade}${c.name ? ' (' + c.name + ')' : ''}`);
+      }
+      let subs = 0, quoted = 0, added = 0, changed = 0;
+      for (const r of rows) {
+        const trade = text(r.trade, 'Subcontractor / scope', { max: 60 });
+        const amount = cents(r.amount_cents ?? 0, `${trade} amount`);
+        const p = each ? pct(r.markup_pct, `${trade} markup %`) : all;
+        const q = Math.round(amount * (1 + p / 100));
+        subs += amount; quoted += q;
+        if (r.id) {
+          const cur = (await db.query('SELECT * FROM job_crews WHERE id=$1 AND job_id=$2', [r.id, job.id])).rows[0] || fail(404, `${trade} was not found on this job`);
+          const bal = await subBalance(db, cur);
+          if (amount + (bal.contract - cur.amount_cents) < bal.paid) fail(400, `${usd(bal.paid)} has already been paid to ${trade}, so its amount can't go below that`);
+          if (cur.trade !== trade || cur.amount_cents !== amount || cur.quote_cents !== q || Number(cur.gc_markup_pct) !== p) {
+            await db.query('UPDATE job_crews SET trade=$1, amount_cents=$2, quote_cents=$3, gc_markup_pct=$4 WHERE id=$5', [trade, amount, q, p, cur.id]);
+            changed++;
+          }
+        } else {
+          await db.query(`INSERT INTO job_crews (job_id, column_id, trade, amount_cents, billing, quote_cents, gc_markup_pct, created_by)
+            VALUES ($1,$2,$3,$4,'included',$5,$6,$7)`, [job.id, phase, trade, amount, q, p, req.user.id]);
+          added++;
+        }
+      }
+      if (quoted !== job.quoted_cents && job.paid_cents > 0 && !isManager(req.user)) {
+        fail(403, 'Payments have been taken on this job; only an owner or manager can change the quoted price');
+      }
+      await db.query('UPDATE jobs SET quoted_cents=$1, gc_own_cents=0, gc_markup_each=$2, gc_markup_all=$3, updated_at=now() WHERE id=$4', [quoted, each, all, job.id]);
+      if (added || changed || removed.length || quoted !== job.quoted_cents) {
+        await log(db, job.id, req.user, `Bid saved: ${rows.length} line${rows.length === 1 ? '' : 's'} · subs ${usd(subs)} + markup ${usd(quoted - subs)} = quoted price ${usd(quoted)}`
+          + (quoted !== job.quoted_cents ? ` (was ${usd(job.quoted_cents)})` : ''));
+      }
+      return { quoted_cents: quoted };
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json(out);
+  }));
+
   // Detailed print (each trade's price, markup included) needs the user's password again, so it can't go out by accident.
   const bcrypt = require('bcryptjs');
   const pwTries = new Map();
