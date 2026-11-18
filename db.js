@@ -579,6 +579,10 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_own_note TEXT;
 ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS gc_markup_pct NUMERIC(7,3);
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_markup_each BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_markup_all NUMERIC(7,3) NOT NULL DEFAULT 0;
+-- Look of the program per business (v1.14): 'ranch' (parchment & green, the Bid Builder look) or 'dark'.
+-- Businesses that existed before keep the dark look (NULL); new businesses start on ranch.
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS theme TEXT;
+ALTER TABLE businesses ALTER COLUMN theme SET DEFAULT 'ranch';
 
 -- Claude add-on: switched on per business by the platform admin. Every request is logged (for usage and billing).
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT FALSE;
