@@ -1,7 +1,7 @@
-[HANDOVER (25).md](https://github.com/user-attachments/files/35044515/HANDOVER.25.md)
+[HANDOVER (26).md](https://github.com/user-attachments/files/35046270/HANDOVER.26.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-18 · Current version: **ContractorPOS v1.11**
+Last updated: 2026-11-18 · Current version: **ContractorPOS v1.12**
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -346,3 +346,14 @@ Merged from MultiPOS v1.11 (three-way merge against v1.10, no conflicts).
 - **🏗 GC Quote** button on the job board's top bar (GC add-on only): **+ Start a new job** (job form → "Next: add subs ›" → wizard) or pick a job in the first column to continue its GC quote.
 - **🖨 Print** on a GC job with sub charges asks: **Customer copy: quoted price only** (default) or **🔒 Detailed: each trade's price**. Detailed needs the user's password (`POST /api/jobs/:id/detail-print`, 5 wrong tries → 15-minute lockout, logged in history). Lines: each sub's charge (trade + what's included), own work, and "Other / adjustment" if the quoted price was changed by hand. The detailed page is wiped from the screen after printing.
 - The customer link (Send) still shows the quoted price only. Bids and markup are never printed or sent.
+
+## 23. Bid Builder replaces the GC Quote wizard (ContractorPOS v1.12)
+- **🏗 Bid Builder** (board top bar, and the ticket header) opens one screen styled after the user's mock-up (parchment, green header):
+  - Toolbar: **New Bid** (new job → builder), **Open** (search open jobs), **Save**, **Print / PDF** (same total-only / 🔒 detailed choice), ✕.
+  - Project and Date (job name and created date).
+  - Table: #, Subcontractor / Scope, Subcontractor Amount, Your % Markup, Your Markup, Total (With Markup), ✎ and 🗑. Click the # to select rows; **＋ Add Contractor / Scope**, **Duplicate**, **Remove Selected**. Enter moves down / adds a line.
+  - **Markup Settings:** individual % per line, or one overall %.
+  - Totals: Subcontractor Total, Total Markup, **Project Total (Your Price)**; shows the current quoted price when it differs / not saved.
+  - ✎ opens company, phone, what's included (shown on the detailed print), **Attach bid** PDF / **Add picture**, and **💵 Payments & change orders**.
+- Saving: `POST /api/jobs/:id/bid` saves all lines at once (new/changed/removed crews, `billing='included'`), stores `job_crews.gc_markup_pct`, `jobs.gc_markup_each / gc_markup_all`, and sets the quoted price to the total. Lines with sub payments can't be removed.
+- Leaving with unsaved changes asks first. The old one-sub-per-screen wizard is gone.
