@@ -258,6 +258,55 @@
     #board { min-height: auto; } .col { min-width: 82vw; }
   }
 
+
+  /* ---- Bid Builder (GC add-on) ---- */
+  #bb { position: fixed; inset: 0; z-index: 45; background: rgba(20,14,6,.55); display: flex; align-items: flex-start; justify-content: center; padding: 18px; overflow: auto; }
+  #bb[hidden] { display: none; }
+  #bb .bbwin { background: #f4ecdb; color: #2b2417; width: 100%; max-width: 1180px; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.5); overflow: hidden; position: relative; padding-bottom: 64px; }
+  #bb .bbhead { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 18px; background: linear-gradient(180deg, #e7d4ac, #d9c093); border-bottom: 1px solid #c4a874; flex-wrap: wrap; }
+  #bb .bblogo { display: flex; align-items: center; gap: 10px; } #bb .bbicon { font-size: 40px; line-height: 1; }
+  #bb .bblogo small { display: block; font-size: 17px; font-weight: 800; color: #3a2c17; } #bb .bblogo b { display: block; font-size: 30px; font-weight: 900; color: #2b2010; line-height: 1; }
+  #bb .bbtools { display: flex; gap: 4px; align-items: stretch; background: rgba(255,255,255,.25); border-radius: 8px; padding: 4px; }
+  #bb .bbtools button { background: transparent; color: #2b2010; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 14px; font-size: 13.5px; font-weight: 600; border-radius: 6px; }
+  #bb .bbtools button span { font-size: 22px; } #bb .bbtools button:hover { background: rgba(255,255,255,.5); }
+  #bb .bbtools button.dirty { background: #2f5a2a; color: #fff; } #bb .bbtools .bbx { font-size: 20px; justify-content: center; }
+  #bb .bbmeta { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; padding: 14px 18px 8px; }
+  #bb .bbmeta label { margin: 0; color: #2b2417; font-weight: 800; font-size: 16px; }
+  #bb .bbbox { background: #fff; border: 1px solid #cdbb98; border-radius: 6px; padding: 8px 12px; font-size: 17px; }
+  #bb .bbbox small { color: #7a6a50; }
+  #bb .bbtablewrap { margin: 6px 18px 0; border: 1px solid #c9b48c; border-radius: 6px; overflow: auto; background: #fff; }
+  #bb table.bbt { width: 100%; border-collapse: collapse; font-size: 16px; min-width: 820px; }
+  #bb .bbt th { background: #2f5a2a; color: #fff; padding: 10px 8px; text-align: left; font-size: 14.5px; white-space: nowrap; }
+  #bb .bbt th.n, #bb .bbt td.n { text-align: right; } #bb .bbt th:first-child, #bb .bbt td.num { text-align: center; width: 44px; }
+  #bb .bbt td { padding: 6px 8px; border-bottom: 1px solid #e6dcc6; vertical-align: middle; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #bb .bbt tbody tr:nth-child(even) td { background: #faf6ec; }
+  #bb .bbt tr.sel td { background: #fde7b0 !important; }
+  #bb .bbt td.num { cursor: pointer; color: #6b5a3c; font-weight: 700; user-select: none; }
+  #bb .bbt td small { display: block; color: #7a6a50; font-size: 12px; margin-top: 2px; }
+  #bb .bbt input { background: #fff; color: #2b2417; border: 1px solid #d6c7a6; border-radius: 4px; padding: 6px 8px; font-size: 16px; width: 100%; min-width: 200px; }
+  #bb .bbt input:focus { outline: 2px solid #2f5a2a; outline-offset: -1px; }
+  #bb .bbt input.amt { width: 130px; min-width: 0; text-align: right; } #bb .bbt input.pct { width: 92px; min-width: 0; text-align: right; }
+  #bb .bbt input:disabled { background: #eee6d4; color: #8a7a5c; }
+  #bb .bbt .cur { color: #6b5a3c; margin: 0 4px; } #bb .bbt td.tot { font-weight: 700; }
+  #bb .bbt .acts { width: 80px; } #bb .bbt .acts button { background: transparent; color: #4b3d26; padding: 4px 7px; font-size: 18px; }
+  #bb .bbt .acts button.del { color: #b42318; } #bb .bbt .acts button:hover { background: #efe5cf; }
+  #bb .bbbottom { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 14px 18px; }
+  #bb .bbbtns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  #bb .bbbtns button { background: #fbf7ee; color: #2b2417; border: 1px solid #cdbb98; padding: 10px 14px; font-size: 14.5px; }
+  #bb .bbbtns button:disabled { opacity: .5; }
+  #bb .bbbtns .bbadd { background: #2f5a2a; color: #fff; border-color: #2f5a2a; font-weight: 700; }
+  #bb .bbset { border: 1px solid #d8c9a8; border-radius: 6px; background: #f8f1e2; }
+  #bb .bbsethead { background: #ead9b6; padding: 8px 14px; font-weight: 800; font-size: 16px; border-radius: 6px 6px 0 0; }
+  #bb .bbset label { display: flex; align-items: center; gap: 8px; color: #2b2417; font-weight: 500; font-size: 15px; margin: 8px 14px; }
+  #bb .bbset input[type=radio] { width: 18px; height: 18px; accent-color: #2f5a2a; }
+  #bb .bbset input[type=number] { width: 90px; padding: 5px 8px; border: 1px solid #d6c7a6; border-radius: 4px; background: #fff; color: #2b2417; text-align: right; }
+  #bb .bbset input:disabled { background: #eee6d4; color: #8a7a5c; }
+  #bb .bbtotals { border: 1px solid #d8c9a8; border-radius: 6px; background: #fbf7ee; padding: 8px 12px; align-self: start; }
+  #bb .bbtotals > div { display: flex; justify-content: space-between; padding: 7px 4px; font-size: 17px; border-bottom: 1px solid #e6dcc6; font-variant-numeric: tabular-nums; }
+  #bb .bbtotals .grand { background: #2f5a2a; color: #fff; border-radius: 6px; padding: 12px 14px; margin-top: 6px; font-size: 20px; border: 0; }
+  #bb .bbtotals .grand b { font-size: 26px; } #bb .bbtotals .was { font-size: 13px; color: #7a6a50; border: 0; justify-content: flex-end; }
+  #bb .bbfoot { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 64px; }
+  @media (max-width: 800px) { #bb { padding: 0; } #bb .bbwin { border-radius: 0; } #bb .bbbottom { grid-template-columns: 1fr; } #bb .bbmeta { grid-template-columns: auto 1fr; } #bb .bblogo b { font-size: 22px; } }
   @media print {
     body { background: #fff; color: #000; }
     body > *:not(#printArea) { display: none !important; }
@@ -277,7 +326,7 @@
 <header class="jtop">
   <div class="brand"><img id="logo" alt="" hidden><span>🏗</span><span id="bizName">Job Board</span><small>Job Board</small></div>
   <button class="primary" id="newJob">+ New job</button>
-  <button class="dk gcbtn" id="gcBoardBtn" hidden>🏗 GC Quote</button>
+  <button class="dk gcbtn" id="gcBoardBtn" hidden>🏗 Bid Builder</button>
   <input id="search" placeholder="Search job #, name, customer…" autocomplete="off">
   <select id="viewSel" aria-label="Which jobs">
     <option value="">All jobs</option><option value="high">High priority</option><option value="owed">Balance owed</option>
@@ -348,7 +397,7 @@ function openModal(html) {
 }
 function closeModal() { $('#m').classList.remove('open'); $('#mBody').innerHTML = ''; if (typeof gcIdx !== 'undefined') gcIdx = null; }
 $('#m').addEventListener('mousedown', (e) => { if (e.target.id === 'm') closeModal(); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if ($('#m').classList.contains('open')) closeModal(); else if (openId) closeTicket(); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if ($('#m').classList.contains('open')) closeModal(); else if (bb) bbLeave(bbClose); else if (openId) closeTicket(); } });
 // Moving a job back needs a note saying why. Resolves true when the job moved.
 function moveBackDialog(j) {
   const ci = cols.findIndex((c) => c.id === j.column_id);
@@ -593,7 +642,7 @@ function renderTicket() {
     <div class="spacer" style="flex:1"></div>
     ${i > 0 && isMgr ? '<button class="dk" id="tPrev">‹ Move back</button>' : ''}
     ${i < j.columns_count - 1 ? `<button class="dk" id="tNext">Move to next ›</button>` : ''}
-    ${gcOn() && !locked ? '<button class="dk gcbtn" id="tGC">🏗 GC Quote</button>' : ''}
+    ${gcOn() && !locked ? '<button class="dk gcbtn" id="tGC">🏗 Bid Builder</button>' : ''}
     <button class="dk" id="tCrews">👷 Crews (${j.crews.length})</button>
     <button class="dk" onclick="editDetails()">Edit details</button>
     <button class="dk" onclick="sendJob()">📤 Send</button>
@@ -601,7 +650,7 @@ function renderTicket() {
   $('#tHead').onclick = (e) => {
     const b = e.target.closest('[data-tbtn]');
     if (b) return run(async () => { const r = await api(`/api/jobs/${j.id}/button`, { index: Number(b.dataset.tbtn) }); if (r.moved) toast('Moved to the next column'); await refreshTicket(); });
-    if (e.target.closest('#tGC')) return gcWizard(0);
+    if (e.target.closest('#tGC')) return openBidBuilder(j.id);
     if (e.target.id === 'tCrews') { crewOpen = !crewOpen; renderTicket(); if (crewOpen) $('#crewBox').scrollIntoView({ block: 'nearest' }); return; }
     if (e.target.id === 'tNext') return run(async () => { await api(`/api/jobs/${j.id}/move`, { direction: 1 }); toast('Moved'); await refreshTicket(); });
     if (e.target.id === 'tPrev') return moveBackDialog(j).then((ok) => ok && refreshTicket());
@@ -1206,147 +1255,244 @@ function subDialog(cid, form) {
 }
 const subUpload = (kind) => run(async () => {
   const r = await uploadPicked($(kind === 'pdf' ? '#subPdfFile' : '#subPhotoFile'), kind, subCrewId);
-  if ($('#m').classList.contains('open')) { if (gcIdx != null) gcWizard(gcIdx); else if (subCrewId) subDialog(subCrewId); }
+  if ($('#m').classList.contains('open')) { if (gcIdx != null) bidEdit(gcIdx); else if (subCrewId) subDialog(subCrewId); }
   return r;
 });
 $('#subPdfFile').onchange = () => subUpload('pdf');
 $('#subPhotoFile').onchange = () => subUpload('photo');
 
-// ---------- General Contractor quote (add-on): one sub per screen, then a review that sets the quoted price ----------
+// ---------- General Contractor Bid Builder (add-on) ----------
+// One screen: a row per sub (scope, their amount, your markup %), totals, and New Bid / Open / Save / Print.
+// Company, phone, what's included and the sub's bid PDF/pictures are behind ✎ on each row.
 const gcOn = () => !!(me && me.business && me.business.gc_enabled);
-let gcIdx = null;
-const gcC = (v) => toCents(v) || 0;
-const gcList = () => [...cur.crews].sort((a, b) => a.id - b.id);
-function gcPhase() {
-  const p = (cur.columns || []).find((c) => /progress/i.test(c.name));
-  return p ? p.id : cur.column_id;
+let gcIdx = null; // crew being edited from the Bid Builder (for re-showing it after a file upload)
+let bb = null;
+const bbPct = (c) => (c.gc_markup_pct != null ? Number(c.gc_markup_pct) : (c.amount_cents && c.quote_cents ? Math.round((c.quote_cents - c.amount_cents) / c.amount_cents * 10000) / 100 : 15));
+const money2 = (c) => (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function bbLoad() {
+  const j = cur;
+  bb = { jobId: j.id, removed: [], sel: new Set(), dirty: false, each: j.gc_markup_each !== false, all: Number(j.gc_markup_all || 0) || 12,
+    rows: [...j.crews].filter((c) => c.billing === 'included').sort((a, b) => a.id - b.id)
+      .map((c) => ({ id: c.id, trade: c.trade, name: c.name || '', amount: c.amount_cents, pct: bbPct(c), files: c.file_count || 0, paid: c.sub_paid_cents || 0 })) };
+  if (!bb.rows.length) bb.rows.push({ id: null, trade: '', name: '', amount: 0, pct: 15, files: 0, paid: 0 });
 }
-// Saves what's on the screen. Returns the crew id (or null when a new, empty sub was left blank).
-async function gcSave() {
-  const f = $('#mBody'); if (!f.trade) return null;
-  const list = gcList(), c = list[gcIdx];
-  const trade = f.trade.value.trim();
-  const body = { trade, name: f.cname.value.trim(), phone: f.phone.value.trim(), amount_cents: gcC(f.bid.value), quote_cents: gcC(f.charge.value), note: f.note.value.trim() };
-  if (!c) {
-    if (!trade && !body.amount_cents && !body.quote_cents && !body.name) return null;
-    if (!trade) throw new Error('Pick or type the trade (e.g. Plumber)');
-    const r = await api(`/api/jobs/${cur.id}/crews`, { ...body, billing: 'included', column_id: gcPhase() });
-    await refreshTicket(); return r.id;
-  }
-  if (!trade) throw new Error('Pick or type the trade (e.g. Plumber)');
-  const same = c.trade === body.trade && (c.name || '') === body.name && (c.phone || '') === body.phone && c.amount_cents === body.amount_cents
-    && c.quote_cents === body.quote_cents && (c.note || '') === body.note;
-  if (!same) { await api(`/api/jobs/${cur.id}/crews/${c.id}`, body, 'PUT'); await refreshTicket(); }
-  return c.id;
+async function openBidBuilder(jobId) {
+  if (!cur || cur.id !== jobId) await openTicket(jobId);
+  bbLoad(); bbRender();
+  const first = $('#bb input[data-f=trade]'); if (first && !first.value) first.focus();
 }
-function gcWizard(idx) {
-  const list = gcList();
-  if (idx === 'review') return gcReview();
-  gcIdx = Math.max(0, Math.min(idx, list.length));
-  const c = list[gcIdx] || { trade: '', name: '', phone: '', amount_cents: 0, quote_cents: 0, note: '' };
-  const isNew = !list[gcIdx];
-  const myFiles = c.id ? files.filter((f) => f.crew_id === c.id) : [];
-  const f = openModal(`<div class="gcw">
-    <div class="gcstep"><h2 style="margin:0">🏗 GC Quote · Sub ${gcIdx + 1}${isNew ? ' (new)' : ` of ${list.length}`}</h2>
-      <span class="muted">#${cur.job_number} ${esc(cur.name)}</span></div>
-    ${list.length ? `<div class="gcdots">${list.map((x, k) => `<button type="button" class="${k === gcIdx ? 'on' : ''}" data-gcgo="${k}">${k + 1}. ${esc(x.trade)}</button>`).join('')}
-      <button type="button" class="${isNew ? 'on' : ''}" data-gcgo="${list.length}">+ New</button></div>` : ''}
-    <label>Trade</label>
-    <div class="presets">${TRADES.map((t) => `<button type="button" class="dk ${c.trade === t ? 'on' : ''}" data-trade="${t}">${t}</button>`).join('')}</div>
-    <input name="trade" maxlength="60" value="${esc(c.trade)}" placeholder="Or type it, e.g. Septic" style="margin-top:6px">
+const bbRowPct = (r) => (bb.each ? Number(r.pct) || 0 : Number(bb.all) || 0);
+const bbMk = (r) => Math.round(r.amount * bbRowPct(r) / 100);
+function bbRender() {
+  const j = cur;
+  let el = $('#bb'); if (!el) { el = document.createElement('div'); el.id = 'bb'; document.body.appendChild(el); }
+  el.hidden = false;
+  el.innerHTML = `<div class="bbwin">
+    <div class="bbhead"><div class="bblogo"><span class="bbicon">🏗</span><div><small>General Contractor</small><b>Bid Builder</b></div></div>
+      <div class="bbtools">
+        <button type="button" data-bb="new"><span>📄</span>New Bid</button><button type="button" data-bb="open"><span>📂</span>Open</button>
+        <button type="button" data-bb="save" class="${bb.dirty ? 'dirty' : ''}"><span>💾</span>Save</button><button type="button" data-bb="print"><span>🖨</span>Print / PDF</button>
+        <button type="button" data-bb="close" class="bbx" title="Close">✕</button></div></div>
+    <div class="bbmeta"><label>Project:</label><div class="bbbox">#${j.job_number} ${esc(j.name)}${j.customer_name ? ` <small>· ${esc(j.customer_name)}</small>` : ''}</div>
+      <label>Date:</label><div class="bbbox" style="max-width:190px">${new Date(j.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</div></div>
+    <div class="bbtablewrap"><table class="bbt"><thead><tr><th>#</th><th>Subcontractor / Scope</th><th class="n">Subcontractor Amount</th><th class="n">Your % Markup</th><th class="n">Your Markup</th><th class="n">Total (With Markup)</th><th></th></tr></thead>
+      <tbody>${bb.rows.map((r, i) => `<tr class="${bb.sel.has(i) ? 'sel' : ''}" data-i="${i}">
+        <td class="num" data-selrow="${i}" title="Click to select">${i + 1}</td>
+        <td><input data-f="trade" value="${esc(r.trade)}" maxlength="60" placeholder="e.g. Excavation &amp; Site Prep">${r.name || r.files ? `<small>${esc(r.name)}${r.name && r.files ? ' · ' : ''}${r.files ? '📎 ' + r.files : ''}</small>` : ''}</td>
+        <td class="n"><span class="cur">$</span><input data-f="amount" class="amt" inputmode="decimal" value="${r.amount ? money2(r.amount) : ''}" placeholder="0.00"></td>
+        <td class="n"><input data-f="pct" type="number" step="0.5" min="0" max="1000" class="pct" value="${bb.each ? r.pct : bb.all}" ${bb.each ? '' : 'disabled'}><span class="cur">%</span></td>
+        <td class="n" data-mk="${i}">$ ${money2(bbMk(r))}</td>
+        <td class="n tot" data-tot="${i}">$ ${money2(r.amount + bbMk(r))}</td>
+        <td class="acts"><button type="button" data-edit="${i}" title="Company, phone, bid PDF &amp; pictures">✎</button><button type="button" data-del="${i}" title="Remove" class="del">🗑</button></td></tr>`).join('')}</tbody></table></div>
+    <div class="bbbottom">
+      <div class="bbleft">
+        <div class="bbbtns"><button type="button" class="bbadd" data-bb="add">＋ Add Contractor / Scope</button>
+          <button type="button" data-bb="dup" ${bb.sel.size ? '' : 'disabled'}>⧉ Duplicate</button><button type="button" data-bb="remove" ${bb.sel.size ? '' : 'disabled'}>✕ Remove Selected</button></div>
+        <div class="bbset"><div class="bbsethead">Markup Settings</div>
+          <label><input type="radio" name="bbmode" value="each" ${bb.each ? 'checked' : ''}> Use individual % per contractor (as above)</label>
+          <label><input type="radio" name="bbmode" value="all" ${bb.each ? '' : 'checked'}> Use one overall markup % <input type="number" step="0.5" min="0" max="1000" id="bbAll" value="${bb.all}" ${bb.each ? 'disabled' : ''}> %</label>
+        </div></div>
+      <div class="bbtotals" id="bbTotals"></div>
+    </div>
+    <svg class="bbfoot" viewBox="0 0 1200 70" preserveAspectRatio="none" aria-hidden="true"><path d="M0 52 C200 30 380 58 600 44 C820 30 1000 56 1200 40 L1200 70 L0 70Z" fill="#c9ad7f"/><path d="M0 60 C260 48 520 66 800 56 C980 50 1100 60 1200 54 L1200 70 L0 70Z" fill="#a98a5c"/>
+      <g fill="#7a5a37"><path d="M70 58 V36 L95 22 L120 36 V58Z"/><rect x="88" y="44" width="14" height="14" fill="#c9ad7f"/><path d="M180 58 L184 20 L188 58Z"/><path d="M172 22 L196 18 M184 10 L184 30 M174 12 L194 28 M194 12 L174 28" stroke="#7a5a37" stroke-width="2"/>
+      <path d="M20 58 v-10 h40 v10 M130 58 v-8 h40 v8" stroke="#7a5a37" stroke-width="2" fill="none"/></g></svg>
+  </div>`;
+  bbTotals();
+}
+function bbTotals() {
+  const subs = bb.rows.reduce((a, r) => a + r.amount, 0), mk = bb.rows.reduce((a, r) => a + bbMk(r), 0);
+  $('#bbTotals').innerHTML = `<div><span>Subcontractor Total:</span><b>$ ${money2(subs)}</b></div><div><span>Total Markup:</span><b>$ ${money2(mk)}</b></div>
+    <div class="grand"><span>Project Total (Your Price):</span><b>$ ${money2(subs + mk)}</b></div>
+    ${cur.quoted_cents !== subs + mk ? `<div class="was">Quoted price now: ${usd(cur.quoted_cents)}${bb.dirty ? ' · not saved yet' : ''}</div>` : ''}`;
+  const sv = $('#bb [data-bb=save]'); if (sv) sv.classList.toggle('dirty', bb.dirty);
+}
+function bbRow(i) {
+  const r = bb.rows[i];
+  $(`#bb [data-mk="${i}"]`).textContent = '$ ' + money2(bbMk(r));
+  $(`#bb [data-tot="${i}"]`).textContent = '$ ' + money2(r.amount + bbMk(r));
+}
+async function bbSave(quiet) {
+  const bad = bb.rows.findIndex((r) => !r.trade.trim() && (r.amount || r.id));
+  if (bad >= 0) throw new Error(`Line ${bad + 1}: enter the subcontractor or scope`);
+  const rows = bb.rows.filter((r) => r.trade.trim()).map((r) => ({ id: r.id, trade: r.trade.trim(), amount_cents: r.amount, markup_pct: Number(r.pct) || 0 }));
+  const out = await api(`/api/jobs/${bb.jobId}/bid`, { rows, removed: bb.removed, markup_each: bb.each, markup_all: Number(bb.all) || 0 });
+  await refreshTicket();
+  const sel = bb.sel; bbLoad(); bb.sel = sel.size ? new Set() : sel;
+  bbRender();
+  if (!quiet) toast(`Bid saved · quoted price ${usd(out.quoted_cents)}`);
+}
+function bbClose() { const el = $('#bb'); if (el) { el.hidden = true; el.innerHTML = ''; } bb = null; }
+function bbLeave(then) {
+  if (bb && bb.dirty && !confirm('This bid has changes that are not saved. Leave without saving?')) return;
+  then();
+}
+// Picker used by the board button and by New Bid / Open.
+function bidPicker(mode) {
+  const open = jobs.filter((j) => !(cols.length && j.column_id === cols[cols.length - 1].id));
+  const colName = (id) => (cols.find((c) => c.id === id) || {}).name || '';
+  const startNew = () => {
+    const g = openModal(jobForm());
+    wireCustomerFind(g);
+    $('#saveJob').textContent = 'Next: build the bid ›';
+    $('#saveJob').onclick = () => run(async () => {
+      if (!g.reportValidity()) return;
+      const r = await api('/api/jobs', readJobForm(g));
+      closeModal(); bbClose(); toast(`Job #${r.job_number} created`); await loadBoard();
+      await openBidBuilder(r.id);
+    });
+  };
+  if (mode === 'new') return startNew();
+  const f = openModal(`<h2>🏗 Bid Builder</h2>
+    <button type="button" class="primary" data-pnew="1" style="width:100%;padding:14px;font-size:16px">📄 New Bid (new job)</button>
+    <label style="margin-top:14px">📂 Open a job</label>
+    <input id="bbFind" placeholder="Search job #, name, customer…" autocomplete="off">
+    <div class="sublist" id="bbList" style="max-height:340px;overflow:auto;margin-top:6px"></div>
+    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button></div>`);
+  const list = () => {
+    const q = $('#bbFind').value.trim().toLowerCase();
+    $('#bbList').innerHTML = open.filter((j) => !q || [String(j.job_number), j.name, j.customer_name].join(' ').toLowerCase().includes(q)).slice(0, 60)
+      .map((j) => `<div data-pjob="${j.id}" style="cursor:pointer"><span><b>#${j.job_number}</b> ${esc(j.name)}<small>${esc(j.customer_name || '')} · ${esc(colName(j.column_id))}</small></span>
+        <span class="amt">${j.quoted_cents ? usd(j.quoted_cents) : ''}</span></div>`).join('') || '<div class="muted" style="background:none">No open jobs found.</div>';
+  };
+  list(); $('#bbFind').oninput = list;
+  if (window.innerWidth > 700) setTimeout(() => $('#bbFind').focus(), 30);
+  f.onclick = async (e) => {
+    if (e.target.closest('[data-pnew]')) return startNew();
+    const pick = e.target.closest('[data-pjob]');
+    if (pick) { closeModal(); bbClose(); await openBidBuilder(Number(pick.dataset.pjob)); }
+  };
+}
+// ✎ on a row: who the sub is and their paperwork.
+function bidEdit(cid) {
+  const c = cur.crews.find((x) => x.id === cid); if (!c) return;
+  gcIdx = cid; subCrewId = cid;
+  const myFiles = files.filter((f) => f.crew_id === c.id);
+  const f = openModal(`<h2 style="margin-bottom:4px">✎ ${esc(c.trade)}</h2>
+    <div class="muted" style="margin-bottom:6px">Amount ${usd(c.amount_cents)} · customer price ${usd(c.quote_cents)}</div>
     <div class="two"><div><label>Subcontractor (company)</label><input name="cname" maxlength="100" value="${esc(c.name || '')}" placeholder="e.g. Reyes Plumbing"></div>
       <div><label>Phone</label><input name="phone" maxlength="40" inputmode="tel" value="${esc(c.phone || '')}"></div></div>
-    <div class="big2">
-      <div><label>Sub's bid (your cost)</label><input name="bid" inputmode="decimal" value="${c.amount_cents ? dollars(c.amount_cents) : ''}" placeholder="0.00"></div>
-      <div><label>Charge the customer</label><input name="charge" inputmode="decimal" value="${c.quote_cents ? dollars(c.quote_cents) : ''}" placeholder="0.00">
-        <div class="mk">${[10, 15, 20, 25].map((p) => `<button type="button" data-mk="${p}">Bid + ${p}%</button>`).join('')}<button type="button" data-mk="0">Same as bid</button></div></div>
-    </div>
-    <div class="margin" id="gcMargin"></div>
-    <label>What's included (optional)</label><input name="note" maxlength="300" value="${esc(c.note || '')}" placeholder="e.g. Rough-in and finish, 2 baths, fixtures by owner">
+    <label>What's included (shows on the detailed print)</label><input name="note" maxlength="300" value="${esc(c.note || '')}" placeholder="e.g. Rough-in and finish, fixtures by owner">
     <label style="margin-top:12px">Their bid &amp; pictures (${myFiles.length})</label>
     <div class="subfiles">${myFiles.map((x) => `<a href="${fileUrl(x)}" target="_blank" rel="noopener">${x.kind === 'photo' ? `<img src="${fileUrl(x)}" alt="" loading="lazy">` : '📄'}<span>${esc(x.name)}</span></a>`).join('')}
-      <button type="button" class="dk" data-gcfile="pdf">📄 Attach bid</button><button type="button" class="dk" data-gcfile="photo">📷 Add picture</button></div>
-    <div class="gcfoot">
-      <span style="display:flex;gap:8px"><button type="button" class="dk" data-gcnav="back" ${gcIdx === 0 ? 'disabled' : ''}>‹ Back</button>
-        <button type="button" class="dk" data-gcnav="close">Close</button></span>
-      <span style="display:flex;gap:8px"><button type="button" class="dk" data-gcnav="review">Review quote ✓</button>
-        <button class="primary" data-gcnav="next">Next sub ›</button></span>
-    </div></div>`);
-  f.classList.add('wide');
-  const margin = () => {
-    const b = gcC(f.bid.value), q = gcC(f.charge.value);
-    $('#gcMargin').innerHTML = b && q ? `Your markup on this sub: <b>${usd(q - b)}</b> (${((q - b) / b * 100).toFixed(1)}%)` : '';
+      <button type="button" class="dk" data-bf="pdf">📄 Attach bid</button><button type="button" class="dk" data-bf="photo">📷 Add picture</button></div>
+    <div class="actions" style="justify-content:space-between;flex-wrap:wrap">
+      <button type="button" class="dk" data-be="money">💵 Payments &amp; change orders</button>
+      <span style="display:flex;gap:8px"><button type="button" class="dk" data-be="cancel">Close</button><button class="primary" data-be="save">Save</button></span></div>`);
+  const save = async () => {
+    const body = { name: f.cname.value.trim(), phone: f.phone.value.trim(), note: f.note.value.trim() };
+    if (body.name === (c.name || '') && body.phone === (c.phone || '') && body.note === (c.note || '')) return true;
+    return run(async () => { await api(`/api/jobs/${cur.id}/crews/${cid}`, body, 'PUT'); await refreshTicket(); return true; });
   };
-  margin();
-  f.oninput = margin;
   f.onclick = async (e) => {
-    const t = e.target;
-    const tr = t.closest('[data-trade]'); if (tr) { f.trade.value = tr.dataset.trade; $$('#mBody [data-trade]').forEach((x) => x.classList.toggle('on', x === tr)); return; }
-    const mk = t.closest('[data-mk]');
-    if (mk) { const b = gcC(f.bid.value); if (!b) return toast("Enter the sub's bid first", 'bad'); f.charge.value = dollars(Math.round(b * (1 + Number(mk.dataset.mk) / 100))); return margin(); }
-    const go = t.closest('[data-gcgo]');
-    const nav = t.closest('[data-gcnav]');
-    const fl = t.closest('[data-gcfile]');
-    if (!go && !nav && !fl) return;
-    if (nav && nav.dataset.gcnav === 'close') {
-      const ok = await run(async () => { await gcSave(); return true; }); if (ok) closeModal(); return;
-    }
-    t.closest('button').disabled = true;
-    const id = await run(async () => { const r = await gcSave(); return r || 0; });
-    if (id === null) { t.closest('button').disabled = false; return; }
-    if (fl) {
-      if (!id) { t.closest('button').disabled = false; return toast('Pick the trade first, then attach the bid', 'bad'); }
-      gcIdx = gcList().findIndex((x) => x.id === id); subCrewId = id;
-      gcWizard(gcIdx);
-      return $(fl.dataset.gcfile === 'pdf' ? '#subPdfFile' : '#subPhotoFile').click();
-    }
-    const n = gcList().length;
-    if (go) return gcWizard(Number(go.dataset.gcgo));
-    if (nav.dataset.gcnav === 'review') return gcReview();
-    if (nav.dataset.gcnav === 'back') return gcWizard(id ? gcList().findIndex((x) => x.id === id) - 1 : n - 1);
-    // next: after an existing sub go to the following one; after a new one, start another new one
-    const at = id ? gcList().findIndex((x) => x.id === id) : gcIdx;
-    return gcWizard(at + 1);
+    const bf = e.target.closest('[data-bf]');
+    if (bf) { if (!(await save())) return; bidEdit(cid); return $(bf.dataset.bf === 'pdf' ? '#subPdfFile' : '#subPhotoFile').click(); }
+    const be = e.target.closest('[data-be]'); if (!be) return;
+    if (be.dataset.be === 'cancel') { closeModal(); return bbAfterEdit(); }
+    if (!(await save())) return;
+    if (be.dataset.be === 'money') return subDialog(cid);
+    closeModal(); toast('Saved'); bbAfterEdit();
   };
 }
-function gcReview() {
-  gcIdx = 'review';
-  const list = gcList();
-  const bids = list.reduce((a, c) => a + c.amount_cents, 0), charged = list.reduce((a, c) => a + c.quote_cents, 0);
-  const f = openModal(`<div class="gcw">
-    <div class="gcstep"><h2 style="margin:0">🏗 GC Quote · Review</h2><span class="muted">#${cur.job_number} ${esc(cur.name)}</span></div>
-    <table class="est" style="margin-top:8px"><thead><tr><th>Trade</th><th>Subcontractor</th><th class="n">Bid (cost)</th><th class="n">Charge customer</th><th class="n">Markup</th><th>Files</th></tr></thead>
-      <tbody>${list.map((c, k) => `<tr data-gcgo="${k}" style="cursor:pointer"><td><b>${esc(c.trade)}</b></td><td>${esc(c.name || '')}</td><td class="n">${usd(c.amount_cents)}</td>
-        <td class="n">${c.quote_cents ? usd(c.quote_cents) : '<span style="color:#fca5a5">not set</span>'}</td><td class="n">${c.quote_cents && c.amount_cents ? usd(c.quote_cents - c.amount_cents) : ''}</td>
-        <td>${c.file_count ? '📎 ' + c.file_count : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No subs yet.</td></tr>'}</tbody>
-      <tfoot><tr><td colspan="2"><b>Subs total</b></td><td class="n"><b>${usd(bids)}</b></td><td class="n"><b>${usd(charged)}</b></td><td class="n"><b>${usd(charged - bids)}</b></td><td></td></tr></tfoot></table>
-    <div class="two" style="margin-top:12px"><div><label>Your own work / overhead (optional)</label><input name="own" inputmode="decimal" value="${cur.gc_own_cents ? dollars(cur.gc_own_cents) : ''}" placeholder="0.00"></div>
-      <div><label>What it's for</label><input name="ownnote" maxlength="200" value="${esc(cur.gc_own_note || '')}" placeholder="e.g. Supervision, permits, cleanup"></div></div>
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:14px;flex-wrap:wrap;gap:8px">
-      <div><div class="muted">Quote total</div><div class="qtot" id="gcTot"></div><div class="muted" style="font-size:13px">Currently quoted: ${usd(cur.quoted_cents)}</div></div>
-      <div class="muted" id="gcProfit" style="text-align:right"></div></div>
-    <div class="gcfoot">
-      <span style="display:flex;gap:8px"><button type="button" class="dk" data-gcnav="back">‹ Back to subs</button><button type="button" class="dk" data-gcnav="close">Close</button></span>
-      <button class="primary" data-gcnav="set">Set as the quoted price</button></div></div>`);
-  f.classList.add('wide');
-  const calc = () => {
-    const own = gcC(f.own.value);
-    $('#gcTot').textContent = usd(charged + own);
-    $('#gcProfit').innerHTML = `Subs cost ${usd(bids)}<br>Your markup + own work: <b>${usd(charged - bids + own)}</b>`;
-  };
-  calc(); f.oninput = calc;
-  f.onclick = async (e) => {
-    const go = e.target.closest('[data-gcgo]'); if (go) return gcWizard(Number(go.dataset.gcgo));
-    const nav = e.target.closest('[data-gcnav]'); if (!nav) return;
-    if (nav.dataset.gcnav === 'close') return closeModal();
-    if (nav.dataset.gcnav === 'back') return gcWizard(Math.max(0, list.length - 1));
-    if (list.some((c) => !c.quote_cents) && !confirm('Some subs have no charge to the customer set. Set the quoted price anyway?')) return;
-    nav.disabled = true;
-    const ok = await run(async () => { await api(`/api/jobs/${cur.id}/gc-quote`, { own_cents: gcC(f.own.value), own_note: f.ownnote.value.trim() }); return true; });
-    nav.disabled = false; if (!ok) return;
-    toast('Quoted price set'); await refreshTicket(); closeModal();
-  };
+function bbAfterEdit() {
+  if (!bb) return;
+  // keep unsaved numbers; refresh names and file counts from the server
+  for (const r of bb.rows) { const c = r.id && cur.crews.find((x) => x.id === r.id); if (c) { r.name = c.name || ''; r.files = c.file_count || 0; } }
+  bbRender();
 }
+document.addEventListener('input', (e) => {
+  if (!bb || !e.target.closest('#bb')) return;
+  const t = e.target, tr = t.closest('tr[data-i]');
+  if (t.id === 'bbAll') { bb.all = Number(t.value) || 0; bb.dirty = true; bb.rows.forEach((_, i) => bbRow(i)); return bbTotals(); }
+  if (!tr) return;
+  const i = Number(tr.dataset.i), r = bb.rows[i];
+  if (t.dataset.f === 'trade') r.trade = t.value;
+  if (t.dataset.f === 'amount') r.amount = toCents(t.value) || 0;
+  if (t.dataset.f === 'pct') r.pct = Number(t.value) || 0;
+  bb.dirty = true; bbRow(i); bbTotals();
+});
+document.addEventListener('change', (e) => {
+  if (!bb || !e.target.closest('#bb')) return;
+  if (e.target.name === 'bbmode') { bb.each = e.target.value === 'each'; bb.dirty = true; bbRender(); }
+  if (e.target.dataset.f === 'amount') { const r = bb.rows[Number(e.target.closest('tr').dataset.i)]; e.target.value = r.amount ? money2(r.amount) : ''; }
+});
+document.addEventListener('keydown', (e) => {
+  if (!bb || e.key !== 'Enter' || !e.target.closest('#bb tr[data-i]')) return;
+  e.preventDefault();
+  const i = Number(e.target.closest('tr').dataset.i), f = e.target.dataset.f;
+  const next = $(`#bb tr[data-i="${i + 1}"] input[data-f="${f}"]`);
+  if (next) next.focus(); else { $('#bb [data-bb=add]').click(); }
+});
+document.addEventListener('click', async (e) => {
+  if (!bb || !e.target.closest('#bb')) return;
+  const t = e.target;
+  const sr = t.closest('[data-selrow]');
+  if (sr) { const i = Number(sr.dataset.selrow); bb.sel.has(i) ? bb.sel.delete(i) : bb.sel.add(i); return bbRender(); }
+  const del = t.closest('[data-del]');
+  if (del) {
+    const i = Number(del.dataset.del), r = bb.rows[i];
+    if (r.paid) return toast(`${r.trade} has payments recorded, so it can't be removed`, 'bad');
+    if ((r.trade || r.amount) && !confirm(`Remove ${r.trade || 'this line'} from the bid?`)) return;
+    if (r.id) bb.removed.push(r.id);
+    bb.rows.splice(i, 1); bb.sel.clear(); bb.dirty = true; return bbRender();
+  }
+  const ed = t.closest('[data-edit]');
+  if (ed) {
+    const i = Number(ed.dataset.edit), r = bb.rows[i];
+    if (!r.trade.trim()) return toast('Enter the subcontractor or scope first', 'bad');
+    if (!r.id || bb.dirty) { const ok = await run(async () => { await bbSave(true); return true; }); if (!ok) return; }
+    const id = bb.rows[i] && bb.rows[i].id; if (id) bidEdit(id);
+    return;
+  }
+  const b = t.closest('[data-bb]'); if (!b) return;
+  const k = b.dataset.bb;
+  if (k === 'add') {
+    const last = bb.rows[bb.rows.length - 1];
+    bb.rows.push({ id: null, trade: '', name: '', amount: 0, pct: last ? last.pct : 15, files: 0, paid: 0 }); bb.dirty = true; bbRender();
+    return $(`#bb tr[data-i="${bb.rows.length - 1}"] input[data-f=trade]`).focus();
+  }
+  if (k === 'dup') {
+    const idx = [...bb.sel].sort((a, c) => a - c);
+    const copies = idx.map((i) => ({ ...bb.rows[i], id: null, name: '', files: 0, paid: 0 }));
+    bb.rows.splice(idx[idx.length - 1] + 1, 0, ...copies); bb.sel.clear(); bb.dirty = true; return bbRender();
+  }
+  if (k === 'remove') {
+    const idx = [...bb.sel].sort((a, c) => c - a);
+    const paid = idx.map((i) => bb.rows[i]).filter((r) => r.paid);
+    if (paid.length) return toast(`${paid[0].trade} has payments recorded, so it can't be removed`, 'bad');
+    if (!confirm(`Remove ${idx.length} line${idx.length === 1 ? '' : 's'} from the bid?`)) return;
+    for (const i of idx) { if (bb.rows[i].id) bb.removed.push(bb.rows[i].id); bb.rows.splice(i, 1); }
+    bb.sel.clear(); bb.dirty = true; return bbRender();
+  }
+  if (k === 'save') { b.disabled = true; await run(() => bbSave(false)); if ($('#bb [data-bb=save]')) $('#bb [data-bb=save]').disabled = false; return; }
+  if (k === 'print') {
+    if (bb.dirty) { const ok = await run(async () => { await bbSave(true); return true; }); if (!ok) return; }
+    return printChoice();
+  }
+  if (k === 'close') return bbLeave(bbClose);
+  if (k === 'new') return bbLeave(() => bidPicker('new'));
+  if (k === 'open') return bbLeave(() => bidPicker());
+});
 
 // ---------- print: total only (normal) or detailed by trade (password required) ----------
 function detailLines(j) {
@@ -1386,31 +1532,7 @@ function printChoice() {
   f.onsubmit = (e) => { e.preventDefault(); if (!$('#prPw').hidden) f.querySelector('[data-pr=go]').click(); return false; };
 }
 
-// ---------- GC Quote from the board: start a new job or pick one being quoted ----------
-$('#gcBoardBtn').onclick = () => {
-  const first = cols[0];
-  const list = jobs.filter((j) => first && j.column_id === first.id);
-  const f = openModal(`<h2>🏗 GC Quote</h2>
-    <button type="button" class="primary" data-gcnew="1" style="width:100%;padding:14px;font-size:16px">+ Start a new job</button>
-    ${list.length ? `<label style="margin-top:14px">Or continue a job in ${esc(first.name)}</label>
-      <div class="sublist" style="max-height:340px;overflow:auto">${list.map((j) => `<div data-gcjob="${j.id}" style="cursor:pointer"><span><b>#${j.job_number}</b> ${esc(j.name)}<small>${esc(j.customer_name || '')}</small></span>
-        <span class="amt">${j.quoted_cents ? usd(j.quoted_cents) : ''}</span></div>`).join('')}</div>` : ''}
-    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button></div>`);
-  f.onclick = async (e) => {
-    const pick = e.target.closest('[data-gcjob]');
-    if (pick) { closeModal(); await openTicket(Number(pick.dataset.gcjob)); return gcWizard(0); }
-    if (!e.target.closest('[data-gcnew]')) return;
-    const g = openModal(jobForm());
-    wireCustomerFind(g);
-    $('#saveJob').textContent = 'Next: add subs ›';
-    $('#saveJob').onclick = () => run(async () => {
-      if (!g.reportValidity()) return;
-      const r = await api('/api/jobs', readJobForm(g));
-      closeModal(); toast(`Job #${r.job_number} created`); await loadBoard();
-      await openTicket(r.id); gcWizard(0);
-    });
-  };
-};
+$('#gcBoardBtn').onclick = () => bidPicker();
 
 // ---------- plans, photos & Claude estimates ----------
 const fileUrl = (f) => `/api/jobs/${f.job_id}/files/${f.id}`;
