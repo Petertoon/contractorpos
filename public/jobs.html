@@ -315,6 +315,51 @@
   #bb .bbtotals .grand b { font-size: 26px; } #bb .bbtotals .was { font-size: 13px; color: #7a6a50; border: 0; justify-content: flex-end; }
   #bb .bbfoot { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 64px; }
   @media (max-width: 800px) { #bb { padding: 0; } #bb .bbwin { border-radius: 0; } #bb .bbbottom { grid-template-columns: 1fr; } #bb .bbmeta { grid-template-columns: auto 1fr; } #bb .bblogo b { font-size: 22px; } }
+
+  /* ---- Ranch look (Settings → Look of the program) ---- */
+  html[data-theme=ranch] { --jbg: #efe5cf; --jpanel: #f7f0e1; --jcard: #fffaf0; --jline: #d8c9a8; --jink: #2b2417; --jmuted: #7a6a50; --red: #b42318; }
+  html[data-theme=ranch] a { color: #2f5a2a; }
+  html[data-theme=ranch] .jtop { background: linear-gradient(180deg, #e7d4ac, #d9c093); border-bottom-color: #c4a874; }
+  html[data-theme=ranch] .jtop a, html[data-theme=ranch] .jtop .link { color: #2b2010; }
+  html[data-theme=ranch] .jtop input, html[data-theme=ranch] .jtop select { background: #fffaf0; color: #2b2417; border-color: #c4a874; }
+  html[data-theme=ranch] button.dk { background: #fbf7ee; color: #2b2417; border-color: #cdbb98; }
+  html[data-theme=ranch] button.dk:hover { background: #f1e6cd; }
+  html[data-theme=ranch] button.primary { background: #2f5a2a; color: #fff; }
+  html[data-theme=ranch] .gcbtn { background: #2f5a2a !important; color: #fff !important; border-color: #2f5a2a !important; }
+  html[data-theme=ranch] .counts span { background: #fbf7ee; }
+  html[data-theme=ranch] .col { border: 1px solid #ddd0b3; box-shadow: 0 1px 2px rgba(80,60,20,.08); }
+  html[data-theme=ranch] .jc { box-shadow: 0 1px 3px rgba(80,60,20,.12); }
+  html[data-theme=ranch] .col.drop { outline-color: #2f5a2a; }
+  html[data-theme=ranch] .jc .ok, html[data-theme=ranch] .tot .big.zero { color: #2f7a33; }
+  html[data-theme=ranch] .chip.on { color: #fff; }
+  html[data-theme=ranch] .bar { background: #e6dcc6; }
+  html[data-theme=ranch] .pane h3 { color: #2f5a2a; }
+  html[data-theme=ranch] .chat .a h4 { color: #5b3a9a; }
+  html[data-theme=ranch] .nx { background: #ead9b6; color: #2b2010; }
+  html[data-theme=ranch] .pane input, html[data-theme=ranch] .pane select, html[data-theme=ranch] .modal input, html[data-theme=ranch] .modal select, html[data-theme=ranch] .modal textarea { background: #fff; color: #2b2417; border-color: #cdbb98; }
+  html[data-theme=ranch] table.lines tr.quote td { background: #f3ead6; }
+  html[data-theme=ranch] #tLines tr.quote td { background: rgba(120,90,40,.08); }
+  html[data-theme=ranch] .k-item { background: #dbe8f7; color: #1d4f8a; } html[data-theme=ranch] .k-charge { background: #f8e3b5; color: #7a4b00; } html[data-theme=ranch] .k-rental { background: #eadcf6; color: #5b2d86; } html[data-theme=ranch] .k-crew { background: #d8efe3; color: #1c5b3c; }
+  html[data-theme=ranch] .hist div, html[data-theme=ranch] .modal label, html[data-theme=ranch] .estlist, html[data-theme=ranch] .crewhead .sum, html[data-theme=ranch] .cpbox .prev, html[data-theme=ranch] .crewtot { color: #4b3d26; }
+  html[data-theme=ranch] .modal { background: #f4ecdb; color: #2b2417; }
+  html[data-theme=ranch] .colors div, html[data-theme=ranch] .summary, html[data-theme=ranch] .subform, html[data-theme=ranch] .billopt label, html[data-theme=ranch] .chat .a { background: #fbf7ee; border-color: #d8c9a8; color: #2b2417; }
+  html[data-theme=ranch] .chat .q { background: #2f5a2a; color: #fff; }
+  html[data-theme=ranch] .chat .a code, html[data-theme=ranch] table.mdt th { background: #ead9b6; }
+  html[data-theme=ranch] .frow .fact button, html[data-theme=ranch] .frow .fact a, html[data-theme=ranch] .crow button, html[data-theme=ranch] .gcw .mk button { background: #ece2cc; color: #2b2417; }
+  html[data-theme=ranch] .frow .fact .estb { background: #6d4fc4; color: #fff; }
+  html[data-theme=ranch] .crow button.ok { background: #2f7a33; color: #fff; }
+  html[data-theme=ranch] .crow button.subb { background: #b45309; color: #fff; }
+  html[data-theme=ranch] .crewbox { background: #f7f0e1; border-color: #d8c9a8; }
+  html[data-theme=ranch] #tLines .crewbox { background: rgba(120,90,40,.06); border-color: rgba(120,90,40,.22); }
+  html[data-theme=ranch] #tLines .crow, html[data-theme=ranch] #tLines .frow { background: rgba(120,90,40,.08); }
+  html[data-theme=ranch] #tLines .crow .amt small.inc, html[data-theme=ranch] #tLines .crow .amt small.ext, html[data-theme=ranch] #tLines .crow .amt small.cp, html[data-theme=ranch] #tLines .crow .subl b.owe, html[data-theme=ranch] #tLines .crow .subl b.paidup { background: #fffaf0; }
+  html[data-theme=ranch] .crow .amt .inc { color: #1d4f8a; } html[data-theme=ranch] .crow .amt .ext { color: #8a5300; } html[data-theme=ranch] .crow .amt .cp { color: #7a2d9a; }
+  html[data-theme=ranch] .crow .subl b.owe, html[data-theme=ranch] .subsum .owe b { color: #b42318; } html[data-theme=ranch] .crow .subl b.paidup, html[data-theme=ranch] .subsum .paidup b { color: #2f7a33; }
+  html[data-theme=ranch] .subsum div, html[data-theme=ranch] .sublist > div, html[data-theme=ranch] .subfiles a { background: #fbf7ee; border: 1px solid #e3d6ba; color: #2b2417; }
+  html[data-theme=ranch] .ftag { background: #b45309; color: #fff; }
+  html[data-theme=ranch] .back { background: #fde3c4; color: #8a3a06; }
+  html[data-theme=ranch] .flag { background: #b42318; color: #fff; }
+  html[data-theme=ranch] .modal .sendgrid button.wa { background: #25d366; color: #06290f; }
   @media print {
     body { background: #fff; color: #000; }
     body > *:not(#printArea) { display: none !important; }
@@ -330,7 +375,7 @@
   }
 </style>
 </head>
-<body>
+<body class="cp">
 <header class="jtop">
   <div class="brand"><img id="logo" alt="" hidden><span>🏗</span><span id="bizName">Job Board</span><small>Job Board</small></div>
   <button class="primary" id="newJob">+ New job</button>
