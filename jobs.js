@@ -583,6 +583,7 @@ module.exports = function setupJobs(app, deps) {
       amount_cents: b.amount_cents == null || b.amount_cents === '' ? 0 : cents(b.amount_cents, 'Amount'),
       billing: ['extra', 'costplus'].includes(b.billing) ? b.billing : 'included',
       note: text(b.note, 'Note', { required: false, max: 300 }) || null,
+      quote_cents: b.quote_cents == null || b.quote_cents === '' ? (current ? current.quote_cents : 0) : cents(b.quote_cents, 'Charge to the customer'),
       done: 'done' in b ? !!b.done : !!(current && current.done),
       column_id: null,
     };
@@ -635,9 +636,9 @@ module.exports = function setupJobs(app, deps) {
       const n = await db.query('SELECT count(*)::int AS n FROM job_crews WHERE job_id=$1', [job.id]);
       if (n.rows[0].n >= 100) fail(400, 'This job already has 100 crews');
       const r = await db.query(
-        `INSERT INTO job_crews (job_id, column_id, trade, name, phone, amount_cents, billing, note, markup_type, markup_percent, markup_cents, charge_cents, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-        [job.id, f.column_id, f.trade, f.name, f.phone, f.amount_cents, f.billing, f.note, f.markup_type, f.markup_percent, f.markup_cents, f.charge_cents, req.user.id]);
+        `INSERT INTO job_crews (job_id, column_id, trade, name, phone, amount_cents, billing, note, markup_type, markup_percent, markup_cents, charge_cents, created_by, quote_cents)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+        [job.id, f.column_id, f.trade, f.name, f.phone, f.amount_cents, f.billing, f.note, f.markup_type, f.markup_percent, f.markup_cents, f.charge_cents, req.user.id, f.quote_cents]);
       await syncCrewLine(db, r.rows[0], req.user.id);
       const col = cols.find((c) => c.id === f.column_id);
       await log(db, job.id, req.user, `Crew added${col ? ' to ' + col.name : ''}: ${crewText(r.rows[0])}`);
@@ -661,8 +662,8 @@ module.exports = function setupJobs(app, deps) {
       }
       const r = await db.query(
         `UPDATE job_crews SET column_id=$1, trade=$2, name=$3, phone=$4, amount_cents=$5, billing=$6, note=$7, done=$8,
-           markup_type=$9, markup_percent=$10, markup_cents=$11, charge_cents=$12 WHERE id=$13 RETURNING *`,
-        [f.column_id, f.trade, f.name, f.phone, f.amount_cents, f.billing, f.note, f.done, f.markup_type, f.markup_percent, f.markup_cents, f.charge_cents, cur.id]);
+           markup_type=$9, markup_percent=$10, markup_cents=$11, charge_cents=$12, quote_cents=$14 WHERE id=$13 RETURNING *`,
+        [f.column_id, f.trade, f.name, f.phone, f.amount_cents, f.billing, f.note, f.done, f.markup_type, f.markup_percent, f.markup_cents, f.charge_cents, cur.id, f.quote_cents]);
       await syncCrewLine(db, r.rows[0], req.user.id);
       const what = f.done !== cur.done && sent.length === 1 ? (f.done ? 'Crew finished' : 'Crew back on the job') : 'Crew changed';
       await log(db, job.id, req.user, `${what}: ${crewText(r.rows[0])}`);
@@ -680,6 +681,28 @@ module.exports = function setupJobs(app, deps) {
       const r = await db.query('DELETE FROM job_crews WHERE id=$1 AND job_id=$2 RETURNING *', [req.params.cid, job.id]);
       const c = r.rows[0] || fail(404, 'Crew not found');
       await log(db, job.id, req.user, `Crew removed: ${crewText(c)}${c.billing !== 'included' && c.charge_cents ? ' (its charge was taken off the ticket)' : ''}`);
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
+
+  // ---------- General Contractor quote: subs' charges + the GC's own amount become the quoted price ----------
+  app.post('/api/jobs/:id/gc-quote', ...J, wrap(async (req, res) => {
+    const b = (await pool.query('SELECT gc_enabled FROM businesses WHERE id=$1', [req.user.business_id])).rows[0];
+    if (!b || !b.gc_enabled) fail(403, 'The General Contractor add-on is not turned on for this business');
+    await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      notClosed(job);
+      const own = req.body.own_cents == null || req.body.own_cents === '' ? 0 : cents(req.body.own_cents, 'Your own amount');
+      const ownNote = text(req.body.own_note, 'Note', { required: false, max: 200 }) || null;
+      const subs = await db.query('SELECT COALESCE(sum(quote_cents), 0)::int AS q FROM job_crews WHERE job_id=$1', [job.id]);
+      const quoted = subs.rows[0].q + own;
+      if (quoted !== job.quoted_cents && job.paid_cents > 0 && !isManager(req.user)) {
+        fail(403, 'Payments have been taken on this job; only an owner or manager can change the quoted price');
+      }
+      await db.query('UPDATE jobs SET quoted_cents=$1, gc_own_cents=$2, gc_own_note=$3, updated_at=now() WHERE id=$4', [quoted, own, ownNote, job.id]);
+      await log(db, job.id, req.user, `GC quote: subs ${usd(subs.rows[0].q)} + own ${usd(own)} = quoted price ${usd(quoted)}`
+        + (quoted !== job.quoted_cents ? ` (was ${usd(job.quoted_cents)})` : ''));
     });
     notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
     res.json({ ok: true });
