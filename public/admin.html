@@ -57,7 +57,7 @@
   .photobtns { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 </style>
 </head>
-<body>
+<body class="cp">
 <div class="topbar">
   <div class="brand">ContractorPOS</div>
   <div class="biz" id="bizName"></div>
@@ -912,6 +912,7 @@ async function showSettings() {
   const isOwner = role === 'owner' && me.business;
   $('#view').innerHTML = `${isOwner ? `<div class="settings"><h2 style="margin-top:0">Business</h2>
       <label>Business name</label><input id="bName" value="${esc(me.business.name)}">
+      <label>Look of the program</label><select id="bTheme"><option value="ranch" ${me.business.theme === 'ranch' ? 'selected' : ''}>Ranch: parchment &amp; green (like the Bid Builder)</option><option value="dark" ${me.business.theme !== 'ranch' ? 'selected' : ''}>Dark</option></select>
       <label>Accent color</label><input id="bColor" type="color" value="${esc(me.business.accent_color)}" style="height:44px;padding:4px">
       <label>Logo image URL (https://…)</label><input id="bLogo" value="${esc(me.business.logo_url || '')}" placeholder="Optional">
       <label>Receipt emails: replies go to (leave blank to use the owner's login email)</label><input id="bReply" type="email" value="${esc(me.business.receipt_reply_email || '')}" placeholder="store@example.com">
@@ -923,7 +924,7 @@ async function showSettings() {
       <label>New password (8+ characters)</label><input id="pNew" type="password" autocomplete="new-password">
       <button class="primary" style="margin-top:14px" id="savePw">Change password</button></div>`;
   if (isOwner) $('#saveBiz').onclick = async () => {
-    try { await api('/api/business', { name: $('#bName').value, accent_color: $('#bColor').value, logo_url: $('#bLogo').value,
+    try { await api('/api/business', { name: $('#bName').value, accent_color: $('#bColor').value, theme: $('#bTheme').value, logo_url: $('#bLogo').value,
       half_day_hours: $('#bHalf') ? $('#bHalf').value : null, deposit_account: $('#bDep').value, receipt_reply_email: $('#bReply').value }, 'PUT'); toast('Saved'); setTimeout(() => location.reload(), 600); }
     catch (e) { toast(e.message, 'bad'); }
   };
