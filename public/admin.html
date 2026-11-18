@@ -39,6 +39,7 @@
   button.rentson { background: #fff3e0; color: #8a4b00; }
   button.jobson { background: #e3ecff; color: #1d3f9a; }
   button.aion { background: #efe7ff; color: #4b2aa8; }
+  button.gcon { background: #ffedd5; color: #9a3412; }
   .stat.refund b { color: #c0392b; }
   .badge { background: #e74c3c; color: #fff; border-radius: 99px; padding: 1px 7px; font-size: 12px; margin-left: 4px; }
   .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
@@ -217,7 +218,8 @@ async function showBusinesses() {
       <td>${b.active ? '<span class="pill">Active</span>' : '<span class="pill off">Off</span>'}</td>
       <td style="white-space:nowrap"><button class="${b.rentals_enabled ? 'rentson' : 'ghost'}" data-rentals="${b.id}" data-on="${b.rentals_enabled}" title="Rentals add-on">🔑 Rentals ${b.rentals_enabled ? 'on' : 'off'}</button>
         <button class="${b.qbo_enabled ? 'qboon' : 'ghost'}" data-qbo="${b.id}" data-on="${b.qbo_enabled}" title="QuickBooks add-on">QuickBooks ${b.qbo_enabled ? 'on' : 'off'}</button>
-        <button class="${b.ai_enabled ? 'aion' : 'ghost'}" data-ai="${b.id}" data-on="${b.ai_enabled}" title="Claude add-on: ask about plans and photos, materials estimates. ${b.claude_month} request(s) this month">✨ Claude ${b.ai_enabled ? 'on' : 'off'}${b.claude_month ? ` · ${b.claude_month} this month` : ''}</button></td>
+        <button class="${b.ai_enabled ? 'aion' : 'ghost'}" data-ai="${b.id}" data-on="${b.ai_enabled}" title="Claude add-on: ask about plans and photos, materials estimates. ${b.claude_month} request(s) this month">✨ Claude ${b.ai_enabled ? 'on' : 'off'}${b.claude_month ? ` · ${b.claude_month} this month` : ''}</button>
+        <button class="${b.gc_enabled ? 'gcon' : 'ghost'}" data-gc="${b.id}" data-on="${b.gc_enabled}" title="General Contractor add-on: build the quote sub by sub">🏗 GC ${b.gc_enabled ? 'on' : 'off'}</button></td>
       <td style="white-space:nowrap"><button class="primary" data-enter="${b.id}">Open</button> <button data-toggle="${b.id}" data-active="${b.active}">${b.active ? 'Turn off' : 'Turn on'}</button></td></tr>`).join('')
       || '<tr><td colspan="7" class="muted">No businesses yet. Create the first one.</td></tr>'}
     </tbody></table></div>`;
@@ -234,6 +236,8 @@ async function showBusinesses() {
   $('#view').onclick = async (e) => {
     const en = e.target.closest('[data-enter]'), tg = e.target.closest('[data-toggle]'), rt = e.target.closest('[data-rentals]');
     const qb = e.target.closest('[data-qbo]'), jb = e.target.closest('[data-jobs]'), ab = e.target.closest('[data-ai]');
+    const gb = e.target.closest('[data-gc]');
+    if (gb) { await api('/api/admin/businesses/' + gb.dataset.gc, { gc_enabled: gb.dataset.on !== 'true' }, 'PUT'); showBusinesses(); return; }
     if (ab) {
       const on = ab.dataset.on !== 'true';
       await api('/api/admin/businesses/' + ab.dataset.ai, { ai_enabled: on }, 'PUT'); showBusinesses(); return;
