@@ -1,8 +1,7 @@
-[HANDOVER (27).md](https://github.com/user-attachments/files/35050554/HANDOVER.27.md)
-
+[HANDOVER (28).md](https://github.com/user-attachments/files/35051618/HANDOVER.28.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-18 · Current version: **ContractorPOS v1.14**
+Last updated: 2026-11-18 · Current version: **ContractorPOS v1.16**
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -367,3 +366,12 @@ Merged from MultiPOS v1.11 (three-way merge against v1.10, no conflicts).
 - Settings → **Look of the program**: **Ranch** (parchment & green, the Bid Builder look) or **Dark**. Stored in `businesses.theme`; businesses that existed before v1.14 stay Dark (NULL) until switched, new businesses start on Ranch.
 - `app.js applyBrand()` sets `<html data-theme>` (remembered in localStorage to avoid a flash). Ranch styles only apply to the three main screens (`<body class="cp">`: job board, checkout, Manage); invoices, statements, receipts and customer pages stay plain white.
 - `style.css`: Ranch variables + `:where(...)` rules (low specificity so screen-specific button colors still win). `jobs.html`: a `html[data-theme=ranch]` block re-colors the board, ticket, dialogs, crews and sub windows. Column colors set in Workflow setup are unchanged.
+
+## 26. New Dark look (ContractorPOS v1.15)
+- **Dark** now matches the Lokaal menu style: charcoal (#121418 / panels #1d2027), lime green highlights (#7cc04a), gold section headings and table headers (#d9a93a). Navy is gone.
+- Dark now covers checkout and Manage too (they were white before). Screen only (`@media screen`), so printed reports and receipts stay black on white.
+- Two complete looks: **Dark** (default for businesses with no choice saved) and **Ranch**. Bid Builder keeps its parchment look in both.
+
+## 27. Burgundy in the Ranch look (ContractorPOS v1.16)
+- Ranch now uses the website's brick red/burgundy (`--burg: #7f3b33`, money-owed `#8b2e24`) alongside green and tan: section headings and page titles, the selected top-bar tab (burgundy pill, like the region button on Lokaal), balance owed / "Owe", High-priority flags, moved-back tags, delete (×/🗑) and error colors. Green stays for main buttons and table headers.
+- Bid Builder (both themes): "Bid Builder" title and the barn/windmill footer in burgundy.
