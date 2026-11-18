@@ -167,7 +167,7 @@ app.post('/api/logout', wrap(async (req, res) => {
 app.get('/api/me', requireLogin, wrap(async (req, res) => {
   let business = null;
   if (req.user.business_id) {
-    const b = await pool.query('SELECT id, name, accent_color, logo_url, rentals_enabled, half_day_hours, deposit_account, qbo_enabled, jobs_enabled, ai_enabled, time_zone, receipt_reply_email FROM businesses WHERE id = $1', [req.user.business_id]);
+    const b = await pool.query('SELECT id, name, accent_color, logo_url, rentals_enabled, half_day_hours, deposit_account, qbo_enabled, jobs_enabled, ai_enabled, gc_enabled, time_zone, receipt_reply_email FROM businesses WHERE id = $1', [req.user.business_id]);
     business = b.rows[0] || null;
   }
   const { id, name, email, role } = req.user;
@@ -234,6 +234,7 @@ app.put('/api/admin/businesses/:id', requireLogin, requireAdmin, wrap(async (req
   if ('rentals_enabled' in req.body) await pool.query('UPDATE businesses SET rentals_enabled = $1 WHERE id = $2', [!!req.body.rentals_enabled, req.params.id]);
   if ('jobs_enabled' in req.body) await pool.query('UPDATE businesses SET jobs_enabled = $1 WHERE id = $2', [!!req.body.jobs_enabled, req.params.id]);
   if ('ai_enabled' in req.body) await pool.query('UPDATE businesses SET ai_enabled = $1 WHERE id = $2', [!!req.body.ai_enabled, req.params.id]);
+  if ('gc_enabled' in req.body) await pool.query('UPDATE businesses SET gc_enabled = $1 WHERE id = $2', [!!req.body.gc_enabled, req.params.id]);
   res.json({ ok: true });
 }));
 
