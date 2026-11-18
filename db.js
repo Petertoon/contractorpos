@@ -570,6 +570,11 @@ CREATE TABLE IF NOT EXISTS job_crew_changes (
 );
 CREATE INDEX IF NOT EXISTS job_crew_changes_crew ON job_crew_changes(crew_id);
 ALTER TABLE job_files ADD COLUMN IF NOT EXISTS crew_id INT REFERENCES job_crews(id) ON DELETE SET NULL;
+-- General Contractor add-on (v1.10): quote built sub by sub. quote_cents = what the customer is charged for that sub inside the quote.
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS gc_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS quote_cents INT NOT NULL DEFAULT 0;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_own_cents INT NOT NULL DEFAULT 0;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_own_note TEXT;
 
 -- Claude add-on: switched on per business by the platform admin. Every request is logged (for usage and billing).
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT FALSE;
