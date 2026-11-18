@@ -575,6 +575,10 @@ ALTER TABLE businesses ADD COLUMN IF NOT EXISTS gc_enabled BOOLEAN NOT NULL DEFA
 ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS quote_cents INT NOT NULL DEFAULT 0;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_own_cents INT NOT NULL DEFAULT 0;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_own_note TEXT;
+-- Bid Builder (v1.12): markup % per sub, or one overall % for the whole bid.
+ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS gc_markup_pct NUMERIC(7,3);
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_markup_each BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_markup_all NUMERIC(7,3) NOT NULL DEFAULT 0;
 
 -- Claude add-on: switched on per business by the platform admin. Every request is logged (for usage and billing).
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT FALSE;
