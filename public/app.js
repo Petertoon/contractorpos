@@ -1,3 +1,5 @@
+// Look of the program: set from the last visit right away, then confirmed by applyBrand().
+try { document.documentElement.dataset.theme = localStorage.getItem('cp_theme') || 'dark'; } catch (e) { /* private mode */ }
 // Shared helpers for all ContractorPOS pages.
 async function api(path, body, method) {
   const opts = { method: method || (body === undefined ? 'GET' : 'POST'), headers: {}, credentials: 'same-origin' };
@@ -32,6 +34,8 @@ function toast(msg, kind = 'ok') {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => (el.className = ''), 2600);
 }
 function applyBrand(business) {
+  document.documentElement.dataset.theme = (business && business.theme) || 'dark';
+  try { localStorage.setItem('cp_theme', document.documentElement.dataset.theme); } catch (e) { /* private mode */ }
   if (business && business.accent_color) document.documentElement.style.setProperty('--accent', business.accent_color);
 }
 // Photo address for a product; v changes whenever the photo changes.
