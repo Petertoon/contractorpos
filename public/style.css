@@ -92,7 +92,7 @@ table.list tr.off td { color: #aaa; }
 /* ---- Ranch look (Settings → Look of the program). Only the main screens (body.cp); printouts and customer pages stay plain. ---- */
 html[data-theme=ranch]:has(> body.cp) { background: #efe5cf; }
 html[data-theme=ranch] body.cp {
-  --bg: #efe5cf; --panel: #fbf7ee; --ink: #2b2417; --muted: #7a6a50; --line: #dccdb0; --top: #2f5a2a; --danger: #b42318;
+  --bg: #efe5cf; --panel: #fbf7ee; --ink: #2b2417; --muted: #7a6a50; --line: #dccdb0; --top: #2f5a2a; --danger: #8b2e24; --burg: #7f3b33;
   background: var(--bg); color: var(--ink);
 }
 :where(html[data-theme=ranch] body.cp) button { background: #ece2cc; color: #2b2417; }
@@ -106,7 +106,10 @@ html[data-theme=ranch] body.cp {
 :where(html[data-theme=ranch] body.cp) .topbar .biz { color: #2f5a2a; }
 :where(html[data-theme=ranch] body.cp) .topbar a, :where(html[data-theme=ranch] body.cp) .topbar button.link { color: #2b2010; }
 :where(html[data-theme=ranch] body.cp) .topbar a.active, :where(html[data-theme=ranch] body.cp) .topbar a:hover, :where(html[data-theme=ranch] body.cp) .topbar button.link:hover { background: rgba(47,90,42,.14); }
-:where(html[data-theme=ranch] body.cp) .topbar a.active { background: #2f5a2a; color: #fff; }
+:where(html[data-theme=ranch] body.cp) .topbar a.active { background: var(--burg); color: #f6ead6; border-radius: 99px; padding-left: 14px; padding-right: 14px; }
+:where(html[data-theme=ranch] body.cp) h2 { color: var(--burg); }
+:where(html[data-theme=ranch] body.cp) .topbar .brand { color: var(--burg); }
+:where(html[data-theme=ranch] body.cp) .badge { background: var(--burg); }
 :where(html[data-theme=ranch] body.cp) .topbar select { background: #fbf7ee; color: #2b2010; border-color: #c4a874; }
 :where(html[data-theme=ranch] body.cp) table.list { border: 1px solid #d8c9a8; }
 :where(html[data-theme=ranch] body.cp) table.list th { background: #2f5a2a; color: #fff; }
@@ -115,3 +118,33 @@ html[data-theme=ranch] body.cp {
 :where(html[data-theme=ranch] body.cp) .modal { background: #f4ecdb; color: #2b2417; }
 :where(html[data-theme=ranch] body.cp) #toast { background: #2b2417; }
 :where(html[data-theme=ranch] body.cp) #toast.bad { background: var(--danger); }
+
+/* ---- Dark look (default). Charcoal, lime green and gold, like the Lokaal menu. Screen only; printouts stay black on white. ---- */
+@media screen {
+  html[data-theme=dark]:has(> body.cp) { background: #121418; }
+  html[data-theme=dark] body.cp {
+    --bg: #121418; --panel: #1d2027; --ink: #f1f2f4; --muted: #9aa0aa; --line: #2e323b; --top: #17191e; --danger: #ef5350;
+    --gold: #d9a93a; --lime: #7cc04a;
+    background: var(--bg); color: var(--ink);
+  }
+  :where(html[data-theme=dark] body.cp) a { color: var(--lime); }
+  :where(html[data-theme=dark] body.cp) button { background: #2a2e36; color: #f1f2f4; }
+  :where(html[data-theme=dark] body.cp) button.primary { background: var(--accent); color: #fff; }
+  :where(html[data-theme=dark] body.cp) button.danger { background: var(--danger); color: #fff; }
+  :where(html[data-theme=dark] body.cp) button.ghost { background: transparent; border-color: #3a3f4a; color: #f1f2f4; }
+  :where(html[data-theme=dark] body.cp) input, :where(html[data-theme=dark] body.cp) select, :where(html[data-theme=dark] body.cp) textarea { background: #16181d; color: #f1f2f4; border-color: #353a44; }
+  :where(html[data-theme=dark] body.cp) input::placeholder, :where(html[data-theme=dark] body.cp) textarea::placeholder { color: #6f7580; }
+  :where(html[data-theme=dark] body.cp) .topbar { background: #17191e; border-bottom: 1px solid #2a2e36; }
+  :where(html[data-theme=dark] body.cp) .topbar .biz { color: var(--lime); }
+  :where(html[data-theme=dark] body.cp) .topbar a.active { background: #1f2a17; color: var(--lime); box-shadow: inset 0 0 0 1.5px var(--lime); }
+  :where(html[data-theme=dark] body.cp) .topbar select { background: #1d2027; border-color: #353a44; }
+  :where(html[data-theme=dark] body.cp) table.list { background: #1d2027; border: 1px solid #2a2e36; }
+  :where(html[data-theme=dark] body.cp) table.list th { background: #191b20; color: var(--gold); letter-spacing: .08em; }
+  :where(html[data-theme=dark] body.cp) table.list tr.off td { color: #6f7580; }
+  :where(html[data-theme=dark] body.cp) .pill { background: #2a2e36; color: #e6e8ec; }
+  :where(html[data-theme=dark] body.cp) .pill.off { background: #3a1f1f; color: #ff8a80; }
+  :where(html[data-theme=dark] body.cp) .modal { background: #1d2027; color: #f1f2f4; border: 1px solid #2e323b; }
+  :where(html[data-theme=dark] body.cp) .wabox { background: #1d2027; }
+  :where(html[data-theme=dark] body.cp) #toast { background: #2a2e36; }
+  :where(html[data-theme=dark] body.cp) #toast.bad { background: var(--danger); }
+}
