@@ -88,3 +88,30 @@ table.list tr.off td { color: #aaa; }
 #hoursModal .modal{max-width:600px}
 .hourtbl input[type=time]{min-width:0;max-width:150px}
 .actions .spacer { flex: 1; }
+
+/* ---- Ranch look (Settings → Look of the program). Only the main screens (body.cp); printouts and customer pages stay plain. ---- */
+html[data-theme=ranch]:has(> body.cp) { background: #efe5cf; }
+html[data-theme=ranch] body.cp {
+  --bg: #efe5cf; --panel: #fbf7ee; --ink: #2b2417; --muted: #7a6a50; --line: #dccdb0; --top: #2f5a2a; --danger: #b42318;
+  background: var(--bg); color: var(--ink);
+}
+:where(html[data-theme=ranch] body.cp) button { background: #ece2cc; color: #2b2417; }
+:where(html[data-theme=ranch] body.cp) button.primary { background: #2f5a2a; color: #fff; }
+:where(html[data-theme=ranch] body.cp) button.danger { background: var(--danger); color: #fff; }
+:where(html[data-theme=ranch] body.cp) button.ghost { background: transparent; border-color: #cdbb98; }
+:where(html[data-theme=ranch] body.cp) button.wa { background: #25d366; color: #06290f; }
+:where(html[data-theme=ranch] body.cp) input, :where(html[data-theme=ranch] body.cp) select, :where(html[data-theme=ranch] body.cp) textarea { border-color: #cdbb98; background: #fff; color: #2b2417; }
+:where(html[data-theme=ranch] body.cp) input:focus, :where(html[data-theme=ranch] body.cp) select:focus { outline-color: #2f5a2a; }
+:where(html[data-theme=ranch] body.cp) .topbar { background: linear-gradient(180deg, #e7d4ac, #d9c093); color: #2b2010; border-bottom: 1px solid #c4a874; }
+:where(html[data-theme=ranch] body.cp) .topbar .biz { color: #2f5a2a; }
+:where(html[data-theme=ranch] body.cp) .topbar a, :where(html[data-theme=ranch] body.cp) .topbar button.link { color: #2b2010; }
+:where(html[data-theme=ranch] body.cp) .topbar a.active, :where(html[data-theme=ranch] body.cp) .topbar a:hover, :where(html[data-theme=ranch] body.cp) .topbar button.link:hover { background: rgba(47,90,42,.14); }
+:where(html[data-theme=ranch] body.cp) .topbar a.active { background: #2f5a2a; color: #fff; }
+:where(html[data-theme=ranch] body.cp) .topbar select { background: #fbf7ee; color: #2b2010; border-color: #c4a874; }
+:where(html[data-theme=ranch] body.cp) table.list { border: 1px solid #d8c9a8; }
+:where(html[data-theme=ranch] body.cp) table.list th { background: #2f5a2a; color: #fff; }
+:where(html[data-theme=ranch] body.cp) table.list tbody tr:nth-child(even) td { background: #f7f0e1; }
+:where(html[data-theme=ranch] body.cp) .pill { background: #ead9b6; color: #3a2c17; }
+:where(html[data-theme=ranch] body.cp) .modal { background: #f4ecdb; color: #2b2417; }
+:where(html[data-theme=ranch] body.cp) #toast { background: #2b2417; }
+:where(html[data-theme=ranch] body.cp) #toast.bad { background: var(--danger); }
