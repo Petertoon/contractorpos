@@ -167,7 +167,7 @@ app.post('/api/logout', wrap(async (req, res) => {
 app.get('/api/me', requireLogin, wrap(async (req, res) => {
   let business = null;
   if (req.user.business_id) {
-    const b = await pool.query('SELECT id, name, accent_color, logo_url, rentals_enabled, half_day_hours, deposit_account, qbo_enabled, jobs_enabled, ai_enabled, gc_enabled, time_zone, receipt_reply_email FROM businesses WHERE id = $1', [req.user.business_id]);
+    const b = await pool.query('SELECT id, name, accent_color, logo_url, rentals_enabled, half_day_hours, deposit_account, qbo_enabled, jobs_enabled, ai_enabled, gc_enabled, theme, time_zone, receipt_reply_email FROM businesses WHERE id = $1', [req.user.business_id]);
     business = b.rows[0] || null;
   }
   const { id, name, email, role } = req.user;
@@ -262,6 +262,7 @@ app.put('/api/business', ...biz, requireRole('owner'), wrap(async (req, res) => 
   if (logo && !/^https:\/\//.test(logo)) fail(400, 'Logo URL must start with https://');
   await pool.query('UPDATE businesses SET name=$1, accent_color=$2, logo_url=$3 WHERE id=$4',
     [name, color, logo || null, req.user.business_id]);
+  if ('theme' in req.body) await pool.query('UPDATE businesses SET theme=$1 WHERE id=$2', [req.body.theme === 'dark' ? 'dark' : 'ranch', req.user.business_id]);
   if ('deposit_account' in req.body) {
     await pool.query('UPDATE businesses SET deposit_account=$1 WHERE id=$2',
       [text(req.body.deposit_account, 'Bank account', { required: false, max: 120 }) || null, req.user.business_id]);
