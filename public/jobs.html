@@ -161,6 +161,24 @@
   .frow .fact .estb { background: #4b33b5; }
   .frow.est { border-left: 4px solid #8b6cff; }
   .modal.wide { max-width: 980px; }
+  #crewBox .crow { flex-wrap: wrap; } #crewBox .crow .who { flex: 1 1 300px; } #crewBox .crow .amt { margin-left: auto; }
+  .crow .cbtns { display: flex; gap: 6px; align-items: center; } .crow .subl b { white-space: nowrap; }
+  .gcw .presets button.on { background: #ea580c; color: #fff; }
+  .gcbtn { background: #9a3412 !important; color: #ffedd5 !important; }
+  .gcw .gcstep { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .gcw .gcdots { display: flex; gap: 5px; flex-wrap: wrap; }
+  .gcw .gcdots button { padding: 3px 9px; font-size: 12.5px; border-radius: 12px; background: #22304d; color: var(--jink); }
+  .gcw .gcdots button.on { background: #ea580c; color: #fff; }
+  .gcw .big2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 4px; }
+  .gcw .big2 input { font-size: 22px; font-weight: 700; padding: 12px; }
+  .gcw .mk { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .gcw .mk button { padding: 5px 10px; font-size: 13px; background: #22304d; color: var(--jink); }
+  .gcw .gcfoot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .gcw .gcfoot .primary { font-size: 17px; padding: 12px 20px; }
+  .gcw .margin { font-size: 13.5px; color: var(--jmuted); margin-top: 6px; }
+  .gcw table.est td.n, .gcw table.est th.n { text-align: right; }
+  .gcw .qtot { font-size: 26px; font-weight: 800; color: #fdba74; }
+  @media (max-width: 760px) { .gcw .big2 { grid-template-columns: 1fr; } }
   .crow .subl { display: block; font-size: 12.5px; margin-top: 3px; font-variant-numeric: tabular-nums; }
   .crow .subl b.owe { color: #fca5a5; } .crow .subl b.paidup { color: #86efac; }
   #tLines .crow .subl b.owe, #tLines .crow .subl b.paidup { background: #1d2a45; padding: 0 5px; border-radius: 4px; }
@@ -327,7 +345,7 @@ function openModal(html) {
   if (f && window.innerWidth > 700) setTimeout(() => f.focus(), 30);
   return $('#mBody');
 }
-function closeModal() { $('#m').classList.remove('open'); $('#mBody').innerHTML = ''; }
+function closeModal() { $('#m').classList.remove('open'); $('#mBody').innerHTML = ''; if (typeof gcIdx !== 'undefined') gcIdx = null; }
 $('#m').addEventListener('mousedown', (e) => { if (e.target.id === 'm') closeModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if ($('#m').classList.contains('open')) closeModal(); else if (openId) closeTicket(); } });
 // Moving a job back needs a note saying why. Resolves true when the job moved.
@@ -574,6 +592,7 @@ function renderTicket() {
     <div class="spacer" style="flex:1"></div>
     ${i > 0 && isMgr ? '<button class="dk" id="tPrev">‹ Move back</button>' : ''}
     ${i < j.columns_count - 1 ? `<button class="dk" id="tNext">Move to next ›</button>` : ''}
+    ${gcOn() && !locked ? '<button class="dk gcbtn" id="tGC">🏗 GC Quote</button>' : ''}
     <button class="dk" id="tCrews">👷 Crews (${j.crews.length})</button>
     <button class="dk" onclick="editDetails()">Edit details</button>
     <button class="dk" onclick="sendJob()">📤 Send</button>
@@ -581,6 +600,7 @@ function renderTicket() {
   $('#tHead').onclick = (e) => {
     const b = e.target.closest('[data-tbtn]');
     if (b) return run(async () => { const r = await api(`/api/jobs/${j.id}/button`, { index: Number(b.dataset.tbtn) }); if (r.moved) toast('Moved to the next column'); await refreshTicket(); });
+    if (e.target.closest('#tGC')) return gcWizard(0);
     if (e.target.id === 'tCrews') { crewOpen = !crewOpen; renderTicket(); if (crewOpen) $('#crewBox').scrollIntoView({ block: 'nearest' }); return; }
     if (e.target.id === 'tNext') return run(async () => { await api(`/api/jobs/${j.id}/move`, { direction: 1 }); toast('Moved'); await refreshTicket(); });
     if (e.target.id === 'tPrev') return moveBackDialog(j).then((ok) => ok && refreshTicket());
@@ -991,9 +1011,9 @@ function crewPanel(j) {
       <div class="amt">${c.billing === 'costplus'
         ? `${usd(c.charge_cents)}<small class="cp">COST PLUS</small><small class="cpd">cost ${usd(c.amount_cents)} + ${c.markup_type === 'dollar' ? usd(c.markup_cents || 0) : Number(c.markup_percent || 0) + '%'}</small>`
         : `${c.amount_cents ? usd(c.amount_cents) : '<span class="muted">—</span>'}<small class="${c.billing === 'extra' ? 'ext' : 'inc'}">${c.billing === 'extra' ? 'UP-CHARGE' : 'PART OF QUOTE'}</small>`}</div>
-      <button class="subb" data-sub="${c.id}" title="Bid, change orders, payments to this sub and their files">💵 Sub</button>
+      <span class="cbtns"><button class="subb" data-sub="${c.id}" title="Bid, change orders, payments to this sub and their files">💵 Sub</button>
       ${locked ? '' : `<button class="${c.done ? '' : 'ok'}" data-crewdone="${c.id}" title="${c.done ? 'Put back on the job' : 'Mark finished'}">${c.done ? '↺' : '✓ Done'}</button>
-        <button data-crewedit="${c.id}">Edit</button><button class="xbtn" data-crewdel="${c.id}" title="Remove">×</button>`}</div>`;
+        <button data-crewedit="${c.id}">Edit</button><button class="xbtn" data-crewdel="${c.id}" title="Remove">×</button>`}</span></div>`;
   const inc = j.crews.filter((c) => c.billing === 'included').reduce((a, c) => a + c.amount_cents, 0);
   const ext = j.crews.filter((c) => c.billing !== 'included').reduce((a, c) => a + (c.charge_cents || c.amount_cents), 0);
   return `<div class="crewbox" id="crewBox"><div class="crewhead" data-crewtoggle="1"><b>👷 Crews</b><span class="sum">${summary}</span><span class="tog">Hide ▴</span></div>
@@ -1065,10 +1085,11 @@ function crewDialog(c, phaseId) {
 const SUB_METHOD = { check: 'Check', cash: 'Cash', card: 'Card', transfer: 'Bank transfer', other: 'Other' };
 const todayISO = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 const crewTag = (f) => { const c = f.crew_id && cur && cur.crews.find((x) => x.id === f.crew_id); return c ? `<span class="ftag">👷 ${esc(c.trade)}</span>` : ''; };
-const hasSub = (c) => c.amount_cents || c.co_count || c.payments.length;
+const hasSub = (c) => c.amount_cents || c.quote_cents || c.co_count || c.payments.length;
 function subLine(c) {
   if (!hasSub(c)) return '';
   const parts = [`Bid ${usd(c.amount_cents)}`];
+  if (c.quote_cents) parts.push(`Quoted ${usd(c.quote_cents)}`);
   if (c.co_count) parts.push(`${c.co_count} change order${c.co_count === 1 ? '' : 's'} ${c.co_cents < 0 ? '−' : '+'}${usd(Math.abs(c.co_cents))}`);
   if (c.sub_paid_cents) parts.push(`Paid ${usd(c.sub_paid_cents)}`);
   const owe = c.sub_owed_cents;
@@ -1093,7 +1114,7 @@ let subCrewId = null, subForm = null;
 function subDialog(cid, form) {
   const j = cur, c = j.crews.find((x) => x.id === cid);
   if (!c) return closeModal();
-  subCrewId = cid; subForm = form || null;
+  subCrewId = cid; subForm = form || null; gcIdx = null;
   const myFiles = files.filter((f) => f.crew_id === c.id);
   const owe = c.sub_owed_cents;
   const payForm = `<div class="subform">
@@ -1184,11 +1205,147 @@ function subDialog(cid, form) {
 }
 const subUpload = (kind) => run(async () => {
   const r = await uploadPicked($(kind === 'pdf' ? '#subPdfFile' : '#subPhotoFile'), kind, subCrewId);
-  if (subCrewId && $('#m').classList.contains('open')) subDialog(subCrewId);
+  if ($('#m').classList.contains('open')) { if (gcIdx != null) gcWizard(gcIdx); else if (subCrewId) subDialog(subCrewId); }
   return r;
 });
 $('#subPdfFile').onchange = () => subUpload('pdf');
 $('#subPhotoFile').onchange = () => subUpload('photo');
+
+// ---------- General Contractor quote (add-on): one sub per screen, then a review that sets the quoted price ----------
+const gcOn = () => !!(me && me.business && me.business.gc_enabled);
+let gcIdx = null;
+const gcC = (v) => toCents(v) || 0;
+const gcList = () => [...cur.crews].sort((a, b) => a.id - b.id);
+function gcPhase() {
+  const p = (cur.columns || []).find((c) => /progress/i.test(c.name));
+  return p ? p.id : cur.column_id;
+}
+// Saves what's on the screen. Returns the crew id (or null when a new, empty sub was left blank).
+async function gcSave() {
+  const f = $('#mBody'); if (!f.trade) return null;
+  const list = gcList(), c = list[gcIdx];
+  const trade = f.trade.value.trim();
+  const body = { trade, name: f.cname.value.trim(), phone: f.phone.value.trim(), amount_cents: gcC(f.bid.value), quote_cents: gcC(f.charge.value), note: f.note.value.trim() };
+  if (!c) {
+    if (!trade && !body.amount_cents && !body.quote_cents && !body.name) return null;
+    if (!trade) throw new Error('Pick or type the trade (e.g. Plumber)');
+    const r = await api(`/api/jobs/${cur.id}/crews`, { ...body, billing: 'included', column_id: gcPhase() });
+    await refreshTicket(); return r.id;
+  }
+  if (!trade) throw new Error('Pick or type the trade (e.g. Plumber)');
+  const same = c.trade === body.trade && (c.name || '') === body.name && (c.phone || '') === body.phone && c.amount_cents === body.amount_cents
+    && c.quote_cents === body.quote_cents && (c.note || '') === body.note;
+  if (!same) { await api(`/api/jobs/${cur.id}/crews/${c.id}`, body, 'PUT'); await refreshTicket(); }
+  return c.id;
+}
+function gcWizard(idx) {
+  const list = gcList();
+  if (idx === 'review') return gcReview();
+  gcIdx = Math.max(0, Math.min(idx, list.length));
+  const c = list[gcIdx] || { trade: '', name: '', phone: '', amount_cents: 0, quote_cents: 0, note: '' };
+  const isNew = !list[gcIdx];
+  const myFiles = c.id ? files.filter((f) => f.crew_id === c.id) : [];
+  const f = openModal(`<div class="gcw">
+    <div class="gcstep"><h2 style="margin:0">🏗 GC Quote · Sub ${gcIdx + 1}${isNew ? ' (new)' : ` of ${list.length}`}</h2>
+      <span class="muted">#${cur.job_number} ${esc(cur.name)}</span></div>
+    ${list.length ? `<div class="gcdots">${list.map((x, k) => `<button type="button" class="${k === gcIdx ? 'on' : ''}" data-gcgo="${k}">${k + 1}. ${esc(x.trade)}</button>`).join('')}
+      <button type="button" class="${isNew ? 'on' : ''}" data-gcgo="${list.length}">+ New</button></div>` : ''}
+    <label>Trade</label>
+    <div class="presets">${TRADES.map((t) => `<button type="button" class="dk ${c.trade === t ? 'on' : ''}" data-trade="${t}">${t}</button>`).join('')}</div>
+    <input name="trade" maxlength="60" value="${esc(c.trade)}" placeholder="Or type it, e.g. Septic" style="margin-top:6px">
+    <div class="two"><div><label>Subcontractor (company)</label><input name="cname" maxlength="100" value="${esc(c.name || '')}" placeholder="e.g. Reyes Plumbing"></div>
+      <div><label>Phone</label><input name="phone" maxlength="40" inputmode="tel" value="${esc(c.phone || '')}"></div></div>
+    <div class="big2">
+      <div><label>Sub's bid (your cost)</label><input name="bid" inputmode="decimal" value="${c.amount_cents ? dollars(c.amount_cents) : ''}" placeholder="0.00"></div>
+      <div><label>Charge the customer</label><input name="charge" inputmode="decimal" value="${c.quote_cents ? dollars(c.quote_cents) : ''}" placeholder="0.00">
+        <div class="mk">${[10, 15, 20, 25].map((p) => `<button type="button" data-mk="${p}">Bid + ${p}%</button>`).join('')}<button type="button" data-mk="0">Same as bid</button></div></div>
+    </div>
+    <div class="margin" id="gcMargin"></div>
+    <label>What's included (optional)</label><input name="note" maxlength="300" value="${esc(c.note || '')}" placeholder="e.g. Rough-in and finish, 2 baths, fixtures by owner">
+    <label style="margin-top:12px">Their bid &amp; pictures (${myFiles.length})</label>
+    <div class="subfiles">${myFiles.map((x) => `<a href="${fileUrl(x)}" target="_blank" rel="noopener">${x.kind === 'photo' ? `<img src="${fileUrl(x)}" alt="" loading="lazy">` : '📄'}<span>${esc(x.name)}</span></a>`).join('')}
+      <button type="button" class="dk" data-gcfile="pdf">📄 Attach bid</button><button type="button" class="dk" data-gcfile="photo">📷 Add picture</button></div>
+    <div class="gcfoot">
+      <span style="display:flex;gap:8px"><button type="button" class="dk" data-gcnav="back" ${gcIdx === 0 ? 'disabled' : ''}>‹ Back</button>
+        <button type="button" class="dk" data-gcnav="close">Close</button></span>
+      <span style="display:flex;gap:8px"><button type="button" class="dk" data-gcnav="review">Review quote ✓</button>
+        <button class="primary" data-gcnav="next">Next sub ›</button></span>
+    </div></div>`);
+  f.classList.add('wide');
+  const margin = () => {
+    const b = gcC(f.bid.value), q = gcC(f.charge.value);
+    $('#gcMargin').innerHTML = b && q ? `Your markup on this sub: <b>${usd(q - b)}</b> (${((q - b) / b * 100).toFixed(1)}%)` : '';
+  };
+  margin();
+  f.oninput = margin;
+  f.onclick = async (e) => {
+    const t = e.target;
+    const tr = t.closest('[data-trade]'); if (tr) { f.trade.value = tr.dataset.trade; $$('#mBody [data-trade]').forEach((x) => x.classList.toggle('on', x === tr)); return; }
+    const mk = t.closest('[data-mk]');
+    if (mk) { const b = gcC(f.bid.value); if (!b) return toast("Enter the sub's bid first", 'bad'); f.charge.value = dollars(Math.round(b * (1 + Number(mk.dataset.mk) / 100))); return margin(); }
+    const go = t.closest('[data-gcgo]');
+    const nav = t.closest('[data-gcnav]');
+    const fl = t.closest('[data-gcfile]');
+    if (!go && !nav && !fl) return;
+    if (nav && nav.dataset.gcnav === 'close') {
+      const ok = await run(async () => { await gcSave(); return true; }); if (ok) closeModal(); return;
+    }
+    t.closest('button').disabled = true;
+    const id = await run(async () => { const r = await gcSave(); return r || 0; });
+    if (id === null) { t.closest('button').disabled = false; return; }
+    if (fl) {
+      if (!id) { t.closest('button').disabled = false; return toast('Pick the trade first, then attach the bid', 'bad'); }
+      gcIdx = gcList().findIndex((x) => x.id === id); subCrewId = id;
+      gcWizard(gcIdx);
+      return $(fl.dataset.gcfile === 'pdf' ? '#subPdfFile' : '#subPhotoFile').click();
+    }
+    const n = gcList().length;
+    if (go) return gcWizard(Number(go.dataset.gcgo));
+    if (nav.dataset.gcnav === 'review') return gcReview();
+    if (nav.dataset.gcnav === 'back') return gcWizard(id ? gcList().findIndex((x) => x.id === id) - 1 : n - 1);
+    // next: after an existing sub go to the following one; after a new one, start another new one
+    const at = id ? gcList().findIndex((x) => x.id === id) : gcIdx;
+    return gcWizard(at + 1);
+  };
+}
+function gcReview() {
+  gcIdx = 'review';
+  const list = gcList();
+  const bids = list.reduce((a, c) => a + c.amount_cents, 0), charged = list.reduce((a, c) => a + c.quote_cents, 0);
+  const f = openModal(`<div class="gcw">
+    <div class="gcstep"><h2 style="margin:0">🏗 GC Quote · Review</h2><span class="muted">#${cur.job_number} ${esc(cur.name)}</span></div>
+    <table class="est" style="margin-top:8px"><thead><tr><th>Trade</th><th>Subcontractor</th><th class="n">Bid (cost)</th><th class="n">Charge customer</th><th class="n">Markup</th><th>Files</th></tr></thead>
+      <tbody>${list.map((c, k) => `<tr data-gcgo="${k}" style="cursor:pointer"><td><b>${esc(c.trade)}</b></td><td>${esc(c.name || '')}</td><td class="n">${usd(c.amount_cents)}</td>
+        <td class="n">${c.quote_cents ? usd(c.quote_cents) : '<span style="color:#fca5a5">not set</span>'}</td><td class="n">${c.quote_cents && c.amount_cents ? usd(c.quote_cents - c.amount_cents) : ''}</td>
+        <td>${c.file_count ? '📎 ' + c.file_count : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No subs yet.</td></tr>'}</tbody>
+      <tfoot><tr><td colspan="2"><b>Subs total</b></td><td class="n"><b>${usd(bids)}</b></td><td class="n"><b>${usd(charged)}</b></td><td class="n"><b>${usd(charged - bids)}</b></td><td></td></tr></tfoot></table>
+    <div class="two" style="margin-top:12px"><div><label>Your own work / overhead (optional)</label><input name="own" inputmode="decimal" value="${cur.gc_own_cents ? dollars(cur.gc_own_cents) : ''}" placeholder="0.00"></div>
+      <div><label>What it's for</label><input name="ownnote" maxlength="200" value="${esc(cur.gc_own_note || '')}" placeholder="e.g. Supervision, permits, cleanup"></div></div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:14px;flex-wrap:wrap;gap:8px">
+      <div><div class="muted">Quote total</div><div class="qtot" id="gcTot"></div><div class="muted" style="font-size:13px">Currently quoted: ${usd(cur.quoted_cents)}</div></div>
+      <div class="muted" id="gcProfit" style="text-align:right"></div></div>
+    <div class="gcfoot">
+      <span style="display:flex;gap:8px"><button type="button" class="dk" data-gcnav="back">‹ Back to subs</button><button type="button" class="dk" data-gcnav="close">Close</button></span>
+      <button class="primary" data-gcnav="set">Set as the quoted price</button></div></div>`);
+  f.classList.add('wide');
+  const calc = () => {
+    const own = gcC(f.own.value);
+    $('#gcTot').textContent = usd(charged + own);
+    $('#gcProfit').innerHTML = `Subs cost ${usd(bids)}<br>Your markup + own work: <b>${usd(charged - bids + own)}</b>`;
+  };
+  calc(); f.oninput = calc;
+  f.onclick = async (e) => {
+    const go = e.target.closest('[data-gcgo]'); if (go) return gcWizard(Number(go.dataset.gcgo));
+    const nav = e.target.closest('[data-gcnav]'); if (!nav) return;
+    if (nav.dataset.gcnav === 'close') return closeModal();
+    if (nav.dataset.gcnav === 'back') return gcWizard(Math.max(0, list.length - 1));
+    if (list.some((c) => !c.quote_cents) && !confirm('Some subs have no charge to the customer set. Set the quoted price anyway?')) return;
+    nav.disabled = true;
+    const ok = await run(async () => { await api(`/api/jobs/${cur.id}/gc-quote`, { own_cents: gcC(f.own.value), own_note: f.ownnote.value.trim() }); return true; });
+    nav.disabled = false; if (!ok) return;
+    toast('Quoted price set'); await refreshTicket(); closeModal();
+  };
+}
 
 // ---------- plans, photos & Claude estimates ----------
 const fileUrl = (f) => `/api/jobs/${f.job_id}/files/${f.id}`;
