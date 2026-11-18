@@ -212,6 +212,8 @@
   .spin { display: inline-block; width: 18px; height: 18px; border: 3px solid #8b6cff; border-right-color: transparent; border-radius: 50%; animation: sp 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
   @keyframes sp { to { transform: rotate(360deg); } }
   .clip { color: var(--jmuted); font-size: 12.5px; }
+  .modal .sendgrid { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  @media (max-width: 520px) { .modal .sendgrid { grid-template-columns: 1fr 1fr; } }
   .modal .sendgrid button.wa { background: #25d366; color: #06290f; }
   .chat { max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
   .chat .q { align-self: flex-end; background: #24345a; border-radius: 10px 10px 2px 10px; padding: 8px 12px; max-width: 85%; white-space: pre-wrap; }
@@ -287,8 +289,14 @@
   #bb .bbt input:focus { outline: 2px solid #2f5a2a; outline-offset: -1px; }
   #bb .bbt input.amt { width: 130px; min-width: 0; text-align: right; } #bb .bbt input.pct { width: 92px; min-width: 0; text-align: right; }
   #bb .bbt input:disabled { background: #eee6d4; color: #8a7a5c; }
+  #bb .bbfiles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; white-space: normal; }
+  #bb .bbfiles a { display: inline-flex; align-items: center; gap: 5px; background: #f3ead6; border: 1px solid #d8c9a8; border-radius: 5px; padding: 2px 7px 2px 3px; color: #3a2c17; text-decoration: none; font-size: 12.5px; max-width: 210px; }
+  #bb .bbfiles a:hover { background: #ead9b6; }
+  #bb .bbfiles img { width: 26px; height: 26px; object-fit: cover; border-radius: 3px; background: #fff; }
+  #bb .bbfiles span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #bb .bbt td { vertical-align: top; } #bb .bbt td[data-mk], #bb .bbt td.tot, #bb .bbt td.num { padding-top: 13px; } #bb .bbt td.acts { padding-top: 8px; }
   #bb .bbt .cur { color: #6b5a3c; margin: 0 4px; } #bb .bbt td.tot { font-weight: 700; }
-  #bb .bbt .acts { width: 80px; } #bb .bbt .acts button { background: transparent; color: #4b3d26; padding: 4px 7px; font-size: 18px; }
+  #bb .bbt .acts { width: 116px; } #bb .bbt .acts button { background: transparent; color: #4b3d26; padding: 4px 7px; font-size: 18px; }
   #bb .bbt .acts button.del { color: #b42318; } #bb .bbt .acts button:hover { background: #efe5cf; }
   #bb .bbbottom { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 14px 18px; }
   #bb .bbbtns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -363,6 +371,7 @@
       </div>
       <input type="file" id="pdfFile" accept="application/pdf,.pdf" multiple hidden>
       <input type="file" id="photoFile" accept="image/*" multiple hidden>
+      <input type="file" id="bbFile" accept="application/pdf,.pdf,image/*" multiple hidden>
       <input type="file" id="subPdfFile" accept="application/pdf,.pdf" multiple hidden>
       <input type="file" id="subPhotoFile" accept="image/*" multiple hidden>
       <div style="height:12px"></div>
@@ -1291,19 +1300,19 @@ function bbRender() {
     <div class="bbhead"><div class="bblogo"><span class="bbicon">🏗</span><div><small>General Contractor</small><b>Bid Builder</b></div></div>
       <div class="bbtools">
         <button type="button" data-bb="new"><span>📄</span>New Bid</button><button type="button" data-bb="open"><span>📂</span>Open</button>
-        <button type="button" data-bb="save" class="${bb.dirty ? 'dirty' : ''}"><span>💾</span>Save</button><button type="button" data-bb="print"><span>🖨</span>Print / PDF</button>
+        <button type="button" data-bb="save" class="${bb.dirty ? 'dirty' : ''}"><span>💾</span>Save</button><button type="button" data-bb="send"><span>📤</span>Send / Print</button>
         <button type="button" data-bb="close" class="bbx" title="Close">✕</button></div></div>
     <div class="bbmeta"><label>Project:</label><div class="bbbox">#${j.job_number} ${esc(j.name)}${j.customer_name ? ` <small>· ${esc(j.customer_name)}</small>` : ''}</div>
       <label>Date:</label><div class="bbbox" style="max-width:190px">${new Date(j.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</div></div>
     <div class="bbtablewrap"><table class="bbt"><thead><tr><th>#</th><th>Subcontractor / Scope</th><th class="n">Subcontractor Amount</th><th class="n">Your % Markup</th><th class="n">Your Markup</th><th class="n">Total (With Markup)</th><th></th></tr></thead>
       <tbody>${bb.rows.map((r, i) => `<tr class="${bb.sel.has(i) ? 'sel' : ''}" data-i="${i}">
         <td class="num" data-selrow="${i}" title="Click to select">${i + 1}</td>
-        <td><input data-f="trade" value="${esc(r.trade)}" maxlength="60" placeholder="e.g. Excavation &amp; Site Prep">${r.name || r.files ? `<small>${esc(r.name)}${r.name && r.files ? ' · ' : ''}${r.files ? '📎 ' + r.files : ''}</small>` : ''}</td>
+        <td><input data-f="trade" value="${esc(r.trade)}" maxlength="60" placeholder="e.g. Excavation &amp; Site Prep">${r.name ? `<small>${esc(r.name)}</small>` : ''}${bbFiles(r)}</td>
         <td class="n"><span class="cur">$</span><input data-f="amount" class="amt" inputmode="decimal" value="${r.amount ? money2(r.amount) : ''}" placeholder="0.00"></td>
         <td class="n"><input data-f="pct" type="number" step="0.5" min="0" max="1000" class="pct" value="${bb.each ? r.pct : bb.all}" ${bb.each ? '' : 'disabled'}><span class="cur">%</span></td>
         <td class="n" data-mk="${i}">$ ${money2(bbMk(r))}</td>
         <td class="n tot" data-tot="${i}">$ ${money2(r.amount + bbMk(r))}</td>
-        <td class="acts"><button type="button" data-edit="${i}" title="Company, phone, bid PDF &amp; pictures">✎</button><button type="button" data-del="${i}" title="Remove" class="del">🗑</button></td></tr>`).join('')}</tbody></table></div>
+        <td class="acts"><button type="button" data-attach="${i}" title="Attach their bid, an invoice, a blueprint or a picture">📎</button><button type="button" data-edit="${i}" title="Company, phone, what's included, payments">✎</button><button type="button" data-del="${i}" title="Remove" class="del">🗑</button></td></tr>`).join('')}</tbody></table></div>
     <div class="bbbottom">
       <div class="bbleft">
         <div class="bbbtns"><button type="button" class="bbadd" data-bb="add">＋ Add Contractor / Scope</button>
@@ -1414,6 +1423,26 @@ function bidEdit(cid) {
     closeModal(); toast('Saved'); bbAfterEdit();
   };
 }
+// Files attached to a bid line (its sub): bids, invoices, blueprints, pictures. Click to open.
+function bbFiles(r) {
+  if (!r.id) return '';
+  const list = files.filter((f) => f.crew_id === r.id);
+  if (!list.length) return '';
+  return `<div class="bbfiles">${list.map((f) => `<a href="${fileUrl(f)}" target="_blank" rel="noopener" title="Open ${esc(f.name)}">${f.kind === 'photo' ? `<img src="${fileUrl(f)}" alt="" loading="lazy">` : '📄'}<span>${esc(f.name)}</span></a>`).join('')}</div>`;
+}
+let bbAttachId = null;
+async function bbAttach(input) {
+  const list = [...input.files]; input.value = '';
+  if (!list.length || !bbAttachId) return;
+  let n = 0;
+  for (const [i, f] of list.entries()) {
+    const kind = f.type === 'application/pdf' || /\.pdf$/i.test(f.name) ? 'pdf' : (f.type.startsWith('image/') ? 'photo' : null);
+    if (!kind) { toast(`${f.name}: only PDFs and pictures can be attached`, 'bad'); continue; }
+    toast(`Attaching ${list.length > 1 ? `${i + 1} of ${list.length}` : f.name}…`);
+    try { await uploadFile(f, kind, bbAttachId); n++; } catch (e) { toast(e.message, 'bad'); }
+  }
+  if (n) { toast(`${n} file${n === 1 ? '' : 's'} attached`); await refreshTicket(); bbAfterEdit(); }
+}
 function bbAfterEdit() {
   if (!bb) return;
   // keep unsaved numbers; refresh names and file counts from the server
@@ -1456,6 +1485,15 @@ document.addEventListener('click', async (e) => {
     if (r.id) bb.removed.push(r.id);
     bb.rows.splice(i, 1); bb.sel.clear(); bb.dirty = true; return bbRender();
   }
+  const at = t.closest('[data-attach]');
+  if (at) {
+    const i = Number(at.dataset.attach), r = bb.rows[i];
+    if (!r.trade.trim()) return toast('Enter the subcontractor or scope first', 'bad');
+    if (!r.id || bb.dirty) { const ok = await run(async () => { await bbSave(true); return true; }); if (!ok) return; }
+    bbAttachId = bb.rows[i] && bb.rows[i].id;
+    if (bbAttachId) $('#bbFile').click();
+    return;
+  }
   const ed = t.closest('[data-edit]');
   if (ed) {
     const i = Number(ed.dataset.edit), r = bb.rows[i];
@@ -1485,9 +1523,9 @@ document.addEventListener('click', async (e) => {
     bb.sel.clear(); bb.dirty = true; return bbRender();
   }
   if (k === 'save') { b.disabled = true; await run(() => bbSave(false)); if ($('#bb [data-bb=save]')) $('#bb [data-bb=save]').disabled = false; return; }
-  if (k === 'print') {
+  if (k === 'send') {
     if (bb.dirty) { const ok = await run(async () => { await bbSave(true); return true; }); if (!ok) return; }
-    return printChoice();
+    return sendJob();
   }
   if (k === 'close') return bbLeave(bbClose);
   if (k === 'new') return bbLeave(() => bidPicker('new'));
@@ -1533,6 +1571,7 @@ function printChoice() {
 }
 
 $('#gcBoardBtn').onclick = () => bidPicker();
+$('#bbFile').onchange = () => bbAttach($('#bbFile'));
 
 // ---------- plans, photos & Claude estimates ----------
 const fileUrl = (f) => `/api/jobs/${f.job_id}/files/${f.id}`;
@@ -1785,10 +1824,10 @@ async function sendJob(how) {
     const f = openModal(`${head}
       <p class="muted" style="margin:10px 0 0">The customer gets a link to their ${esc(s.doc)}, which they can open on their phone and print.</p>
       <div class="sendgrid"><button type="button" class="wa" data-how="wa">🟢 WhatsApp</button><button type="button" class="dk" data-how="sms">💬 Text</button>
-        <button type="button" class="dk" data-how="email">✉️ Email</button></div>
+        <button type="button" class="dk" data-how="email">✉️ Email</button><button type="button" class="dk" data-how="print">🖨 Print</button></div>
       <div class="presets" style="justify-content:center"><button type="button" class="dk" id="sOpen">👁 Preview what they'll see</button><button type="button" class="dk" id="sCopy">📋 Copy link</button></div>
       <div class="actions"><button type="button" class="dk" onclick="closeModal()">Close</button></div>`);
-    f.onclick = (e) => { const b = e.target.closest('[data-how]'); if (b) sendJob(b.dataset.how); };
+    f.onclick = (e) => { const b = e.target.closest('[data-how]'); if (!b) return; if (b.dataset.how === 'print') { closeModal(); return printChoice(); } sendJob(b.dataset.how); };
     $('#sOpen').onclick = () => window.open(s.url, '_blank', 'noopener');
     $('#sCopy').onclick = async () => { try { await navigator.clipboard.writeText(s.url); toast('Link copied'); } catch (e) { prompt('Copy this link:', s.url); } };
     return;
