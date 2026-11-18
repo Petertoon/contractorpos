@@ -708,6 +708,25 @@ module.exports = function setupJobs(app, deps) {
     res.json({ ok: true });
   }));
 
+  // Detailed print (each trade's price, markup included) needs the user's password again, so it can't go out by accident.
+  const bcrypt = require('bcryptjs');
+  const pwTries = new Map();
+  app.post('/api/jobs/:id/detail-print', ...J, wrap(async (req, res) => {
+    const now = Date.now();
+    const rec = pwTries.get(req.user.id) || { n: 0, t: now };
+    if (now - rec.t > 15 * 60 * 1000) { rec.n = 0; rec.t = now; }
+    if (rec.n >= 5) fail(429, 'Too many wrong passwords. Try again in 15 minutes.');
+    const { job } = await loadJob(pool, req.params.id, req.user.business_id);
+    const u = (await pool.query('SELECT password_hash FROM users WHERE id=$1', [req.user.id])).rows[0];
+    if (!u || !(await bcrypt.compare(String(req.body.password || ''), u.password_hash))) {
+      rec.n++; pwTries.set(req.user.id, rec);
+      fail(400, 'Wrong password');
+    }
+    pwTries.delete(req.user.id);
+    await log(pool, job.id, req.user, 'Printed the detailed quote (each trade\'s price), password confirmed');
+    res.json({ ok: true });
+  }));
+
   // ---------- subcontracts: payments made to a sub and change orders ----------
   // A crew's amount is its bid (the contract). Change orders add to it (or credit it); payments to the sub come off.
   // Owners/managers only. Allowed after the job is closed (subs are often paid after the customer).
