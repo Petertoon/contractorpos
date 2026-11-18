@@ -278,8 +278,23 @@ module.exports = function setupJobs(app, deps) {
     const history = await pool.query('SELECT * FROM job_history WHERE job_id=$1 ORDER BY id DESC LIMIT 300', [job.id]);
     const loc = await pool.query('SELECT name, address, phone FROM locations WHERE id=$1', [job.location_id]);
     const crews = await pool.query(
-      `SELECT c.*, k.name AS column_name, k.position AS column_position FROM job_crews c LEFT JOIN job_columns k ON k.id = c.column_id
+      `SELECT c.*, k.name AS column_name, k.position AS column_position,
+              COALESCE((SELECT sum(amount_cents) FROM job_crew_changes x WHERE x.crew_id = c.id), 0)::int AS co_cents,
+              (SELECT count(*) FROM job_crew_changes x WHERE x.crew_id = c.id)::int AS co_count,
+              COALESCE((SELECT sum(amount_cents) FROM job_crew_payments p WHERE p.crew_id = c.id AND NOT p.voided), 0)::int AS sub_paid_cents,
+              (SELECT count(*) FROM job_files f WHERE f.crew_id = c.id)::int AS file_count
+         FROM job_crews c LEFT JOIN job_columns k ON k.id = c.column_id
         WHERE c.job_id=$1 ORDER BY k.position NULLS LAST, c.id`, [job.id]);
+    const subPays = await pool.query(
+      `SELECT p.*, u.name AS taken_by FROM job_crew_payments p LEFT JOIN users u ON u.id = p.created_by WHERE p.job_id=$1 ORDER BY p.paid_on, p.id`, [job.id]);
+    const subChanges = await pool.query(
+      `SELECT x.*, u.name AS taken_by FROM job_crew_changes x LEFT JOIN users u ON u.id = x.created_by WHERE x.job_id=$1 ORDER BY x.id`, [job.id]);
+    for (const c of crews.rows) {
+      c.contract_cents = c.amount_cents + c.co_cents;
+      c.sub_owed_cents = c.contract_cents - c.sub_paid_cents;
+      c.payments = subPays.rows.filter((p) => p.crew_id === c.id);
+      c.changes = subChanges.rows.filter((x) => x.crew_id === c.id);
+    }
     res.json({ ...job, column: cols[job.column_index] || null, columns_count: cols.length, columns: cols.map((c) => ({ id: c.id, name: c.name, color: c.color })),
       location: loc.rows[0] || null, items: items.rows, payments: payments.rows, history: history.rows, crews: crews.rows });
   }));
@@ -640,6 +655,10 @@ module.exports = function setupJobs(app, deps) {
       // Only the fields sent change (e.g. just { done: true } from the Done button).
       req.body = { ...cur, ...req.body };
       const f = await crewFields(db, req, cols, cur);
+      if (f.amount_cents !== cur.amount_cents) {
+        const bal = await subBalance(db, cur);
+        if (f.amount_cents + (bal.contract - cur.amount_cents) < bal.paid) fail(400, `${usd(bal.paid)} has already been paid to this crew, so the amount can't go below that`);
+      }
       const r = await db.query(
         `UPDATE job_crews SET column_id=$1, trade=$2, name=$3, phone=$4, amount_cents=$5, billing=$6, note=$7, done=$8,
            markup_type=$9, markup_percent=$10, markup_cents=$11, charge_cents=$12 WHERE id=$13 RETURNING *`,
@@ -655,9 +674,118 @@ module.exports = function setupJobs(app, deps) {
     await withTx(async (db) => {
       const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
       notClosed(job);
+      const paid = await db.query('SELECT count(*)::int AS n FROM job_crew_payments WHERE crew_id=$1 AND job_id=$2 AND NOT voided', [req.params.cid, job.id]);
+      if (paid.rows[0].n) fail(400, 'This crew has payments recorded. Void them first, or mark the crew Done instead.');
+      await db.query(`DELETE FROM job_items WHERE id IN (SELECT job_item_id FROM job_crew_changes WHERE crew_id=$1 AND job_id=$2)`, [req.params.cid, job.id]);
       const r = await db.query('DELETE FROM job_crews WHERE id=$1 AND job_id=$2 RETURNING *', [req.params.cid, job.id]);
       const c = r.rows[0] || fail(404, 'Crew not found');
       await log(db, job.id, req.user, `Crew removed: ${crewText(c)}${c.billing !== 'included' && c.charge_cents ? ' (its charge was taken off the ticket)' : ''}`);
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
+
+  // ---------- subcontracts: payments made to a sub and change orders ----------
+  // A crew's amount is its bid (the contract). Change orders add to it (or credit it); payments to the sub come off.
+  // Owners/managers only. Allowed after the job is closed (subs are often paid after the customer).
+  const SUB_METHOD = { check: 'Check', cash: 'Cash', card: 'Card', transfer: 'Bank transfer', other: 'Other' };
+  async function crewOf(db, job, cid, lock) {
+    const r = await db.query(`SELECT * FROM job_crews WHERE id=$1 AND job_id=$2 ${lock ? 'FOR UPDATE' : ''}`, [cid, job.id]);
+    return r.rows[0] || fail(404, 'Crew not found');
+  }
+  async function subBalance(db, crew) {
+    const r = await db.query(`SELECT
+        COALESCE((SELECT sum(amount_cents) FROM job_crew_changes WHERE crew_id=$1), 0)::int AS co,
+        COALESCE((SELECT sum(amount_cents) FROM job_crew_payments WHERE crew_id=$1 AND NOT voided), 0)::int AS paid`, [crew.id]);
+    const contract = crew.amount_cents + r.rows[0].co;
+    return { contract, paid: r.rows[0].paid, owed: contract - r.rows[0].paid };
+  }
+  const who = (c) => `${c.trade}${c.name ? ' (' + c.name + ')' : ''}`;
+  const subRoute = (path, handler) => app.post(`/api/jobs/:id/crews/:cid${path}`, ...J, wrap(async (req, res) => {
+    if (!isManager(req.user)) fail(403, 'Only an owner or manager can record payments and change orders for subs');
+    const out = await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      const crew = await crewOf(db, job, req.params.cid, true);
+      return handler(db, req, job, crew);
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json(out || { ok: true });
+  }));
+
+  subRoute('/payments', async (db, req, job, crew) => {
+    const b = req.body;
+    const amount = cents(b.amount_cents, 'Payment amount');
+    if (!amount) fail(400, 'Enter the amount paid');
+    const method = SUB_METHOD[b.method] ? b.method : 'check';
+    const paidOn = /^\d{4}-\d{2}-\d{2}$/.test(b.paid_on || '') ? b.paid_on : null;
+    const bal = await subBalance(db, crew);
+    if (bal.contract > 0 && amount > bal.owed) {
+      fail(400, bal.owed > 0 ? `That's more than the ${usd(bal.owed)} still owed to ${who(crew)}. Record a change order first if the price went up.`
+        : `${who(crew)} is already paid in full. Record a change order first if the price went up.`);
+    }
+    const r = await db.query(
+      `INSERT INTO job_crew_payments (crew_id, job_id, amount_cents, method, check_number, paid_on, note, created_by)
+       VALUES ($1,$2,$3,$4,$5,COALESCE($6::date, CURRENT_DATE),$7,$8) RETURNING id`,
+      [crew.id, job.id, amount, method, text(b.check_number, 'Check number', { required: false, max: 30 }) || null, paidOn,
+        text(b.note, 'Note', { required: false, max: 200 }) || null, req.user.id]);
+    const after = bal.owed - amount;
+    await log(db, job.id, req.user, `Paid ${who(crew)} ${usd(amount)} by ${SUB_METHOD[method]}${b.check_number ? ' #' + b.check_number : ''}`
+      + (bal.contract > 0 ? ` · still owed ${usd(after)}` : ''));
+    return { id: r.rows[0].id };
+  });
+
+  subRoute('/payments/:pid/void', async (db, req, job, crew) => {
+    const reason = text(req.body.reason, 'Reason', { required: false, max: 200 });
+    if (!reason || reason.length < 3) fail(400, 'Write why this payment is being voided');
+    const r = await db.query(`UPDATE job_crew_payments SET voided=TRUE, void_reason=$1, voided_at=now()
+      WHERE id=$2 AND crew_id=$3 AND NOT voided RETURNING amount_cents`, [reason, req.params.pid, crew.id]);
+    if (!r.rows[0]) fail(404, 'Payment not found');
+    await log(db, job.id, req.user, `Voided payment of ${usd(r.rows[0].amount_cents)} to ${who(crew)} · Reason: ${reason}`);
+  });
+
+  subRoute('/changes', async (db, req, job, crew) => {
+    const b = req.body;
+    const amt = cents(b.amount_cents, 'Change order amount');
+    if (!amt) fail(400, 'Enter the change order amount');
+    const signed = b.credit ? -amt : amt;
+    const note = text(b.note, 'What the change order is for', { max: 300 });
+    if (note.length < 3) fail(400, 'Write what the change order is for');
+    const bal = await subBalance(db, crew);
+    if (bal.contract + signed < bal.paid) fail(400, `That credit would leave ${who(crew)}'s contract below the ${usd(bal.paid)} already paid`);
+    const bill = b.bill_customer ? cents(b.customer_cents, 'Amount to charge the customer') : 0;
+    if (b.bill_customer && !bill) fail(400, 'Enter the amount to charge the customer');
+    if (bill) notClosed(job);
+    const n = await db.query('SELECT COALESCE(max(number), 0)::int + 1 AS n FROM job_crew_changes WHERE crew_id=$1', [crew.id]);
+    const num = n.rows[0].n;
+    let itemId = null;
+    if (bill) {
+      const it = await db.query(`INSERT INTO job_items (job_id, kind, name, qty, unit_cents, taxable, created_by) VALUES ($1,'charge',$2,1,$3,FALSE,$4) RETURNING id`,
+        [job.id, `Change order: ${crew.trade}: ${note}`.slice(0, 120), bill, req.user.id]);
+      itemId = it.rows[0].id;
+    }
+    const r = await db.query(
+      `INSERT INTO job_crew_changes (crew_id, job_id, number, amount_cents, note, customer_cents, job_item_id, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, [crew.id, job.id, num, signed, note, bill, itemId, req.user.id]);
+    await log(db, job.id, req.user, `Change order #${num} for ${who(crew)}: ${signed < 0 ? '−' : '+'}${usd(Math.abs(signed))} (${note})`
+      + ` · contract now ${usd(bal.contract + signed)}` + (bill ? ` · ${usd(bill)} added to the customer's bill` : ''));
+    return { id: r.rows[0].id };
+  });
+
+  app.delete('/api/jobs/:id/crews/:cid/changes/:chid', ...J, wrap(async (req, res) => {
+    if (!isManager(req.user)) fail(403, 'Only an owner or manager can remove change orders');
+    await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      const crew = await crewOf(db, job, req.params.cid, true);
+      const x = (await db.query('SELECT * FROM job_crew_changes WHERE id=$1 AND crew_id=$2', [req.params.chid, crew.id])).rows[0] || fail(404, 'Change order not found');
+      if (x.job_item_id) {
+        const it = await db.query('SELECT id FROM job_items WHERE id=$1', [x.job_item_id]);
+        if (it.rows[0]) { notClosed(job); await db.query('DELETE FROM job_items WHERE id=$1', [x.job_item_id]); }
+      }
+      const bal = await subBalance(db, crew);
+      if (bal.contract - x.amount_cents < bal.paid) fail(400, `Removing it would leave ${who(crew)}'s contract below the ${usd(bal.paid)} already paid`);
+      await db.query('DELETE FROM job_crew_changes WHERE id=$1', [x.id]);
+      await log(db, job.id, req.user, `Removed change order #${x.number} for ${who(crew)} (${x.amount_cents < 0 ? '−' : '+'}${usd(Math.abs(x.amount_cents))}: ${x.note})`
+        + (x.job_item_id ? ' and its charge on the ticket' : ''));
     });
     notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
     res.json({ ok: true });
