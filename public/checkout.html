@@ -113,6 +113,26 @@
   .bigchange { font-size: 44px; font-weight: 800; text-align: center; margin: 10px 0; font-variant-numeric: tabular-nums; }
   .quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
   @media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } body { height: auto; } .grid { max-height: none; } }
+
+  /* ---- Dark look ---- */
+  @media screen {
+    html[data-theme=dark] .cart th, html[data-theme=dark] tr.totrow td { background: #191b20; color: #d9a93a; }
+    html[data-theme=dark] .tabs button, html[data-theme=dark] .tile, html[data-theme=dark] .chip, html[data-theme=dark] .seg3 button, html[data-theme=dark] .periods button, html[data-theme=dark] .seg2 button, html[data-theme=dark] .seg button { background: #1d2027; color: #f1f2f4; border-color: #2e323b; }
+    html[data-theme=dark] .tabs button.on, html[data-theme=dark] .seg3 button.on, html[data-theme=dark] .periods button.on, html[data-theme=dark] .seg2 button.on, html[data-theme=dark] .seg button.on { background: #1f2a17; color: #7cc04a; border-color: #7cc04a; }
+    html[data-theme=dark] .tile { border-radius: 14px; } html[data-theme=dark] .tile img, html[data-theme=dark] .cthumb { background: #2a2e36; }
+    html[data-theme=dark] .pay .split { background: #2b2040; color: #d6b4ff; }
+    html[data-theme=dark] .paidrow { background: #1f2a17; }
+    html[data-theme=dark] .chip.set { background: #182a3f; border-color: #2f5f93; color: #9cc8ff; }
+    html[data-theme=dark] .chip.acct, html[data-theme=dark] .acctpill, html[data-theme=dark] label.report { background: #3a2f12; border-color: #7a6020; color: #f0d27a; }
+    html[data-theme=dark] .chip.fee { background: #23262d; }
+    html[data-theme=dark] .chip.quote { background: #2b2040; color: #d6b4ff; border-color: #4b3570; }
+    html[data-theme=dark] .custform, html[data-theme=dark] .retcard { background: #16181d; }
+    html[data-theme=dark] .rentbtn { background: #3a2a12; color: #f0b46a; }
+    html[data-theme=dark] .tile.rent { border-color: #7a5520; background: #221d16; }
+    html[data-theme=dark] .periods button.on span { color: #b9e39a; }
+    html[data-theme=dark] tr.overdue td { background: #3a1f1f; }
+    html[data-theme=dark] .phone #qr { background: #fff; padding: 4px; border-radius: 6px; }
+  }
 </style>
 </head>
 <body class="cp">
