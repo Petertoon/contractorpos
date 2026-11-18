@@ -20,7 +20,7 @@ module.exports = function setupJobFiles(app, { pool, wrap, fail, text, notify, l
       [req.params.id, req.user.business_id]);
     return r.rows[0] || fail(404, 'Job not found');
   }
-  const FILE_COLS = `f.id, f.job_id, f.kind, f.name, f.mime, f.size_bytes, f.estimate, f.source_file_id, f.created_at, u.name AS created_by_name`;
+  const FILE_COLS = `f.id, f.job_id, f.crew_id, f.kind, f.name, f.mime, f.size_bytes, f.estimate, f.source_file_id, f.created_at, u.name AS created_by_name`;
 
   app.get('/api/jobs/:id/files', ...J, wrap(async (req, res) => {
     const job = await jobOf(req);
@@ -41,10 +41,15 @@ module.exports = function setupJobFiles(app, { pool, wrap, fail, text, notify, l
       .replace(/[\\/:*?"<>|\r\n]+/g, ' ');
     const n = await pool.query('SELECT count(*)::int AS n FROM job_files WHERE job_id=$1', [job.id]);
     if (n.rows[0].n >= 200) fail(400, 'This job already has 200 files');
+    // Optional: the file belongs to one crew/sub (their bid, change order, invoice, lien waiver…).
+    let crew = null;
+    if (req.query.crew_id) {
+      crew = (await pool.query('SELECT id, trade, name FROM job_crews WHERE id=$1 AND job_id=$2', [req.query.crew_id, job.id])).rows[0] || fail(404, 'Crew not found');
+    }
     const r = await pool.query(
-      `INSERT INTO job_files (job_id, business_id, kind, name, mime, data, size_bytes, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      [job.id, req.user.business_id, kind, name, mime, body, body.length, req.user.id]);
-    await log(pool, job.id, req.user, `Attached ${kind === 'pdf' ? 'PDF' : 'photo'}: ${name}`);
+      `INSERT INTO job_files (job_id, business_id, kind, name, mime, data, size_bytes, created_by, crew_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [job.id, req.user.business_id, kind, name, mime, body, body.length, req.user.id, crew ? crew.id : null]);
+    await log(pool, job.id, req.user, `Attached ${kind === 'pdf' ? 'PDF' : 'photo'}${crew ? ` for ${crew.trade}${crew.name ? ' (' + crew.name + ')' : ''}` : ''}: ${name}`);
     notify(req.user.business_id, { type: 'job', id: job.id });
     res.json({ id: r.rows[0].id, kind, name });
   }));
