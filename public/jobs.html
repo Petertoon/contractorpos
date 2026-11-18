@@ -161,6 +161,29 @@
   .frow .fact .estb { background: #4b33b5; }
   .frow.est { border-left: 4px solid #8b6cff; }
   .modal.wide { max-width: 980px; }
+  .crow .subl { display: block; font-size: 12.5px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .crow .subl b.owe { color: #fca5a5; } .crow .subl b.paidup { color: #86efac; }
+  #tLines .crow .subl b.owe, #tLines .crow .subl b.paidup { background: #1d2a45; padding: 0 5px; border-radius: 4px; }
+  .crow button.subb { background: #7c4a03; color: #ffedd5; }
+  .subsum { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 6px 0 14px; }
+  .subsum div { background: #1b2740; border-radius: 8px; padding: 8px 10px; }
+  .subsum small { display: block; color: var(--jmuted); font-size: 12px; } .subsum b { font-size: 17px; font-variant-numeric: tabular-nums; }
+  .subsum .owe b { color: #fca5a5; } .subsum .paidup b { color: #86efac; }
+  .subcols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .subcols h3 { margin: 4px 0 8px; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
+  .sublist > div { display: flex; justify-content: space-between; gap: 8px; background: #1b2740; border-radius: 7px; padding: 7px 10px; margin-bottom: 5px; font-size: 14px; }
+  .sublist > div small { display: block; color: var(--jmuted); font-size: 12px; }
+  .sublist > div.v { opacity: .45; text-decoration: line-through; }
+  .sublist .amt { white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+  .sublist a { font-size: 12px; font-weight: 500; }
+  .subform { background: #0f1729; border: 1px solid var(--jline); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .subform label { margin-top: 6px; }
+  .subfiles { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .subfiles a { display: flex; align-items: center; gap: 6px; background: #1b2740; border-radius: 7px; padding: 5px 8px; color: var(--jink); text-decoration: none; font-size: 13px; max-width: 230px; }
+  .subfiles img { width: 40px; height: 40px; object-fit: cover; border-radius: 5px; background: #fff; }
+  .subfiles span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ftag { display: inline-block; background: #7c4a03; color: #ffedd5; border-radius: 4px; padding: 0 5px; font-size: 11.5px; font-weight: 700; margin-right: 4px; }
+  @media (max-width: 760px) { .subsum { grid-template-columns: repeat(2, 1fr); } .subcols { grid-template-columns: 1fr; } }
   table.est { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
   table.est th { text-align: left; color: var(--jmuted); font-size: 12px; text-transform: uppercase; padding: 6px 4px; border-bottom: 1px solid var(--jline); }
   table.est td { padding: 6px 4px; border-bottom: 1px solid var(--jline); vertical-align: middle; }
@@ -272,6 +295,8 @@
       </div>
       <input type="file" id="pdfFile" accept="application/pdf,.pdf" multiple hidden>
       <input type="file" id="photoFile" accept="image/*" multiple hidden>
+      <input type="file" id="subPdfFile" accept="application/pdf,.pdf" multiple hidden>
+      <input type="file" id="subPhotoFile" accept="image/*" multiple hidden>
       <div style="height:12px"></div>
       <div class="muted" style="font-size:13px" id="resHint">Inventory items</div>
       <div class="results" id="tResults"></div>
@@ -579,6 +604,8 @@ function renderTicket() {
   $('#tLines').onclick = (e) => {
     if (e.target.closest('[data-crewtoggle]')) { crewOpen = !crewOpen; return renderTicket(); }
     if (e.target.closest('[data-crewadd]')) return crewDialog(null, Number(e.target.closest('[data-crewadd]').dataset.crewadd) || null);
+    const sb = e.target.closest('[data-sub]');
+    if (sb) return subDialog(Number(sb.dataset.sub));
     const ce = e.target.closest('[data-crewedit]');
     if (ce) return crewDialog(j.crews.find((x) => x.id === Number(ce.dataset.crewedit)));
     const cd = e.target.closest('[data-crewdone]');
@@ -624,6 +651,7 @@ function renderTicket() {
       <button class="primary" id="payBtn" ${locked || bal <= 0 ? 'disabled' : ''}>Take payment</button>
       <button class="dk" id="finishBtn" ${locked ? 'disabled' : ''}>Finish job…</button>
     </div>
+    ${subTotalsHtml(j)}
     <h3>Payments (${j.payments.filter((p) => !p.voided).length})</h3>
     <div class="plist">${j.payments.map((p) => `<div class="${p.voided ? 'v' : ''}"><span>${shortDate(p.created_at)} · ${METHOD[p.method]}${p.check_number ? ' #' + esc(p.check_number) : ''}${p.note ? ` · <span class="muted">${esc(p.note)}</span>` : ''}${p.voided ? ' (void)' : ''}</span>
       <span>${usd(p.amount_cents)}${isMgr && !p.voided && !p.deposit_id && !locked ? ` <a href="#" data-void="${p.id}" style="font-size:12px">void</a>` : ''}</span></div>`).join('') || '<div class="muted">No payments yet</div>'}</div>
@@ -643,6 +671,7 @@ function renderTicket() {
   $('#payBtn').onclick = () => payDialog();
   $('#finishBtn').onclick = () => finishDialog();
   $('#tSide').onclick = (e) => {
+    const sb = e.target.closest('[data-sub]'); if (sb) { e.preventDefault(); return subDialog(Number(sb.dataset.sub)); }
     const v = e.target.closest('[data-void]'); if (!v) return;
     e.preventDefault();
     const p = j.payments.find((x) => x.id === Number(v.dataset.void));
@@ -958,10 +987,11 @@ function crewPanel(j) {
   const orphan = j.crews.filter((x) => !(j.columns || []).some((c) => c.id === x.column_id));
   const row = (c) => `<div class="crow ${c.done ? 'done' : ''}">
       <div class="who"><b>${esc(c.trade)}</b>${c.name ? ' · ' + esc(c.name) : ''}${c.done ? ' <span class="muted" style="font-size:12px">✓ done</span>' : ''}
-        <small>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : ''}${c.phone && c.note ? ' · ' : ''}${esc(c.note || '')}</small></div>
+        <small>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : ''}${c.phone && c.note ? ' · ' : ''}${esc(c.note || '')}</small>${subLine(c)}</div>
       <div class="amt">${c.billing === 'costplus'
         ? `${usd(c.charge_cents)}<small class="cp">COST PLUS</small><small class="cpd">cost ${usd(c.amount_cents)} + ${c.markup_type === 'dollar' ? usd(c.markup_cents || 0) : Number(c.markup_percent || 0) + '%'}</small>`
         : `${c.amount_cents ? usd(c.amount_cents) : '<span class="muted">—</span>'}<small class="${c.billing === 'extra' ? 'ext' : 'inc'}">${c.billing === 'extra' ? 'UP-CHARGE' : 'PART OF QUOTE'}</small>`}</div>
+      <button class="subb" data-sub="${c.id}" title="Bid, change orders, payments to this sub and their files">💵 Sub</button>
       ${locked ? '' : `<button class="${c.done ? '' : 'ok'}" data-crewdone="${c.id}" title="${c.done ? 'Put back on the job' : 'Mark finished'}">${c.done ? '↺' : '✓ Done'}</button>
         <button data-crewedit="${c.id}">Edit</button><button class="xbtn" data-crewdel="${c.id}" title="Remove">×</button>`}</div>`;
   const inc = j.crews.filter((c) => c.billing === 'included').reduce((a, c) => a + c.amount_cents, 0);
@@ -1031,6 +1061,135 @@ function crewDialog(c, phaseId) {
   });
 }
 
+// ---------- subcontracts: bid, change orders, payments to the sub, their files ----------
+const SUB_METHOD = { check: 'Check', cash: 'Cash', card: 'Card', transfer: 'Bank transfer', other: 'Other' };
+const todayISO = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const crewTag = (f) => { const c = f.crew_id && cur && cur.crews.find((x) => x.id === f.crew_id); return c ? `<span class="ftag">👷 ${esc(c.trade)}</span>` : ''; };
+const hasSub = (c) => c.amount_cents || c.co_count || c.payments.length;
+function subLine(c) {
+  if (!hasSub(c)) return '';
+  const parts = [`Bid ${usd(c.amount_cents)}`];
+  if (c.co_count) parts.push(`${c.co_count} change order${c.co_count === 1 ? '' : 's'} ${c.co_cents < 0 ? '−' : '+'}${usd(Math.abs(c.co_cents))}`);
+  if (c.sub_paid_cents) parts.push(`Paid ${usd(c.sub_paid_cents)}`);
+  const owe = c.sub_owed_cents;
+  parts.push(owe > 0 ? `<b class="owe">Owe ${usd(owe)}</b>` : `<b class="paidup">Paid in full</b>`);
+  if (c.file_count) parts.push(`📎 ${c.file_count}`);
+  return `<span class="subl">${parts.join(' · ')}</span>`;
+}
+function subTotalsHtml(j) {
+  const list = j.crews.filter(hasSub);
+  if (!list.length) return '';
+  const sum = (k) => list.reduce((a, c) => a + c[k], 0);
+  const owed = sum('sub_owed_cents');
+  return `<h3>Subcontractors</h3>
+    <div class="tot">
+      ${list.map((c) => `<div><span><a href="#" data-sub="${c.id}">${esc(c.trade)}${c.name ? ' · ' + esc(c.name) : ''}</a></span><span>${c.sub_owed_cents > 0 ? 'owe ' + usd(c.sub_owed_cents) : '✓ paid'}</span></div>`).join('')}
+      <div class="sep"><span>Sub contracts (bids + change orders)</span><span>${usd(sum('contract_cents'))}</span></div>
+      <div><span>Paid to subs</span><span>${usd(sum('sub_paid_cents'))}</span></div>
+      <div class="sep"><b>Still owed to subs</b><b class="${owed > 0 ? 'owed' : 'zero'}">${usd(owed)}</b></div>
+    </div>`;
+}
+let subCrewId = null, subForm = null;
+function subDialog(cid, form) {
+  const j = cur, c = j.crews.find((x) => x.id === cid);
+  if (!c) return closeModal();
+  subCrewId = cid; subForm = form || null;
+  const myFiles = files.filter((f) => f.crew_id === c.id);
+  const owe = c.sub_owed_cents;
+  const payForm = `<div class="subform">
+      <div class="two"><div><label>Amount paid</label><input name="amt" inputmode="decimal" value="${owe > 0 ? dollars(owe) : ''}" placeholder="0.00"></div>
+        <div><label>Date paid</label><input name="paid_on" type="date" value="${todayISO()}"></div></div>
+      <div class="two"><div><label>How</label><select name="paymethod">${Object.entries(SUB_METHOD).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+        <div><label>Check #</label><input name="check_number" maxlength="30"></div></div>
+      <label>Note (optional)</label><input name="note" maxlength="200" placeholder="e.g. Rough-in draw">
+      <div class="actions"><button type="button" class="dk" data-subcancel="1">Cancel</button><button class="primary" data-subsave="pay">Save payment</button></div></div>`;
+  const coForm = `<div class="subform">
+      <label>What is the change order for? (required)</label>
+      <textarea name="note" rows="2" maxlength="300" placeholder="e.g. Customer added 6 recessed lights in the kitchen"></textarea>
+      <div class="two"><div><label>Amount</label><input name="amt" inputmode="decimal" placeholder="0.00"></div>
+        <div><label>This change order…</label><select name="credit"><option value="">Adds to the sub's price</option><option value="1">Is a credit (takes off)</option></select></div></div>
+      <label class="check" style="margin-top:10px"><input type="checkbox" name="bill" ${j.is_closed ? 'disabled' : ''}> Also charge the customer for it${j.is_closed ? ' (job is closed)' : ''}</label>
+      <div id="billAmt" hidden><label>Amount to charge the customer</label><input name="camt" inputmode="decimal" placeholder="0.00" style="max-width:200px">
+        <div class="muted" style="font-size:12.5px">Goes on the job ticket as a change-order charge, so the customer's total and balance go up.</div></div>
+      <div class="actions"><button type="button" class="dk" data-subcancel="1">Cancel</button><button class="primary" data-subsave="co">Save change order</button></div></div>`;
+  const f = openModal(`<h2 style="margin-bottom:2px">💵 ${esc(c.trade)}${c.name ? ' · ' + esc(c.name) : ''}</h2>
+    <div class="muted" style="margin-bottom:6px">${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a> · ` : ''}${esc(c.column_name || '')}${c.done ? ' · ✓ done' : ''}</div>
+    <div class="subsum">
+      <div><small>Original bid</small><b>${usd(c.amount_cents)}</b></div>
+      <div><small>Change orders</small><b>${c.co_cents < 0 ? '−' : '+'}${usd(Math.abs(c.co_cents))}</b></div>
+      <div><small>Contract now</small><b>${usd(c.contract_cents)}</b></div>
+      <div><small>Paid to sub</small><b>${usd(c.sub_paid_cents)}</b></div>
+      <div class="${owe > 0 ? 'owe' : 'paidup'}"><small>${owe < 0 ? 'Overpaid' : 'Still owed'}</small><b>${usd(Math.abs(owe))}</b></div>
+    </div>
+    ${!c.amount_cents ? `<p class="muted" style="margin-top:-6px">No bid amount on this crew yet. Use <b>Edit</b> on the crew to enter the sub's bid.</p>` : ''}
+    <div class="subcols">
+      <div><h3>Payments to sub ${isMgr && subForm !== 'pay' ? '<button class="dk" data-subnew="pay" style="padding:5px 10px;font-size:13px">+ Record payment</button>' : ''}</h3>
+        ${subForm === 'pay' ? payForm : ''}
+        <div class="sublist">${c.payments.map((p) => `<div class="${p.voided ? 'v' : ''}"><span>${shortDate(p.paid_on)} · ${SUB_METHOD[p.method] || p.method}${p.check_number ? ' #' + esc(p.check_number) : ''}
+            <small>${p.note ? esc(p.note) + ' · ' : ''}${p.taken_by ? esc(p.taken_by) : ''}${p.voided ? ` · VOID: ${esc(p.void_reason || '')}` : ''}</small></span>
+          <span class="amt">${usd(p.amount_cents)}${isMgr && !p.voided ? `<br><a href="#" data-subvoid="${p.id}">void</a>` : ''}</span></div>`).join('') || '<div class="muted" style="background:none;padding:0">No payments yet.</div>'}</div></div>
+      <div><h3>Change orders ${isMgr && subForm !== 'co' ? '<button class="dk" data-subnew="co" style="padding:5px 10px;font-size:13px">+ Change order</button>' : ''}</h3>
+        ${subForm === 'co' ? coForm : ''}
+        <div class="sublist">${c.changes.map((x) => `<div><span><b>CO #${x.number}</b> · ${shortDate(x.created_at)}<small>${esc(x.note)}${x.customer_cents ? ` · charged customer ${usd(x.customer_cents)}` : ''}${x.taken_by ? ' · ' + esc(x.taken_by) : ''}</small></span>
+          <span class="amt">${x.amount_cents < 0 ? '−' : '+'}${usd(Math.abs(x.amount_cents))}${isMgr ? `<br><a href="#" data-codel="${x.id}">remove</a>` : ''}</span></div>`).join('') || '<div class="muted" style="background:none;padding:0">No change orders.</div>'}</div></div>
+    </div>
+    <h3 style="margin:14px 0 4px;font-size:15px">Files for this sub (${myFiles.length})</h3>
+    <div class="muted" style="font-size:13px">Their bid, change orders, invoices, lien waivers, photos of the work…</div>
+    <div class="subfiles">${myFiles.map((x) => `<a href="${fileUrl(x)}" target="_blank" rel="noopener">${x.kind === 'photo' ? `<img src="${fileUrl(x)}" alt="" loading="lazy">` : '📄'}<span>${esc(x.name)}</span></a>`).join('')}</div>
+    <div class="actions" style="justify-content:space-between;flex-wrap:wrap">
+      <span style="display:flex;gap:8px"><button type="button" class="dk" data-subfile="pdf">📄 Attach PDF</button><button type="button" class="dk" data-subfile="photo">📷 Add photo</button></span>
+      <button type="button" class="dk" data-subclose="1">Close</button></div>`);
+  f.classList.add('wide');
+  if (subForm) setTimeout(() => { const i = f.querySelector('.subform input[name=amt], .subform textarea'); if (i) i.focus(); }, 30);
+  f.onchange = (e) => { if (e.target.name === 'bill') { $('#billAmt').hidden = !e.target.checked; if (e.target.checked && !f.camt.value) f.camt.value = f.amt.value; } };
+  f.onclick = async (e) => {
+    const t = e.target;
+    if (t.closest('[data-subclose]')) return closeModal();
+    if (t.closest('[data-subcancel]')) return subDialog(cid);
+    const nw = t.closest('[data-subnew]'); if (nw) return subDialog(cid, nw.dataset.subnew);
+    const sf = t.closest('[data-subfile]'); if (sf) return $(sf.dataset.subfile === 'pdf' ? '#subPdfFile' : '#subPhotoFile').click();
+    const sv = t.closest('[data-subsave]');
+    if (sv) {
+      const amt = Math.round(parseFloat(f.amt.value) * 100);
+      if (!(amt > 0)) return toast('Enter the amount', 'bad');
+      const body = sv.dataset.subsave === 'pay'
+        ? { amount_cents: amt, paid_on: f.paid_on.value, method: f.paymethod.value, check_number: f.check_number.value, note: f.note.value }
+        : { amount_cents: amt, note: f.note.value.trim(), credit: !!f.credit.value, bill_customer: f.bill.checked, customer_cents: Math.round(parseFloat(f.camt.value || '0') * 100) };
+      if (sv.dataset.subsave === 'co' && body.note.length < 3) return toast('Write what the change order is for', 'bad');
+      sv.disabled = true;
+      const ok = await run(async () => { await api(`/api/jobs/${j.id}/crews/${cid}/${sv.dataset.subsave === 'pay' ? 'payments' : 'changes'}`, body); return true; });
+      if (!ok) { sv.disabled = false; return; }
+      toast(sv.dataset.subsave === 'pay' ? 'Payment recorded' : 'Change order saved');
+      await refreshTicket(); return subDialog(cid);
+    }
+    const pv = t.closest('[data-subvoid]');
+    if (pv) {
+      e.preventDefault();
+      const p = c.payments.find((x) => x.id === Number(pv.dataset.subvoid));
+      const reason = prompt(`Void the ${usd(p.amount_cents)} payment to ${c.trade}? Write why:`);
+      if (reason == null) return;
+      if (reason.trim().length < 3) return toast('Write why this payment is being voided', 'bad');
+      await run(async () => { await api(`/api/jobs/${j.id}/crews/${cid}/payments/${p.id}/void`, { reason: reason.trim() }); toast('Payment voided'); });
+      await refreshTicket(); return subDialog(cid);
+    }
+    const cd = t.closest('[data-codel]');
+    if (cd) {
+      e.preventDefault();
+      const x = c.changes.find((y) => y.id === Number(cd.dataset.codel));
+      if (!confirm(`Remove change order #${x.number} (${x.note})?${x.customer_cents ? ' Its charge on the customer\'s ticket comes off too.' : ''}`)) return;
+      await run(async () => { await api(`/api/jobs/${j.id}/crews/${cid}/changes/${x.id}`, undefined, 'DELETE'); toast('Change order removed'); });
+      await refreshTicket(); return subDialog(cid);
+    }
+  };
+}
+const subUpload = (kind) => run(async () => {
+  const r = await uploadPicked($(kind === 'pdf' ? '#subPdfFile' : '#subPhotoFile'), kind, subCrewId);
+  if (subCrewId && $('#m').classList.contains('open')) subDialog(subCrewId);
+  return r;
+});
+$('#subPdfFile').onchange = () => subUpload('pdf');
+$('#subPhotoFile').onchange = () => subUpload('photo');
+
 // ---------- plans, photos & Claude estimates ----------
 const fileUrl = (f) => `/api/jobs/${f.job_id}/files/${f.id}`;
 const kb = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
@@ -1047,11 +1206,11 @@ function fileRow(f) {
       <div class="fact"><button data-fview="${f.id}">Open</button><button class="xbtn" data-fdel="${f.id}" title="Remove">×</button></div></div>`;
   }
   return `<div class="frow">${f.kind === 'photo' ? `<a href="${fileUrl(f)}" target="_blank" rel="noopener"><img class="fthumb" src="${fileUrl(f)}" alt="" loading="lazy"></a>` : '<span class="ficon">📄</span>'}
-    <div class="fname"><b>${esc(f.name)}</b><small>${f.kind === 'pdf' ? 'PDF' : 'Photo'} · ${kb(f.size_bytes)} · ${by}</small></div>
+    <div class="fname"><b>${esc(f.name)}</b><small>${crewTag(f)}${f.kind === 'pdf' ? 'PDF' : 'Photo'} · ${kb(f.size_bytes)} · ${by}</small></div>
     <div class="fact"><a href="${fileUrl(f)}" target="_blank" rel="noopener">Open</a>${aiOn() ? `<button class="estb" data-fest="${f.id}" title="Ask Claude about this file">✨ Ask Claude</button>` : ''}
       <button class="xbtn" data-fdel="${f.id}" title="Remove">×</button></div></div>`;
 }
-async function uploadFile(file, kind) {
+async function uploadFile(file, kind, crewId) {
   let body = file, type = file.type, name = file.name || (kind === 'pdf' ? 'Plans.pdf' : 'Photo.jpg');
   if (kind === 'photo') {
     // Big enough to read a blueprint, small enough to store and send to Claude.
@@ -1062,18 +1221,18 @@ async function uploadFile(file, kind) {
     type = 'application/pdf';
   }
   if (body.size > 20 * 1024 * 1024) throw new Error(`${name} is larger than 20 MB`);
-  const res = await fetch(`/api/jobs/${cur.id}/files?name=${encodeURIComponent(name)}`, { method: 'POST', headers: { 'Content-Type': type }, body, credentials: 'same-origin' });
+  const res = await fetch(`/api/jobs/${cur.id}/files?name=${encodeURIComponent(name)}${crewId ? '&crew_id=' + crewId : ''}`, { method: 'POST', headers: { 'Content-Type': type }, body, credentials: 'same-origin' });
   const d = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(d.error || `Upload failed (${res.status})`);
   return d;
 }
-async function uploadPicked(input, kind) {
+async function uploadPicked(input, kind, crewId) {
   const list = [...input.files]; input.value = '';
   if (!list.length || !cur) return [];
   const out = [];
   for (const [i, f] of list.entries()) {
     toast(`Uploading ${list.length > 1 ? `${i + 1} of ${list.length}` : f.name}…`);
-    try { out.push(await uploadFile(f, kind)); } catch (e) { toast(e.message, 'bad'); }
+    try { out.push(await uploadFile(f, kind, crewId)); } catch (e) { toast(e.message, 'bad'); }
   }
   if (out.length) { toast(`${out.length} file${out.length === 1 ? '' : 's'} attached`); await refreshTicket(); }
   return out;
