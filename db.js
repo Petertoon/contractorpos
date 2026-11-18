@@ -539,6 +539,37 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS statement_email_count INT NOT NULL DEF
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS back_reason TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS back_at TIMESTAMPTZ;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS back_by TEXT;
+-- Subcontracts (v1.9): each crew's bid is its contract; payments made to the sub and change orders adjust what's owed to them.
+CREATE TABLE IF NOT EXISTS job_crew_payments (
+  id SERIAL PRIMARY KEY,
+  crew_id INT NOT NULL REFERENCES job_crews(id) ON DELETE CASCADE,
+  job_id INT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  amount_cents INT NOT NULL CHECK (amount_cents > 0),
+  method TEXT NOT NULL DEFAULT 'check',
+  check_number TEXT,
+  paid_on DATE NOT NULL DEFAULT CURRENT_DATE,
+  note TEXT,
+  voided BOOLEAN NOT NULL DEFAULT FALSE,
+  void_reason TEXT,
+  voided_at TIMESTAMPTZ,
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS job_crew_payments_crew ON job_crew_payments(crew_id);
+CREATE TABLE IF NOT EXISTS job_crew_changes (
+  id SERIAL PRIMARY KEY,
+  crew_id INT NOT NULL REFERENCES job_crews(id) ON DELETE CASCADE,
+  job_id INT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  number INT NOT NULL DEFAULT 1,
+  amount_cents INT NOT NULL CHECK (amount_cents <> 0),
+  note TEXT NOT NULL,
+  customer_cents INT NOT NULL DEFAULT 0 CHECK (customer_cents >= 0),
+  job_item_id INT REFERENCES job_items(id) ON DELETE SET NULL,
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS job_crew_changes_crew ON job_crew_changes(crew_id);
+ALTER TABLE job_files ADD COLUMN IF NOT EXISTS crew_id INT REFERENCES job_crews(id) ON DELETE SET NULL;
 
 -- Claude add-on: switched on per business by the platform admin. Every request is logged (for usage and billing).
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT FALSE;
@@ -557,6 +588,8 @@ CREATE INDEX IF NOT EXISTS claude_requests_business ON claude_requests(business_
 -- 'answer' = Claude's answers to questions about a plan or photo (a saved conversation).
 ALTER TABLE job_files DROP CONSTRAINT IF EXISTS job_files_kind_check;
 ALTER TABLE job_files ADD CONSTRAINT job_files_kind_check CHECK (kind IN ('pdf','photo','estimate','answer'));
+ALTER TABLE job_crew_payments DROP CONSTRAINT IF EXISTS job_crew_payments_method_check;
+ALTER TABLE job_crew_payments ADD CONSTRAINT job_crew_payments_method_check CHECK (method IN ('check','cash','card','transfer','other'));
 `;
 
 async function init() {
