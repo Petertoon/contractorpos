@@ -1,7 +1,7 @@
-[HANDOVER (35).md](https://github.com/user-attachments/files/35098447/HANDOVER.35.md)
+[HANDOVER (36).md](https://github.com/user-attachments/files/35099518/HANDOVER.36.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-19 · Current version: **ContractorPOS v1.17**
+Last updated: 2026-11-19 · Current version: **ContractorPOS v1.18**
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -383,3 +383,9 @@ Same rules, numbers and wording as MultiPOS v1.15 (SECURITY-HANDOVER.md). Code i
 - **Log:** `support_access_log` → owner's **Who opened your account** (code emailed / owner made a code / opened with emailed code / owner's code / setup days / wrong code / left / password or backup email changed).
 - **Account recovery:** `users.backup_email` (required for owners and admins; yellow "Add a backup email… Add it now" bar on every screen until added). Settings → **My login & backup email** (backup, new password, current password). **Forgot password?** on sign-in → `/api/password/forgot` (same answer for unknown emails, 5/hour per IP and email) emails a 30-minute one-time `/reset#token` link to the login and backup emails; only the newest link works. `/reset` page: new password ×2 + backup email (required for owners); saving signs out every device. Any password/backup change emails "Your login was changed" to the login, old and new backup emails.
 - Tables: `support_codes`, `support_access_log`, `password_resets`; columns `sessions.acting_until`, `users.backup_email`. Needs `RESEND_API_KEY` for emailed codes/links (owner-made codes work without it).
+
+## 29. Bid Builder: Add from Products (ContractorPOS v1.18)
+- **📦 Add from Products** next to "+ Add Contractor / Scope": search the products list (rentals left out), click to add, click again for one more; ✓ shows how many are in the bid.
+- Product lines show "📦 name · Qty [ ] × $price"; amount = qty × price (price saved when added). Markup starts at **0%** because the product price is already the selling price; change it per line, or the overall % applies.
+- Stored in `job_bid_items` (not crews), saved by the same `POST /api/jobs/:id/bid` (`kind:'product'`, `removed_items`). Totals show Subcontractor Total and Products / Materials separately; the quoted price includes both. Detailed print lists them as "name (qty)".
+- Products in a bid don't change stock; that happens when items are put on the job ticket or sold.
