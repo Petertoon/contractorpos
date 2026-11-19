@@ -1979,7 +1979,7 @@ function listen() {
 function tick() { $('#clock').textContent = new Date().toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 
 (async () => {
-  me = await api('/api/me');
+  me = await api('/api/me'); backupNag(me);
   if (!me.business) { location.href = '/admin#businesses'; return; }
   applyBrand(me.business);
   $('#bizName').textContent = me.business.name;
