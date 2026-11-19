@@ -489,7 +489,7 @@
 let me, registerId, state = { cart: [], totals: {} }, products = [], category = 'All', es, payMethod;
 
 async function start() {
-  me = await api('/api/me');
+  me = await api('/api/me'); backupNag(me);
   if (!me.business) { location.href = '/admin#businesses'; return; }
   applyBrand(me.business);
   $('#bizName').textContent = me.business.name;
