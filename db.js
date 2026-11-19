@@ -583,6 +583,38 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_markup_all NUMERIC(7,3) NOT NULL DE
 -- Businesses that existed before keep the dark look (NULL); new businesses start on ranch.
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS theme TEXT;
 ALTER TABLE businesses ALTER COLUMN theme SET DEFAULT 'ranch';
+-- Security (v1.17): support access codes + account recovery (see SECURITY-HANDOVER.md).
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS acting_until TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS support_codes (
+  id SERIAL PRIMARY KEY,
+  business_id INT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  code_hash TEXT NOT NULL,
+  made_by TEXT NOT NULL,
+  requested_by INT REFERENCES users(id) ON DELETE SET NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  used_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS support_codes_biz ON support_codes (business_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS support_access_log (
+  id SERIAL PRIMARY KEY,
+  business_id INT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  user_id INT REFERENCES users(id) ON DELETE SET NULL,
+  user_name TEXT,
+  action TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS support_log_biz ON support_access_log (business_id, created_at DESC);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS backup_email TEXT;
+CREATE TABLE IF NOT EXISTS password_resets (
+  id SERIAL PRIMARY KEY,
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 -- Claude add-on: switched on per business by the platform admin. Every request is logged (for usage and billing).
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT FALSE;
