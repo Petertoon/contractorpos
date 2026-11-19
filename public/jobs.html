@@ -295,6 +295,10 @@
   #bb .bbfiles img { width: 26px; height: 26px; object-fit: cover; border-radius: 3px; background: #fff; }
   #bb .bbfiles span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #bb .bbt td { vertical-align: top; } #bb .bbt td[data-mk], #bb .bbt td.tot, #bb .bbt td.num { padding-top: 13px; } #bb .bbt td.acts { padding-top: 8px; }
+  #bb .bbt tr.prod td { background: #f6f9f0 !important; } #bb .bbt tr.prod.sel td { background: #fde7b0 !important; }
+  #bb .pname { font-weight: 700; padding: 6px 0 2px; } #bb .pqty { font-size: 14px; color: #6b5a3c; }
+  #bb .bbt input.qty { width: 80px; min-width: 0; text-align: right; padding: 4px 6px; }
+  #bb .bbbtns .bbprod { background: #fffaf0; border-color: #2f5a2a; color: #2f5a2a; font-weight: 700; }
   #bb .bbt .cur { color: #6b5a3c; margin: 0 4px; } #bb .bbt td.tot { font-weight: 700; }
   #bb .bbt .acts { width: 116px; } #bb .bbt .acts button { background: transparent; color: #4b3d26; padding: 4px 7px; font-size: 18px; }
   #bb .bbt .acts button.del { color: #7f3b33; } #bb .bbt .acts button:hover { background: #efe5cf; }
@@ -1329,9 +1333,11 @@ const bbPct = (c) => (c.gc_markup_pct != null ? Number(c.gc_markup_pct) : (c.amo
 const money2 = (c) => (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function bbLoad() {
   const j = cur;
-  bb = { jobId: j.id, removed: [], sel: new Set(), dirty: false, each: j.gc_markup_each !== false, all: Number(j.gc_markup_all || 0) || 12,
+  bb = { jobId: j.id, removed: [], removedItems: [], sel: new Set(), dirty: false, each: j.gc_markup_each !== false, all: Number(j.gc_markup_all || 0) || 12,
     rows: [...j.crews].filter((c) => c.billing === 'included').sort((a, b) => a.id - b.id)
-      .map((c) => ({ id: c.id, trade: c.trade, name: c.name || '', amount: c.amount_cents, pct: bbPct(c), files: c.file_count || 0, paid: c.sub_paid_cents || 0 })) };
+      .map((c) => ({ id: c.id, trade: c.trade, name: c.name || '', amount: c.amount_cents, pct: bbPct(c), files: c.file_count || 0, paid: c.sub_paid_cents || 0 }))
+      .concat((j.bid_items || []).map((x) => ({ kind: 'product', id: x.id, product_id: x.product_id, trade: x.name, qty: Number(x.qty), unit: x.unit_cents,
+        amount: Math.round(Number(x.qty) * x.unit_cents), pct: Number(x.markup_pct), paid: 0 }))) };
   if (!bb.rows.length) bb.rows.push({ id: null, trade: '', name: '', amount: 0, pct: 15, files: 0, paid: 0 });
 }
 async function openBidBuilder(jobId) {
@@ -1354,17 +1360,20 @@ function bbRender() {
     <div class="bbmeta"><label>Project:</label><div class="bbbox">#${j.job_number} ${esc(j.name)}${j.customer_name ? ` <small>· ${esc(j.customer_name)}</small>` : ''}</div>
       <label>Date:</label><div class="bbbox" style="max-width:190px">${new Date(j.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</div></div>
     <div class="bbtablewrap"><table class="bbt"><thead><tr><th>#</th><th>Subcontractor / Scope</th><th class="n">Subcontractor Amount</th><th class="n">Your % Markup</th><th class="n">Your Markup</th><th class="n">Total (With Markup)</th><th></th></tr></thead>
-      <tbody>${bb.rows.map((r, i) => `<tr class="${bb.sel.has(i) ? 'sel' : ''}" data-i="${i}">
+      <tbody>${bb.rows.map((r, i) => `<tr class="${bb.sel.has(i) ? 'sel' : ''}${r.kind === 'product' ? ' prod' : ''}" data-i="${i}">
         <td class="num" data-selrow="${i}" title="Click to select">${i + 1}</td>
-        <td><input data-f="trade" value="${esc(r.trade)}" maxlength="60" placeholder="e.g. Excavation &amp; Site Prep">${r.name ? `<small>${esc(r.name)}</small>` : ''}${bbFiles(r)}</td>
-        <td class="n"><span class="cur">$</span><input data-f="amount" class="amt" inputmode="decimal" value="${r.amount ? money2(r.amount) : ''}" placeholder="0.00"></td>
+        ${r.kind === 'product'
+    ? `<td><div class="pname">📦 ${esc(r.trade)}</div><div class="pqty">Qty <input data-f="qty" class="qty" inputmode="decimal" value="${r.qty}"> × $ ${money2(r.unit)}</div></td>
+        <td class="n" data-amt="${i}">$ ${money2(r.amount)}</td>`
+    : `<td><input data-f="trade" value="${esc(r.trade)}" maxlength="60" placeholder="e.g. Excavation &amp; Site Prep">${r.name ? `<small>${esc(r.name)}</small>` : ''}${bbFiles(r)}</td>
+        <td class="n"><span class="cur">$</span><input data-f="amount" class="amt" inputmode="decimal" value="${r.amount ? money2(r.amount) : ''}" placeholder="0.00"></td>`}
         <td class="n"><input data-f="pct" type="number" step="0.5" min="0" max="1000" class="pct" value="${bb.each ? r.pct : bb.all}" ${bb.each ? '' : 'disabled'}><span class="cur">%</span></td>
         <td class="n" data-mk="${i}">$ ${money2(bbMk(r))}</td>
         <td class="n tot" data-tot="${i}">$ ${money2(r.amount + bbMk(r))}</td>
-        <td class="acts"><button type="button" data-attach="${i}" title="Attach their bid, an invoice, a blueprint or a picture">📎</button><button type="button" data-edit="${i}" title="Company, phone, what's included, payments">✎</button><button type="button" data-del="${i}" title="Remove" class="del">🗑</button></td></tr>`).join('')}</tbody></table></div>
+        <td class="acts">${r.kind === 'product' ? '' : `<button type="button" data-attach="${i}" title="Attach their bid, an invoice, a blueprint or a picture">📎</button><button type="button" data-edit="${i}" title="Company, phone, what's included, payments">✎</button>`}<button type="button" data-del="${i}" title="Remove" class="del">🗑</button></td></tr>`).join('')}</tbody></table></div>
     <div class="bbbottom">
       <div class="bbleft">
-        <div class="bbbtns"><button type="button" class="bbadd" data-bb="add">＋ Add Contractor / Scope</button>
+        <div class="bbbtns"><button type="button" class="bbadd" data-bb="add">＋ Add Contractor / Scope</button><button type="button" class="bbprod" data-bb="products">📦 Add from Products</button>
           <button type="button" data-bb="dup" ${bb.sel.size ? '' : 'disabled'}>⧉ Duplicate</button><button type="button" data-bb="remove" ${bb.sel.size ? '' : 'disabled'}>✕ Remove Selected</button></div>
         <div class="bbset"><div class="bbsethead">Markup Settings</div>
           <label><input type="radio" name="bbmode" value="each" ${bb.each ? 'checked' : ''}> Use individual % per contractor (as above)</label>
@@ -1380,21 +1389,28 @@ function bbRender() {
 }
 function bbTotals() {
   const subs = bb.rows.reduce((a, r) => a + r.amount, 0), mk = bb.rows.reduce((a, r) => a + bbMk(r), 0);
-  $('#bbTotals').innerHTML = `<div><span>Subcontractor Total:</span><b>$ ${money2(subs)}</b></div><div><span>Total Markup:</span><b>$ ${money2(mk)}</b></div>
+  const prods = bb.rows.filter((r) => r.kind === 'product').reduce((a, r) => a + r.amount, 0);
+  $('#bbTotals').innerHTML = `${prods ? `<div><span>Subcontractor Total:</span><b>$ ${money2(subs - prods)}</b></div><div><span>Products / Materials:</span><b>$ ${money2(prods)}</b></div>`
+    : `<div><span>Subcontractor Total:</span><b>$ ${money2(subs)}</b></div>`}<div><span>Total Markup:</span><b>$ ${money2(mk)}</b></div>
     <div class="grand"><span>Project Total (Your Price):</span><b>$ ${money2(subs + mk)}</b></div>
     ${cur.quoted_cents !== subs + mk ? `<div class="was">Quoted price now: ${usd(cur.quoted_cents)}${bb.dirty ? ' · not saved yet' : ''}</div>` : ''}`;
   const sv = $('#bb [data-bb=save]'); if (sv) sv.classList.toggle('dirty', bb.dirty);
 }
 function bbRow(i) {
   const r = bb.rows[i];
+  const ac = $(`#bb [data-amt="${i}"]`); if (ac) ac.textContent = '$ ' + money2(r.amount);
   $(`#bb [data-mk="${i}"]`).textContent = '$ ' + money2(bbMk(r));
   $(`#bb [data-tot="${i}"]`).textContent = '$ ' + money2(r.amount + bbMk(r));
 }
 async function bbSave(quiet) {
-  const bad = bb.rows.findIndex((r) => !r.trade.trim() && (r.amount || r.id));
+  const zero = bb.rows.findIndex((r) => r.kind === 'product' && !(r.qty > 0));
+  if (zero >= 0) throw new Error(`Line ${zero + 1}: enter a quantity, or remove the line`);
+  const bad = bb.rows.findIndex((r) => r.kind !== 'product' && !r.trade.trim() && (r.amount || r.id));
   if (bad >= 0) throw new Error(`Line ${bad + 1}: enter the subcontractor or scope`);
-  const rows = bb.rows.filter((r) => r.trade.trim()).map((r) => ({ id: r.id, trade: r.trade.trim(), amount_cents: r.amount, markup_pct: Number(r.pct) || 0 }));
-  const out = await api(`/api/jobs/${bb.jobId}/bid`, { rows, removed: bb.removed, markup_each: bb.each, markup_all: Number(bb.all) || 0 });
+  const rows = bb.rows.filter((r) => r.kind === 'product' || r.trade.trim()).map((r) => (r.kind === 'product'
+    ? { kind: 'product', id: r.id, product_id: r.product_id, name: r.trade, qty: r.qty, markup_pct: Number(r.pct) || 0 }
+    : { id: r.id, trade: r.trade.trim(), amount_cents: r.amount, markup_pct: Number(r.pct) || 0 }));
+  const out = await api(`/api/jobs/${bb.jobId}/bid`, { rows, removed: bb.removed, removed_items: bb.removedItems, markup_each: bb.each, markup_all: Number(bb.all) || 0 });
   await refreshTicket();
   const sel = bb.sel; bbLoad(); bb.sel = sel.size ? new Set() : sel;
   bbRender();
@@ -1492,6 +1508,42 @@ async function bbAttach(input) {
   }
   if (n) { toast(`${n} file${n === 1 ? '' : 's'} attached`); await refreshTicket(); bbAfterEdit(); }
 }
+// 📦 Add from Products: search the products list, click to add (click again to add one more).
+async function bbProductPicker() {
+  const f = openModal(`<h2>📦 Add from Products</h2>
+    <input id="bpFind" placeholder="Search name, barcode or category…" autocomplete="off">
+    <div class="sublist" id="bpList" style="max-height:420px;overflow:auto;margin-top:8px"><div class="muted" style="background:none">Loading…</div></div>
+    <div class="muted" style="font-size:13px;margin-top:6px">Click a product to add it to the bid. Click again to add one more. Change the quantity in the bid.</div>
+    <div class="actions"><button type="button" class="primary" data-bpdone>Done</button></div>`);
+  f.classList.add('wide');
+  let list = [], t = null;
+  const draw = () => {
+    $('#bpList').innerHTML = list.map((p) => {
+      const inBid = bb.rows.find((r) => r.kind === 'product' && r.product_id === p.id);
+      return `<div data-pid="${p.id}" style="cursor:pointer;align-items:center"><span style="display:flex;gap:10px;align-items:center">
+        ${p.has_image ? `<img src="/api/products/${p.id}/image?v=${p.image_version || 0}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:6px;background:#fff">` : '<span style="width:40px;text-align:center;font-size:22px">📦</span>'}
+        <span><b>${esc(p.name)}</b><small>${esc(p.category || '')}${p.track_stock ? ` · ${p.stock_qty} in stock` : ''}${p.barcode ? ' · ' + esc(p.barcode) : ''}</small></span></span>
+        <span class="amt">$ ${money2(p.price_cents)}${inBid ? `<br><small style="color:#2f7a33">✓ ${inBid.qty} in bid</small>` : ''}</span></div>`;
+    }).join('') || '<div class="muted" style="background:none">No products found. Add them in Manage → Products.</div>';
+  };
+  const load = async () => { list = (await api('/api/products?q=' + encodeURIComponent($('#bpFind').value.trim()))).filter((p) => !p.is_rental); draw(); };
+  $('#bpFind').oninput = () => { clearTimeout(t); t = setTimeout(() => load().catch((e) => toast(e.message, 'bad')), 200); };
+  if (window.innerWidth > 700) setTimeout(() => $('#bpFind').focus(), 30);
+  await load().catch((e) => toast(e.message, 'bad'));
+  f.onclick = (e) => {
+    if (e.target.closest('[data-bpdone]')) { closeModal(); return; }
+    const pick = e.target.closest('[data-pid]'); if (!pick) return;
+    const p = list.find((x) => x.id === Number(pick.dataset.pid)); if (!p) return;
+    const have = bb.rows.find((r) => r.kind === 'product' && r.product_id === p.id);
+    if (have) { have.qty = Math.round((have.qty + 1) * 1000) / 1000; have.amount = Math.round(have.qty * have.unit); }
+    else {
+      // drop an empty starter line so the product doesn't land below a blank row
+      if (bb.rows.length === 1 && !bb.rows[0].id && !bb.rows[0].kind && !bb.rows[0].trade && !bb.rows[0].amount) bb.rows = [];
+      bb.rows.push({ kind: 'product', id: null, product_id: p.id, trade: p.name, qty: 1, unit: p.price_cents, amount: p.price_cents, pct: bb.each ? 0 : bb.all, paid: 0 });
+    }
+    bb.dirty = true; bbRender(); draw(); toast(`${p.name} ${have ? `× ${have.qty}` : 'added'}`);
+  };
+}
 function bbAfterEdit() {
   if (!bb) return;
   // keep unsaved numbers; refresh names and file counts from the server
@@ -1507,6 +1559,7 @@ document.addEventListener('input', (e) => {
   if (t.dataset.f === 'trade') r.trade = t.value;
   if (t.dataset.f === 'amount') r.amount = toCents(t.value) || 0;
   if (t.dataset.f === 'pct') r.pct = Number(t.value) || 0;
+  if (t.dataset.f === 'qty') { r.qty = Math.max(0, Number(String(t.value).replace(',', '.')) || 0); r.amount = Math.round(r.qty * r.unit); }
   bb.dirty = true; bbRow(i); bbTotals();
 });
 document.addEventListener('change', (e) => {
@@ -1531,7 +1584,7 @@ document.addEventListener('click', async (e) => {
     const i = Number(del.dataset.del), r = bb.rows[i];
     if (r.paid) return toast(`${r.trade} has payments recorded, so it can't be removed`, 'bad');
     if ((r.trade || r.amount) && !confirm(`Remove ${r.trade || 'this line'} from the bid?`)) return;
-    if (r.id) bb.removed.push(r.id);
+    if (r.id) (r.kind === 'product' ? bb.removedItems : bb.removed).push(r.id);
     bb.rows.splice(i, 1); bb.sel.clear(); bb.dirty = true; return bbRender();
   }
   const at = t.closest('[data-attach]');
@@ -1558,6 +1611,7 @@ document.addEventListener('click', async (e) => {
     bb.rows.push({ id: null, trade: '', name: '', amount: 0, pct: last ? last.pct : 15, files: 0, paid: 0 }); bb.dirty = true; bbRender();
     return $(`#bb tr[data-i="${bb.rows.length - 1}"] input[data-f=trade]`).focus();
   }
+  if (k === 'products') return bbProductPicker();
   if (k === 'dup') {
     const idx = [...bb.sel].sort((a, c) => a - c);
     const copies = idx.map((i) => ({ ...bb.rows[i], id: null, name: '', files: 0, paid: 0 }));
@@ -1568,7 +1622,7 @@ document.addEventListener('click', async (e) => {
     const paid = idx.map((i) => bb.rows[i]).filter((r) => r.paid);
     if (paid.length) return toast(`${paid[0].trade} has payments recorded, so it can't be removed`, 'bad');
     if (!confirm(`Remove ${idx.length} line${idx.length === 1 ? '' : 's'} from the bid?`)) return;
-    for (const i of idx) { if (bb.rows[i].id) bb.removed.push(bb.rows[i].id); bb.rows.splice(i, 1); }
+    for (const i of idx) { const r = bb.rows[i]; if (r.id) (r.kind === 'product' ? bb.removedItems : bb.removed).push(r.id); bb.rows.splice(i, 1); }
     bb.sel.clear(); bb.dirty = true; return bbRender();
   }
   if (k === 'save') { b.disabled = true; await run(() => bbSave(false)); if ($('#bb [data-bb=save]')) $('#bb [data-bb=save]').disabled = false; return; }
@@ -1584,6 +1638,7 @@ document.addEventListener('click', async (e) => {
 // ---------- print: total only (normal) or detailed by trade (password required) ----------
 function detailLines(j) {
   const lines = [...j.crews].sort((a, b) => a.id - b.id).filter((c) => c.quote_cents).map((c) => ({ name: `${c.trade}${c.note ? ' — ' + c.note : ''}`, cents: c.quote_cents }));
+  for (const x of (j.bid_items || [])) lines.push({ name: `${x.name} (${Number(x.qty)})`, cents: x.quote_cents });
   if (j.gc_own_cents) lines.push({ name: j.gc_own_note || 'General conditions / supervision', cents: j.gc_own_cents });
   const diff = j.quoted_cents - lines.reduce((a, l) => a + l.cents, 0);
   if (diff) lines.push({ name: 'Other / adjustment', cents: diff });
