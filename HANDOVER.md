@@ -1,7 +1,7 @@
-[HANDOVER (28).md](https://github.com/user-attachments/files/35051618/HANDOVER.28.md)
+[HANDOVER (35).md](https://github.com/user-attachments/files/35098447/HANDOVER.35.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-18 · Current version: **ContractorPOS v1.16**
+Last updated: 2026-11-19 · Current version: **ContractorPOS v1.17**
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -375,3 +375,11 @@ Merged from MultiPOS v1.11 (three-way merge against v1.10, no conflicts).
 ## 27. Burgundy in the Ranch look (ContractorPOS v1.16)
 - Ranch now uses the website's brick red/burgundy (`--burg: #7f3b33`, money-owed `#8b2e24`) alongside green and tan: section headings and page titles, the selected top-bar tab (burgundy pill, like the region button on Lokaal), balance owed / "Owe", High-priority flags, moved-back tags, delete (×/🗑) and error colors. Green stays for main buttons and table headers.
 - Bid Builder (both themes): "Bid Builder" title and the barn/windmill footer in burgundy.
+
+## 28. Security: support access codes + account recovery (ContractorPOS v1.17)
+Same rules, numbers and wording as MultiPOS v1.15 (SECURITY-HANDOVER.md). Code is in **`security.js`** (new), wired from `server.js`.
+- **Support access:** the admin's **🔒 Open** needs a one-time 6-digit code from the owner: **✉️ Email a code** (owner's email, backup, or both; max 5/hour), or the owner's **Settings → 🔒 Support access → Make a code for support**. Codes: SHA-256 only, once, 15 minutes, dead after 5 wrong tries. Access lasts 4 hours (`sessions.acting_until`, checked in `loadUser`); the banner shows "until 12:12 PM". Setup days: first 3 days after a business is created, no code needed (logged).
+- **No back doors:** inside a business, support can't add logins, change passwords, or change/turn off an owner (`sec.noBackdoor` in `/api/users` POST/PUT), except during setup days (logged). Support can't make owner codes or see/erase anything else.
+- **Log:** `support_access_log` → owner's **Who opened your account** (code emailed / owner made a code / opened with emailed code / owner's code / setup days / wrong code / left / password or backup email changed).
+- **Account recovery:** `users.backup_email` (required for owners and admins; yellow "Add a backup email… Add it now" bar on every screen until added). Settings → **My login & backup email** (backup, new password, current password). **Forgot password?** on sign-in → `/api/password/forgot` (same answer for unknown emails, 5/hour per IP and email) emails a 30-minute one-time `/reset#token` link to the login and backup emails; only the newest link works. `/reset` page: new password ×2 + backup email (required for owners); saving signs out every device. Any password/backup change emails "Your login was changed" to the login, old and new backup emails.
+- Tables: `support_codes`, `support_access_log`, `password_resets`; columns `sessions.acting_until`, `users.backup_email`. Needs `RESEND_API_KEY` for emailed codes/links (owner-made codes work without it).
