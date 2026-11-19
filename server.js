@@ -74,7 +74,8 @@ async function loadUser(req) {
   const t = req.cookies[COOKIE];
   if (!t) return null;
   const { rows } = await pool.query(
-    `SELECT u.id, u.name, u.email, u.role, u.business_id AS own_business_id, s.acting_business_id
+    `SELECT u.id, u.name, u.email, u.role, u.backup_email, u.business_id AS own_business_id,
+            CASE WHEN s.acting_until > now() THEN s.acting_business_id END AS acting_business_id, s.acting_until
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.token = $1 AND s.expires_at > now() AND u.active`, [t]);
   const u = rows[0];
@@ -171,25 +172,17 @@ app.get('/api/me', requireLogin, wrap(async (req, res) => {
     business = b.rows[0] || null;
   }
   const { id, name, email, role } = req.user;
-  res.json({ user: { id, name, email, role }, business, features: { email_receipts: require('./email').configured(),
+  res.json({ user: { id, name, email, role, backup_email: req.user.backup_email || null,
+    needs_backup: ['owner', 'admin'].includes(role) && !req.user.backup_email,
+    acting_until: req.user.acting_business_id ? req.user.acting_until : null }, business, features: { email_receipts: require('./email').configured(),
     ai_estimates: !!process.env.ANTHROPIC_API_KEY && !!(business && business.ai_enabled),
     ai_key_missing: !process.env.ANTHROPIC_API_KEY } });
-}));
-
-app.post('/api/me/password', requireLogin, wrap(async (req, res) => {
-  const current = (req.body.current || '').toString();
-  const next = text(req.body.password, 'New password');
-  if (next.length < 8) fail(400, 'Password must be at least 8 characters');
-  const { rows } = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
-  if (!(await bcrypt.compare(current, rows[0].password_hash))) fail(400, 'Current password is wrong');
-  await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [await bcrypt.hash(next, 10), req.user.id]);
-  res.json({ ok: true });
 }));
 
 // ---------- platform admin ----------
 app.get('/api/admin/businesses', requireLogin, requireAdmin, wrap(async (req, res) => {
   const { rows } = await pool.query(`
-    SELECT b.*,
+    SELECT b.*, (b.created_at > now() - interval '3 days') AS in_setup,
       (SELECT count(*) FROM locations l WHERE l.business_id = b.id)::int AS location_count,
       (SELECT count(*) FROM users u WHERE u.business_id = b.id)::int AS user_count,
       (SELECT email FROM users u WHERE u.business_id = b.id AND u.role = 'owner' ORDER BY u.id LIMIT 1) AS owner_email,
@@ -238,17 +231,8 @@ app.put('/api/admin/businesses/:id', requireLogin, requireAdmin, wrap(async (req
   res.json({ ok: true });
 }));
 
-// Lets the platform admin work inside a business (support / setup).
-app.post('/api/admin/enter/:id', requireLogin, requireAdmin, wrap(async (req, res) => {
-  const b = await pool.query('SELECT id FROM businesses WHERE id = $1', [req.params.id]);
-  if (!b.rowCount) fail(404, 'Business not found');
-  await pool.query('UPDATE sessions SET acting_business_id = $1 WHERE token = $2', [req.params.id, req.cookies[COOKIE]]);
-  res.json({ ok: true });
-}));
-app.post('/api/admin/exit', requireLogin, requireAdmin, wrap(async (req, res) => {
-  await pool.query('UPDATE sessions SET acting_business_id = NULL WHERE token = $1', [req.cookies[COOKIE]]);
-  res.json({ ok: true });
-}));
+// Support access (code from the owner, 4 hours, logged) and account recovery live in security.js.
+const sec = require('./security')(app, { pool, wrap, fail, text, requireLogin, requireAdmin, requireBusiness, COOKIE, token, publicOrigin });
 
 // Everything below is scoped to the logged-in user's business.
 const biz = [requireLogin, requireBusiness];
@@ -1473,6 +1457,7 @@ function allowedRole(req, role) {
 }
 app.post('/api/users', ...managers, wrap(async (req, res) => {
   const role = allowedRole(req, req.body.role);
+  await sec.noBackdoor(req, 'add logins');
   const password = text(req.body.password, 'Password');
   if (password.length < 8) fail(400, 'Password must be at least 8 characters');
   const r = await pool.query(
@@ -1491,6 +1476,11 @@ app.put('/api/users/:id', ...managers, wrap(async (req, res) => {
   if (Number(req.params.id) === req.user.id && (req.body.active === false || role !== rows[0].role)) {
     fail(400, 'You cannot change your own role or turn off your own login');
   }
+  if (rows[0].role === 'owner' || role === 'owner') {
+    const cur = (await pool.query('SELECT name, active FROM users WHERE id=$1', [req.params.id])).rows[0];
+    if (role !== rows[0].role || (req.body.active === false) !== !cur.active) await sec.noBackdoor(req, "change or turn off the owner's login");
+  }
+  if (req.body.password) await sec.noBackdoor(req, 'change passwords');
   await pool.query('UPDATE users SET name=$1, role=$2, active=$3 WHERE id=$4',
     [text(req.body.name, 'Name'), role, req.body.active !== false, req.params.id]);
   if (req.body.password) {
