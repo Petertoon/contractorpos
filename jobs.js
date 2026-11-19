@@ -296,7 +296,8 @@ module.exports = function setupJobs(app, deps) {
       c.changes = subChanges.rows.filter((x) => x.crew_id === c.id);
     }
     res.json({ ...job, column: cols[job.column_index] || null, columns_count: cols.length, columns: cols.map((c) => ({ id: c.id, name: c.name, color: c.color })),
-      location: loc.rows[0] || null, items: items.rows, payments: payments.rows, history: history.rows, crews: crews.rows });
+      location: loc.rows[0] || null, items: items.rows, payments: payments.rows, history: history.rows, crews: crews.rows,
+      bid_items: (await pool.query('SELECT * FROM job_bid_items WHERE job_id=$1 ORDER BY id', [job.id])).rows });
   }));
 
   app.put('/api/jobs/:id', ...J, wrap(async (req, res) => {
@@ -720,6 +721,7 @@ module.exports = function setupJobs(app, deps) {
     const rows = Array.isArray(b.rows) ? b.rows : [];
     if (rows.length > 100) fail(400, 'A bid can have up to 100 lines');
     const removed = (Array.isArray(b.removed) ? b.removed : []).map(Number).filter(Boolean);
+    const removedItems = (Array.isArray(b.removed_items) ? b.removed_items : []).map(Number).filter(Boolean);
     const out = await withTx(async (db) => {
       const { job, cols } = await loadJob(db, req.params.id, req.user.business_id, true);
       notClosed(job);
@@ -733,8 +735,36 @@ module.exports = function setupJobs(app, deps) {
         await db.query('DELETE FROM job_crews WHERE id=$1', [id]);
         await log(db, job.id, req.user, `Bid: removed ${c.trade}${c.name ? ' (' + c.name + ')' : ''}`);
       }
+      for (const id of removedItems) {
+        const x = (await db.query('DELETE FROM job_bid_items WHERE id=$1 AND job_id=$2 RETURNING name, qty', [id, job.id])).rows[0];
+        if (x) await log(db, job.id, req.user, `Bid: removed ${Number(x.qty)} × ${x.name}`);
+      }
       let subs = 0, quoted = 0, added = 0, changed = 0;
-      for (const r of rows) {
+      for (const r of rows.filter((x) => x.kind === 'product')) {
+        const qty = Math.round(Number(r.qty) * 1000) / 1000;
+        if (!(qty > 0 && qty <= 1000000)) fail(400, `Quantity for ${r.name || 'a product'} is not valid`);
+        const p = each ? pct(r.markup_pct, `${r.name || 'Product'} markup %`) : all;
+        let cur = null, unit, name, productId;
+        if (r.id) {
+          cur = (await db.query('SELECT * FROM job_bid_items WHERE id=$1 AND job_id=$2', [r.id, job.id])).rows[0] || fail(404, 'A product line was not found on this job');
+          unit = cur.unit_cents; name = cur.name; productId = cur.product_id;
+        } else {
+          const pr = (await db.query('SELECT id, name, price_cents FROM products WHERE id=$1 AND business_id=$2 AND NOT is_rental', [r.product_id, req.user.business_id])).rows[0]
+            || fail(404, 'That product was not found');
+          unit = pr.price_cents; name = pr.name; productId = pr.id;
+        }
+        const amount = Math.round(qty * unit), q = Math.round(amount * (1 + p / 100));
+        subs += amount; quoted += q;
+        if (cur) {
+          if (Number(cur.qty) !== qty || Number(cur.markup_pct) !== p || cur.quote_cents !== q) {
+            await db.query('UPDATE job_bid_items SET qty=$1, markup_pct=$2, quote_cents=$3 WHERE id=$4', [qty, p, q, cur.id]); changed++;
+          }
+        } else {
+          await db.query(`INSERT INTO job_bid_items (job_id, product_id, name, qty, unit_cents, markup_pct, quote_cents, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [job.id, productId, name, qty, unit, p, q, req.user.id]); added++;
+        }
+      }
+      for (const r of rows.filter((x) => x.kind !== 'product')) {
         const trade = text(r.trade, 'Subcontractor / scope', { max: 60 });
         const amount = cents(r.amount_cents ?? 0, `${trade} amount`);
         const p = each ? pct(r.markup_pct, `${trade} markup %`) : all;
@@ -758,8 +788,8 @@ module.exports = function setupJobs(app, deps) {
         fail(403, 'Payments have been taken on this job; only an owner or manager can change the quoted price');
       }
       await db.query('UPDATE jobs SET quoted_cents=$1, gc_own_cents=0, gc_markup_each=$2, gc_markup_all=$3, updated_at=now() WHERE id=$4', [quoted, each, all, job.id]);
-      if (added || changed || removed.length || quoted !== job.quoted_cents) {
-        await log(db, job.id, req.user, `Bid saved: ${rows.length} line${rows.length === 1 ? '' : 's'} · subs ${usd(subs)} + markup ${usd(quoted - subs)} = quoted price ${usd(quoted)}`
+      if (added || changed || removed.length || removedItems.length || quoted !== job.quoted_cents) {
+        await log(db, job.id, req.user, `Bid saved: ${rows.length} line${rows.length === 1 ? "" : "s"} · cost ${usd(subs)} + markup ${usd(quoted - subs)} = quoted price ${usd(quoted)}`
           + (quoted !== job.quoted_cents ? ` (was ${usd(job.quoted_cents)})` : ''));
       }
       return { quoted_cents: quoted };
