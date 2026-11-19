@@ -579,6 +579,20 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_own_note TEXT;
 ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS gc_markup_pct NUMERIC(7,3);
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_markup_each BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_markup_all NUMERIC(7,3) NOT NULL DEFAULT 0;
+-- Bid Builder products (v1.18): items picked from the products list, priced into the bid (not crews/subs).
+CREATE TABLE IF NOT EXISTS job_bid_items (
+  id SERIAL PRIMARY KEY,
+  job_id INT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  product_id INT REFERENCES products(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  qty NUMERIC(12,3) NOT NULL CHECK (qty > 0),
+  unit_cents INT NOT NULL CHECK (unit_cents >= 0),
+  markup_pct NUMERIC(7,3) NOT NULL DEFAULT 0,
+  quote_cents INT NOT NULL DEFAULT 0,
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS job_bid_items_job ON job_bid_items(job_id);
 -- Look of the program per business (v1.14): 'ranch' (parchment & green, the Bid Builder look) or 'dark'.
 -- Businesses that existed before keep the dark look (NULL); new businesses start on ranch.
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS theme TEXT;
