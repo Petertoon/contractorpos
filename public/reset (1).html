@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Reset password · ContractorPOS</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<form class="auth" id="f">
+  <h1>Choose a new password</h1>
+  <div class="muted">This link works once, for 30 minutes. Saving signs out every device.</div>
+  <label for="pw">New password (8+ characters)</label>
+  <input id="pw" type="password" autocomplete="new-password" required minlength="8">
+  <label for="pw2">Type it again</label>
+  <input id="pw2" type="password" autocomplete="new-password" required minlength="8">
+  <label for="bk">Backup email (required for owners)</label>
+  <input id="bk" type="email" placeholder="A different email you can get into">
+  <div class="muted" style="font-size:13px">Reset links and login-change notices go to your login email and this one.</div>
+  <button class="primary" type="submit">Save</button>
+  <div class="err" id="err"></div>
+</form>
+<div class="auth" id="done" hidden>
+  <h1>Password saved</h1>
+  <p>All devices were signed out. Sign in with your new password.</p>
+  <a class="primary" href="/login" style="display:block;text-align:center;padding:12px;border-radius:8px;background:var(--accent);color:#fff;text-decoration:none;font-weight:700">Sign in</a>
+</div>
+<script src="/app.js"></script>
+<script>
+// The token is after # so it never reaches server logs; remove it from the address bar right away.
+const tok = location.hash.slice(1);
+history.replaceState(null, '', '/reset');
+if (!tok) { $('#err').textContent = 'This reset link is not complete. Ask for a new one on the sign-in page.'; }
+$('#f').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('#err').textContent = '';
+  if ($('#pw').value !== $('#pw2').value) { $('#err').textContent = "The two passwords don't match"; return; }
+  try {
+    await api('/api/password/reset', { token: tok, password: $('#pw').value, backup_email: $('#bk').value });
+    $('#f').hidden = true; $('#done').hidden = false;
+  } catch (err) { $('#err').textContent = err.message; }
+});
+</script>
+</body>
+</html>
