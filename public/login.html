@@ -15,10 +15,28 @@
   <input id="pw" type="password" autocomplete="current-password" required>
   <button class="primary" type="submit">Sign in</button>
   <div class="err" id="err"></div>
+  <a href="#" id="forgotLink" style="display:block;margin-top:14px;text-align:center">Forgot password?</a>
+</form>
+<form class="auth" id="ff" hidden>
+  <h1>Forgot password?</h1>
+  <div class="muted">Enter your login email. We'll email a reset link to it and to your backup email.</div>
+  <label for="femail">Login email</label>
+  <input id="femail" type="email" autocomplete="username" required>
+  <button class="primary" type="submit">Email me a reset link</button>
+  <div class="err" id="ferr"></div>
+  <div id="fdone" hidden style="margin-top:12px;background:#e6f4ea;color:#1b5e33;border-radius:8px;padding:10px">If that email has a login, a reset link is on its way to it and to its backup email. It works once, for 30 minutes. Check spam if you don't see it.</div>
+  <a href="#" id="backLink" style="display:block;margin-top:14px;text-align:center">Back to sign in</a>
 </form>
 <script src="/app.js"></script>
 <script>
 api('/api/setup-status').then((s) => { if (s.needs_setup) location.href = '/setup'; });
+$('#forgotLink').onclick = (e) => { e.preventDefault(); $('#f').hidden = true; $('#ff').hidden = false; $('#femail').value = $('#email').value; $('#femail').focus(); };
+$('#backLink').onclick = (e) => { e.preventDefault(); $('#ff').hidden = true; $('#f').hidden = false; };
+$('#ff').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('#ferr').textContent = ''; $('#fdone').hidden = true;
+  try { await api('/api/password/forgot', { email: $('#femail').value }); $('#fdone').hidden = false; }
+  catch (err) { $('#ferr').textContent = err.message; }
+});
 $('#f').addEventListener('submit', async (e) => {
   e.preventDefault(); $('#err').textContent = '';
   try {
