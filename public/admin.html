@@ -79,7 +79,7 @@
   <button class="link" onclick="logout()">Log out</button>
 </div>
 <div class="banner" id="actingBanner" hidden>
-  <span>You are working inside <b id="actingName"></b> as platform administrator.</span>
+  <span>You are working inside <b id="actingName"></b> as platform administrator<span id="actingUntil"></span>.</span>
   <button onclick="exitBusiness()">Back to all businesses</button>
 </div>
 <main id="view"></main>
@@ -233,7 +233,7 @@ async function showBusinesses() {
         <button class="${b.qbo_enabled ? 'qboon' : 'ghost'}" data-qbo="${b.id}" data-on="${b.qbo_enabled}" title="QuickBooks add-on">QuickBooks ${b.qbo_enabled ? 'on' : 'off'}</button>
         <button class="${b.ai_enabled ? 'aion' : 'ghost'}" data-ai="${b.id}" data-on="${b.ai_enabled}" title="Claude add-on: ask about plans and photos, materials estimates. ${b.claude_month} request(s) this month">✨ Claude ${b.ai_enabled ? 'on' : 'off'}${b.claude_month ? ` · ${b.claude_month} this month` : ''}</button>
         <button class="${b.gc_enabled ? 'gcon' : 'ghost'}" data-gc="${b.id}" data-on="${b.gc_enabled}" title="General Contractor add-on: build the quote sub by sub">🏗 GC ${b.gc_enabled ? 'on' : 'off'}</button></td>
-      <td style="white-space:nowrap"><button class="primary" data-enter="${b.id}">Open</button> <button data-toggle="${b.id}" data-active="${b.active}">${b.active ? 'Turn off' : 'Turn on'}</button></td></tr>`).join('')
+      <td style="white-space:nowrap"><button class="primary" data-enter="${b.id}" title="${b.in_setup ? 'Setup days: opens without a code (logged)' : 'Needs a one-time code from the owner'}">${b.in_setup ? 'Open' : '🔒 Open'}</button> <button data-toggle="${b.id}" data-active="${b.active}">${b.active ? 'Turn off' : 'Turn on'}</button></td></tr>`).join('')
       || '<tr><td colspan="7" class="muted">No businesses yet. Create the first one.</td></tr>'}
     </tbody></table></div>`;
   $('#addBiz').onclick = async () => {
@@ -270,7 +270,7 @@ async function showBusinesses() {
       if (!on && !confirm('Turn off Rentals for this business? Rental screens will be hidden. Nothing is deleted.')) return;
       await api('/api/admin/businesses/' + rt.dataset.rentals, { rentals_enabled: on }, 'PUT'); showBusinesses(); return;
     }
-    if (en) { await api('/api/admin/enter/' + en.dataset.enter, {}); location.hash = 'products'; location.reload(); }
+    if (en) return openAccess(en.dataset.enter);
     if (tg) {
       const turnOn = tg.dataset.active !== 'true';
       if (!turnOn && !confirm('Turn off this business? Its employees will not be able to log in.')) return;
@@ -279,6 +279,51 @@ async function showBusinesses() {
   };
 }
 async function exitBusiness() { await api('/api/admin/exit', {}); location.hash = 'businesses'; location.reload(); }
+
+// Support access: opening a business needs a one-time code from its owner (except the first 3 setup days).
+async function openAccess(id) {
+  const a = await api('/api/admin/access/' + id);
+  let back = $('#accessModal');
+  if (!back) { back = document.createElement('div'); back.className = 'modal-back'; back.id = 'accessModal'; document.body.appendChild(back); }
+  const enter = async (code) => {
+    const r = await api('/api/admin/enter/' + id, { code });
+    location.hash = 'products'; location.reload(); return r;
+  };
+  back.innerHTML = `<form class="modal" style="max-width:460px"><h2>🔒 Open ${esc(a.name)}</h2>
+    ${a.in_setup ? `<p>This business is in its <b>setup days</b> (first 3 days), so you can open it without a code. The visit is logged for the owner.</p>
+      <div class="err" data-err></div>
+      <div class="actions"><button type="button" class="ghost" data-x>Cancel</button><button class="primary">Open</button></div>`
+    : `<p class="muted" style="margin-top:0">To protect the owner's customers and money, you need a <b>one-time code from the owner</b>. It works once, for 15 minutes, and lets you in for 4 hours. Every visit is logged and the owner can see it.</p>
+      ${a.email_ok && a.has_owner ? `<label>Send a code to</label><div style="display:flex;gap:8px"><select data-to style="flex:1">
+          <option value="main">Owner's email (${esc(a.main || '')})</option>
+          ${a.backup ? `<option value="backup">Backup email (${esc(a.backup)})</option><option value="both">Both emails</option>` : ''}</select>
+          <button type="button" data-send>✉️ Email a code</button></div>
+        <div class="muted" data-sent style="font-size:13px;margin-top:4px"></div>`
+      : `<p class="warn">Email isn't available. Ask the owner to make a code in <b>Settings → Support access</b> and read it to you.</p>`}
+      <p class="muted" style="font-size:13px">Or ask the owner to make one in Settings → Support access and read it to you.</p>
+      <label>Owner's 6-digit code</label>
+      <input data-code inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="000 000" style="font-size:30px;letter-spacing:8px;text-align:center;font-weight:800">
+      <div class="err" data-err></div>
+      <div class="actions"><button type="button" class="ghost" data-x>Cancel</button><button class="primary">Open</button></div>`}
+  </form>`;
+  back.classList.add('open');
+  const f = back.querySelector('form'), err = back.querySelector('[data-err]');
+  back.querySelector('[data-x]').onclick = () => back.classList.remove('open');
+  const send = back.querySelector('[data-send]');
+  if (send) send.onclick = async () => {
+    send.disabled = true; err.textContent = '';
+    try { const r = await api(`/api/admin/access/${id}/send`, { to: back.querySelector('[data-to]').value });
+      back.querySelector('[data-sent]').textContent = `Code sent to ${r.sent_to.join(' and ')}. It works for 15 minutes.`; back.querySelector('[data-code]').focus(); }
+    catch (e) { err.textContent = e.message; }
+    send.disabled = false;
+  };
+  const codeBox = back.querySelector('[data-code]');
+  if (codeBox) setTimeout(() => codeBox.focus(), 50);
+  f.onsubmit = async (e) => {
+    e.preventDefault(); err.textContent = '';
+    try { await enter(codeBox ? codeBox.value : ''); } catch (x) { err.textContent = x.message; if (codeBox) { codeBox.value = ''; codeBox.focus(); } }
+  };
+}
 
 // ---------- products ----------
 let productQuery = '';
@@ -932,18 +977,45 @@ async function showSettings() {
       <label>Bank & account for deposit slips (e.g. First Bank · acct ending 1234)</label><input id="bDep" value="${esc(me.business.deposit_account || '')}" placeholder="Optional">
       ${me.business.rentals_enabled ? `<label>Rentals: a half day is how many hours?</label><input id="bHalf" type="number" min="1" max="12" value="${me.business.half_day_hours}">` : ''}
       <button class="primary" style="margin-top:14px" id="saveBiz">Save business</button></div>` : ''}
-    <div class="settings"><h2 style="margin-top:0">My password</h2>
-      <label>Current password</label><input id="pCur" type="password" autocomplete="current-password">
-      <label>New password (8+ characters)</label><input id="pNew" type="password" autocomplete="new-password">
-      <button class="primary" style="margin-top:14px" id="savePw">Change password</button></div>`;
+    ${me.user.role === 'owner' ? `<div class="settings" id="supportBox"><h2 style="margin-top:0">🔒 Support access</h2>
+      <p class="muted" style="margin-top:0">ContractorPOS support can only open your account with a <b>one-time code from you</b>. Make a code only when you've asked for help, and read it to them. It works once, for 15 minutes, and lets support in for 4 hours. Support can't add logins or change passwords in your account.</p>
+      <button class="primary" id="mkCode">Make a code for support</button>
+      <div id="codeOut" hidden style="margin:12px 0;text-align:center"><div style="font-size:42px;font-weight:800;letter-spacing:8px" id="codeVal"></div><div class="muted" style="font-size:13px">Works once, for 15 minutes.</div></div>
+      <h3 style="margin:18px 0 6px">Who opened your account</h3>
+      <div class="tablewrap"><table class="list"><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead><tbody id="supLog"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody></table></div></div>` : ''}
+    <div class="settings" id="loginBox"><h2 style="margin-top:0">My login &amp; backup email</h2>
+      <label>Login email</label><input value="${esc(me.user.email)}" disabled>
+      <label>Backup email${['owner', 'admin'].includes(me.user.role) ? ' (required)' : ' (optional)'}</label>
+      <input id="pBackup" type="email" value="${esc(me.user.backup_email || '')}" placeholder="A different email you can get into">
+      <div class="muted" style="font-size:13px">"Forgot password?" sends the reset link to both emails, and you'll get a notice at both if your login is changed.</div>
+      <label>New password (leave blank to keep it)</label><input id="pNew" type="password" autocomplete="new-password" placeholder="8+ characters">
+      <label>Current password (needed to save)</label><input id="pCur" type="password" autocomplete="current-password">
+      <button class="primary" style="margin-top:14px" id="savePw">Save</button></div>`;
+  if ($('#mkCode')) {
+    const loadLog = async () => {
+      const rows = await api('/api/support/log');
+      $('#supLog').innerHTML = rows.map((r) => `<tr><td style="white-space:nowrap">${new Date(r.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</td><td>${esc(r.user_name || '')}</td><td>${esc(r.action)}</td></tr>`).join('')
+        || '<tr><td colspan="3" class="muted">Nobody has opened your account.</td></tr>';
+    };
+    loadLog().catch((e) => toast(e.message, 'bad'));
+    $('#mkCode').onclick = async () => {
+      try { const r = await api('/api/support/code', {}); $('#codeVal').textContent = r.code; $('#codeOut').hidden = false; loadLog(); }
+      catch (e) { toast(e.message, 'bad'); }
+    };
+  }
+  if (location.hash.includes('backup')) setTimeout(() => { $('#loginBox').scrollIntoView({ block: 'center' }); $('#pBackup').focus(); }, 100);
   if (isOwner) $('#saveBiz').onclick = async () => {
     try { await api('/api/business', { name: $('#bName').value, accent_color: $('#bColor').value, theme: $('#bTheme').value, logo_url: $('#bLogo').value,
       half_day_hours: $('#bHalf') ? $('#bHalf').value : null, deposit_account: $('#bDep').value, receipt_reply_email: $('#bReply').value }, 'PUT'); toast('Saved'); setTimeout(() => location.reload(), 600); }
     catch (e) { toast(e.message, 'bad'); }
   };
   $('#savePw').onclick = async () => {
-    try { await api('/api/me/password', { current: $('#pCur').value, password: $('#pNew').value }); toast('Password changed'); $('#pCur').value = $('#pNew').value = ''; }
-    catch (e) { toast(e.message, 'bad'); }
+    try {
+      const r = await api('/api/me/password', { current: $('#pCur').value, password: $('#pNew').value, backup_email: $('#pBackup').value });
+      toast(r.signed_out_others ? 'Saved. Your other devices were signed out.' : 'Saved');
+      $('#pCur').value = $('#pNew').value = ''; me.user.backup_email = $('#pBackup').value.trim().toLowerCase(); me.user.needs_backup = false;
+      const bar = $('#backupBar'); if (bar) bar.remove();
+    } catch (e) { toast(e.message, 'bad'); }
   };
 }
 
@@ -967,7 +1039,11 @@ function route() {
   role = me.user.role === 'admin' ? 'owner' : me.user.role;
   if (me.user.role === 'cashier') { location.href = '/checkout'; return; }
   if (me.business) { applyBrand(me.business); $('#bizName').textContent = me.business.name; }
-  if (me.user.role === 'admin' && me.business) { $('#actingBanner').hidden = false; $('#actingName').textContent = me.business.name; }
+  if (me.user.role === 'admin' && me.business) {
+    $('#actingBanner').hidden = false; $('#actingName').textContent = me.business.name;
+    if (me.user.acting_until) $('#actingUntil').textContent = ' until ' + new Date(me.user.acting_until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+  backupNag(me);
   window.addEventListener('hashchange', route);
   route();
 })().catch((e) => toast(e.message, 'bad'));
