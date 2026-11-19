@@ -414,3 +414,14 @@ function openSendChooser(saleId) {
   back.classList.add('open');
 }
 async function logout() { await api('/api/logout', {}); location.href = '/login'; }
+
+// Yellow bar for owners/admins without a backup email (account recovery).
+function backupNag(me) {
+  if (!me || !me.user || !me.user.needs_backup || document.getElementById('backupBar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'backupBar';
+  bar.style.cssText = 'background:#fff4d6;color:#5a4300;padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:15px;border-bottom:1px solid #e9c46a';
+  bar.innerHTML = '<span>Add a <b>backup email</b> so you can get back in if you forget your password or lose your email.</span> <a href="/admin#settings?backup" style="font-weight:700;color:#7a4b00">Add it now</a>';
+  document.body.insertBefore(bar, document.body.firstChild);
+  if (location.pathname === '/admin') bar.querySelector('a').onclick = () => { setTimeout(() => { const i = document.getElementById('pBackup'); if (i) { i.scrollIntoView({ block: 'center' }); i.focus(); } }, 300); };
+}
