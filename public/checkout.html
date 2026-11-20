@@ -137,7 +137,7 @@
 </head>
 <body class="cp">
 <div class="topbar">
-  <div class="brand"><img id="logo" alt="" hidden><span>ContractorPOS</span></div>
+  <div class="brand"><span>ContractorPOS</span></div>
   <div class="biz" id="bizName"></div>
   <select id="registerSel" aria-label="Register"></select>
   <div class="spacer"></div>
@@ -493,7 +493,7 @@ async function start() {
   if (!me.business) { location.href = '/admin#businesses'; return; }
   applyBrand(me.business);
   $('#bizName').textContent = me.business.name;
-  if (me.business.logo_url) { $('#logo').src = me.business.logo_url; $('#logo').hidden = false; }
+  topButton(me);
   $('#userName').textContent = me.user.name;
   if (me.business.jobs_enabled) $('#jobsLink').hidden = false;
   if (me.user.role !== 'cashier') {
