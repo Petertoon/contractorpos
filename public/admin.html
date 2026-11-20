@@ -972,7 +972,7 @@ async function showSettings() {
       <label>Business name</label><input id="bName" value="${esc(me.business.name)}">
       <label>Look of the program</label><select id="bTheme"><option value="ranch" ${me.business.theme === 'ranch' ? 'selected' : ''}>Ranch: parchment &amp; green (like the Bid Builder)</option><option value="dark" ${me.business.theme !== 'ranch' ? 'selected' : ''}>Dark</option></select>
       <label>Accent color</label><input id="bColor" type="color" value="${esc(me.business.accent_color)}" style="height:44px;padding:4px">
-      <label>Logo image URL (https://…)</label><input id="bLogo" value="${esc(me.business.logo_url || '')}" placeholder="Optional">
+      <label>Logo on receipts &amp; invoices (image URL, https://…)</label><input id="bLogo" value="${esc(me.business.logo_url || '')}" placeholder="Optional">
       <label>Receipt emails: replies go to (leave blank to use the owner's login email)</label><input id="bReply" type="email" value="${esc(me.business.receipt_reply_email || '')}" placeholder="store@example.com">
       <label>Bank & account for deposit slips (e.g. First Bank · acct ending 1234)</label><input id="bDep" value="${esc(me.business.deposit_account || '')}" placeholder="Optional">
       ${me.business.rentals_enabled ? `<label>Rentals: a half day is how many hours?</label><input id="bHalf" type="number" min="1" max="12" value="${me.business.half_day_hours}">` : ''}
@@ -983,6 +983,13 @@ async function showSettings() {
       <div id="codeOut" hidden style="margin:12px 0;text-align:center"><div style="font-size:42px;font-weight:800;letter-spacing:8px" id="codeVal"></div><div class="muted" style="font-size:13px">Works once, for 15 minutes.</div></div>
       <h3 style="margin:18px 0 6px">Who opened your account</h3>
       <div class="tablewrap"><table class="list"><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead><tbody id="supLog"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody></table></div></div>` : ''}
+    ${me.user.role === 'admin' && !me.business ? `<div class="settings" id="topBox"><h2 style="margin-top:0">Top-left button (all accounts)</h2>
+      <p class="muted" style="margin-top:0">Shows at the top left of every business's screens. Clicking it opens your link in a new tab. Only you can change it.</p>
+      <label>Picture address (https://…, a logo works best)</label><input id="tbImg" placeholder="https://…/logo.png">
+      <label>Link it opens (https://…)</label><input id="tbLink" placeholder="https://lokaalhub.com">
+      <label>Words (shown when there's no picture, and when hovering)</label><input id="tbLabel" maxlength="40" placeholder="e.g. Lokaal">
+      <div style="margin:12px 0 4px" class="muted">Preview:</div><div id="tbPrev" style="min-height:40px;display:flex;align-items:center"></div>
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="primary" id="tbSave">Save</button><button class="ghost" id="tbClear">Remove the button</button></div></div>` : ''}
     <div class="settings" id="loginBox"><h2 style="margin-top:0">My login &amp; backup email</h2>
       <label>Login email</label><input value="${esc(me.user.email)}" disabled>
       <label>Backup email${['owner', 'admin'].includes(me.user.role) ? ' (required)' : ' (optional)'}</label>
@@ -1002,6 +1009,20 @@ async function showSettings() {
       try { const r = await api('/api/support/code', {}); $('#codeVal').textContent = r.code; $('#codeOut').hidden = false; loadLog(); }
       catch (e) { toast(e.message, 'bad'); }
     };
+  }
+  if ($('#topBox')) {
+    const prev = () => {
+      const img = $('#tbImg').value.trim(), link = $('#tbLink').value.trim(), label = $('#tbLabel').value.trim();
+      $('#tbPrev').innerHTML = link ? `<a class="topbtn" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${img ? `<img src="${esc(img)}" alt="">` : `<span>${esc(label || '🔗 Link')}</span>`}</a>` : '<span class="muted">No button (add a link)</span>';
+    };
+    api('/api/admin/top-button').then((t) => { $('#tbImg').value = t.image_url; $('#tbLink').value = t.link_url; $('#tbLabel').value = t.label; prev(); });
+    $('#topBox').oninput = prev;
+    const save = async (vals) => {
+      try { const t = await api('/api/admin/top-button', vals, 'PUT'); me.top_button = t.link_url ? t : null; topButton(me); toast('Saved. Every account shows it now.'); }
+      catch (e) { toast(e.message, 'bad'); }
+    };
+    $('#tbSave').onclick = () => save({ image_url: $('#tbImg').value, link_url: $('#tbLink').value, label: $('#tbLabel').value });
+    $('#tbClear').onclick = () => { if (!confirm('Remove the top-left button from every account?')) return; $('#tbImg').value = $('#tbLink').value = $('#tbLabel').value = ''; prev(); save({}); };
   }
   if (location.hash.includes('backup')) setTimeout(() => { $('#loginBox').scrollIntoView({ block: 'center' }); $('#pBackup').focus(); }, 100);
   if (isOwner) $('#saveBiz').onclick = async () => {
@@ -1043,7 +1064,7 @@ function route() {
     $('#actingBanner').hidden = false; $('#actingName').textContent = me.business.name;
     if (me.user.acting_until) $('#actingUntil').textContent = ' until ' + new Date(me.user.acting_until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
-  backupNag(me);
+  backupNag(me); topButton(me);
   window.addEventListener('hashchange', route);
   route();
 })().catch((e) => toast(e.message, 'bad'));
