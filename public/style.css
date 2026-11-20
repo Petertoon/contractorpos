@@ -46,6 +46,8 @@ label.check input { width: auto; }
 .topbar a, .topbar button.link { color: #fff; text-decoration: none; background: transparent; padding: 8px 10px; font-weight: 600; border-radius: 6px; }
 .topbar a.active, .topbar a:hover, .topbar button.link:hover { background: rgba(255,255,255,.12); }
 .topbar select { width: auto; background: #253029; color: #fff; border-color: #3a463e; }
+.topbar a, .topbar button.link { white-space: nowrap; }
+#nav { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 
 /* auth pages */
 .auth { max-width: 380px; margin: 10vh auto; background: var(--panel); padding: 28px; border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,.06); }
