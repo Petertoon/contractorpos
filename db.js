@@ -593,6 +593,12 @@ CREATE TABLE IF NOT EXISTS job_bid_items (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS job_bid_items_job ON job_bid_items(job_id);
+-- Platform-wide settings set by the platform admin (v1.19): the top-left button shown in every account.
+CREATE TABLE IF NOT EXISTS platform_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 -- Look of the program per business (v1.14): 'ranch' (parchment & green, the Bid Builder look) or 'dark'.
 -- Businesses that existed before keep the dark look (NULL); new businesses start on ranch.
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS theme TEXT;
