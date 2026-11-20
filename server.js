@@ -172,7 +172,8 @@ app.get('/api/me', requireLogin, wrap(async (req, res) => {
     business = b.rows[0] || null;
   }
   const { id, name, email, role } = req.user;
-  res.json({ user: { id, name, email, role, backup_email: req.user.backup_email || null,
+  const top = await topButton();
+  res.json({ top_button: top.link_url || top.image_url ? top : null, user: { id, name, email, role, backup_email: req.user.backup_email || null,
     needs_backup: ['owner', 'admin'].includes(role) && !req.user.backup_email,
     acting_until: req.user.acting_business_id ? req.user.acting_until : null }, business, features: { email_receipts: require('./email').configured(),
     ai_estimates: !!process.env.ANTHROPIC_API_KEY && !!(business && business.ai_enabled),
@@ -229,6 +230,30 @@ app.put('/api/admin/businesses/:id', requireLogin, requireAdmin, wrap(async (req
   if ('ai_enabled' in req.body) await pool.query('UPDATE businesses SET ai_enabled = $1 WHERE id = $2', [!!req.body.ai_enabled, req.params.id]);
   if ('gc_enabled' in req.body) await pool.query('UPDATE businesses SET gc_enabled = $1 WHERE id = $2', [!!req.body.gc_enabled, req.params.id]);
   res.json({ ok: true });
+}));
+
+// ---------- top-left button (platform admin only; shown in every account) ----------
+async function topButton() {
+  const r = await pool.query(`SELECT key, value FROM platform_settings WHERE key IN ('top_image_url','top_link_url','top_label')`);
+  const v = Object.fromEntries(r.rows.map((x) => [x.key, x.value]));
+  return { image_url: v.top_image_url || '', link_url: v.top_link_url || '', label: v.top_label || '' };
+}
+app.get('/api/admin/top-button', requireLogin, requireAdmin, wrap(async (req, res) => res.json(await topButton())));
+app.put('/api/admin/top-button', requireLogin, requireAdmin, wrap(async (req, res) => {
+  const url = (v, label) => {
+    const t = String(v || '').trim();
+    if (!t) return '';
+    if (t.length > 500 || !/^https?:\/\/[^\s"'<>]+$/i.test(t)) fail(400, `${label} must start with https://`);
+    return t;
+  };
+  const vals = { top_image_url: url(req.body.image_url, 'Picture address'), top_link_url: url(req.body.link_url, 'Link'),
+    top_label: String(req.body.label || '').trim().slice(0, 40) };
+  if (vals.top_image_url && !vals.top_link_url) fail(400, 'Add the link the button should open');
+  for (const [k, v] of Object.entries(vals)) {
+    await pool.query(`INSERT INTO platform_settings (key, value, updated_at) VALUES ($1,$2,now())
+      ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()`, [k, v]);
+  }
+  res.json(await topButton());
 }));
 
 // Support access (code from the owner, 4 hours, logged) and account recovery live in security.js.
