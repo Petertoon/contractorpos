@@ -8,6 +8,7 @@
   main { padding: 16px; max-width: 1100px; margin: 0 auto; }
   .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
   .bar h2 { margin: 0; flex: 1; }
+  .custbtns { display: flex; gap: 8px; flex-wrap: wrap; }
   .bar input, .bar select { width: auto; }
   .banner { background: #fff4d6; padding: 10px 16px; display: flex; gap: 12px; align-items: center; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
@@ -495,7 +496,7 @@ async function showCustomer(id) {
   const c = await api('/api/customers/' + id);
   const kinds = { charge: 'Charge', payment: 'Payment' };
   $('#view').innerHTML = `<div class="bar"><button class="ghost" id="back">← Customers</button><h2>${esc(c.name)}${c.company ? ' · ' + esc(c.company) : ''}</h2>
-      ${c.charge_account ? '<button class="primary" id="takePay">Take payment</button><button id="stmt">Print statement</button>' : ''}<button id="editC">Edit</button></div>
+      <span class="custbtns"><button class="primary" id="takePay">Take payment</button><button id="stmt">Print statement</button><button id="editC">Edit</button></span></div>
     <div class="cards">
       <div class="stat"><div>Phone</div><b style="font-size:18px">${esc(c.phone || '—')}</b></div>
       <div class="stat"><div>Address</div><div style="color:var(--ink)">${esc(c.address || '—')}</div></div>
@@ -517,15 +518,25 @@ async function showCustomer(id) {
         <td class="num">${money(q.total_cents)}</td><td><button data-quote="${q.id}">Print</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
   $('#back').onclick = () => showCustomers();
   $('#editC').onclick = async () => { if (await saveLoop('Edit ' + c.name, CUSTOMER_FORM, c, (v) => api('/api/customers/' + c.id, v, 'PUT'))) showCustomer(id); };
-  if (c.charge_account) {
-    $('#stmt').onclick = () => window.open('/statement?id=' + c.id, '_blank', 'width=820,height=900');
+  // Take payment and Print statement need a charge account; offer to turn it on for this customer first.
+  const needAccount = async () => {
+    if (c.charge_account) return true;
+    if (!['owner', 'manager'].includes(role)) { toast(`${c.name} doesn't have a charge account. Ask an owner or manager to turn it on.`, 'bad'); return false; }
+    if (!confirm(`${c.name} doesn't have a charge account yet. Turn it on now?`)) return false;
+    try { await api('/api/customers/' + c.id, { ...c, charge_account: true }, 'PUT'); c.charge_account = true; toast('Charge account turned on'); return true; }
+    catch (e) { toast(e.message, 'bad'); return false; }
+  };
+  $('#stmt').onclick = async () => { if (!(await needAccount())) return; window.open('/statement?id=' + c.id, '_blank', 'width=820,height=900'); showCustomer(id); };
+  {
     $('#takePay').onclick = async () => {
+      if (!(await needAccount())) { return; }
       if (await saveLoop('Payment on account · ' + c.name, [
         { name: 'amount_cents', label: `Amount paid (balance ${balText(c.balance_cents)})`, type: 'money', required: true },
         { name: 'method', label: 'Paid with', type: 'select', options: [{ value: 'check', label: 'Check' }, { value: 'cash', label: 'Cash' }, { value: 'card', label: 'Card' }, { value: 'other', label: 'Other' }] },
         { name: 'check_number', label: 'Check number (for checks)' },
         { name: 'note', label: 'Note' },
       ], { amount_cents: Math.max(0, c.balance_cents), method: 'check' }, (v) => api(`/api/customers/${c.id}/payments`, v), 'Record payment')) showCustomer(id);
+      else showCustomer(id);
     };
   }
   $('#view').onclick = async (e) => {
