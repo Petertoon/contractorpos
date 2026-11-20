@@ -425,3 +425,16 @@ function backupNag(me) {
   document.body.insertBefore(bar, document.body.firstChild);
   if (location.pathname === '/admin') bar.querySelector('a').onclick = () => { setTimeout(() => { const i = document.getElementById('pBackup'); if (i) { i.scrollIntoView({ block: 'center' }); i.focus(); } }, 300); };
 }
+
+// Top-left button set by the platform admin (same in every account). Opens the admin's link in a new tab.
+function topButton(me) {
+  const brand = document.querySelector('.topbar .brand, .jtop .brand');
+  const old = document.getElementById('topBtn'); if (old) old.remove();
+  const t = me && me.top_button;
+  if (!brand || !t || !t.link_url) return;
+  const a = document.createElement('a');
+  a.id = 'topBtn'; a.className = 'topbtn'; a.href = t.link_url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+  a.title = t.label || t.link_url;
+  a.innerHTML = t.image_url ? `<img src="${esc(t.image_url)}" alt="${esc(t.label || 'Link')}">` : `<span>${esc(t.label || '🔗 Link')}</span>`;
+  brand.insertBefore(a, brand.firstChild);
+}
