@@ -12,6 +12,7 @@
   .jtop { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #17191e; border-bottom: 1px solid var(--jline); flex-wrap: wrap; }
   .jtop .brand { font-weight: 800; font-size: 20px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
   .jtop .brand img { height: 30px; border-radius: 6px; background: #fff; }
+  .jtop .topbtn img { height: 34px; }
   .jtop .brand small { color: var(--jmuted); font-weight: 600; font-size: 14px; }
   .jtop .spacer { flex: 1; }
   .jtop a, .jtop .link { color: #e6e8ec; text-decoration: none; padding: 8px 10px; border-radius: 6px; font-weight: 600; background: transparent; }
@@ -385,7 +386,7 @@
 </head>
 <body class="cp">
 <header class="jtop">
-  <div class="brand"><img id="logo" alt="" hidden><span>🏗</span><span id="bizName">Job Board</span><small>Job Board</small></div>
+  <div class="brand"><span>🏗</span><span id="bizName">Job Board</span><small>Job Board</small></div>
   <button class="primary" id="newJob">+ New job</button>
   <button class="dk gcbtn" id="gcBoardBtn" hidden>🏗 Bid Builder</button>
   <input id="search" placeholder="Search job #, name, customer…" autocomplete="off">
@@ -2038,7 +2039,7 @@ function tick() { $('#clock').textContent = new Date().toLocaleString([], { week
   if (!me.business) { location.href = '/admin#businesses'; return; }
   applyBrand(me.business);
   $('#bizName').textContent = me.business.name;
-  if (me.business.logo_url) { $('#logo').src = me.business.logo_url; $('#logo').hidden = false; }
+  topButton(me);
   if (!me.business.jobs_enabled) {
     $('#board').innerHTML = '<div class="empty" style="padding:40px">The job board is not turned on for this business. The platform administrator can turn on the Jobs add-on.</div>';
     $('#newJob').hidden = true; return;
