@@ -148,3 +148,9 @@ html[data-theme=ranch] body.cp {
   :where(html[data-theme=dark] body.cp) #toast { background: #2a2e36; }
   :where(html[data-theme=dark] body.cp) #toast.bad { background: var(--danger); }
 }
+
+/* Top-left button (platform admin's link, same in every account) */
+.topbtn { display: inline-flex; align-items: center; text-decoration: none; border-radius: 8px; flex: none; }
+.topbtn img { height: 36px; max-width: 140px; object-fit: contain; border-radius: 6px; background: #fff; padding: 2px; display: block; }
+.topbtn span { background: var(--accent); color: #fff; font-size: 14px; font-weight: 700; padding: 7px 12px; border-radius: 8px; }
+.topbtn:hover img, .topbtn:hover span { outline: 2px solid var(--accent); outline-offset: 1px; }
