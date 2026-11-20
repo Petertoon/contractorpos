@@ -1,7 +1,7 @@
-[HANDOVER (42).md](https://github.com/user-attachments/files/35121385/HANDOVER.42.md)
+[HANDOVER (43).md](https://github.com/user-attachments/files/35123804/HANDOVER.43.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-19 · Current version: **ContractorPOS v1.19**
+Last updated: 2026-11-19 · Current version: **ContractorPOS v1.20**
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -394,3 +394,7 @@ Same rules, numbers and wording as MultiPOS v1.15 (SECURITY-HANDOVER.md). Code i
 - The platform admin's **Settings → Top-left button (all accounts)** (only when not inside a business): picture address, link, words, live preview, Save / Remove. Stored in the new `platform_settings` table (`top_image_url`, `top_link_url`, `top_label`); `GET/PUT /api/admin/top-button` (admin only); links must start with https://.
 - `/api/me` returns `top_button`; `app.js topButton(me)` puts it at the start of the top-left brand on the job board, checkout and Manage, opening the link in a new tab. Without a picture it shows the words as a button.
 - Owners can't change it. Their "Logo image URL" setting is now "Logo on receipts & invoices" and no longer shows in the top-left.
+
+## 31. Customer page buttons always shown (ContractorPOS v1.20)
+- Manage → Customers → a customer: **Take payment**, **Print statement**, **Edit** always show at the top right. If the customer has no charge account, Take payment / Print statement ask "Turn it on now?" (owners and managers) and then carry on; cashiers are told to ask an owner/manager.
+- Manage top menu: links no longer break onto two lines ("Refunds owed") or overlap (`#nav` is a wrapping flex row, links `nowrap`).
