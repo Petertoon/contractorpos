@@ -603,6 +603,19 @@ ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS packet_files INT[] NOT NULL DEFAU
 ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS packet_materials BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS packet_sent_at TIMESTAMPTZ;
 CREATE UNIQUE INDEX IF NOT EXISTS job_crews_packet_token ON job_crews(packet_token) WHERE packet_token IS NOT NULL;
+-- Crew parts list (v1.22): parts a crew should bring. Separate from what the customer is charged; no prices, no stock change.
+CREATE TABLE IF NOT EXISTS job_crew_materials (
+  id SERIAL PRIMARY KEY,
+  crew_id INT NOT NULL REFERENCES job_crews(id) ON DELETE CASCADE,
+  job_id INT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  product_id INT REFERENCES products(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  qty NUMERIC(12,3) NOT NULL DEFAULT 1,
+  unit TEXT,
+  note TEXT,
+  position INT NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS job_crew_materials_crew ON job_crew_materials(crew_id, position);
 CREATE TABLE IF NOT EXISTS platform_settings (
   key TEXT PRIMARY KEY,
   value TEXT,
