@@ -1,7 +1,7 @@
-[HANDOVER (49).md](https://github.com/user-attachments/files/35199506/HANDOVER.49.md)
+[HANDOVER (50).md](https://github.com/user-attachments/files/35199722/HANDOVER.50.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-20 · Current version: **ContractorPOS v1.21**
+Last updated: 2026-11-20 · Current version: **ContractorPOS v1.22**
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -404,3 +404,9 @@ Same rules, numbers and wording as MultiPOS v1.15 (SECURITY-HANDOVER.md). Code i
 - The crew gets a private link **/c#token** (`public/c.html`): business, job #, job name, customer name, job site with a map link, start date, phase, their part, the notes, files (pictures shown, PDFs open), material list and estimates. **No prices or money.** 🖨 Print / save as PDF prints notes, list and pictures.
 - Server: `PUT /api/jobs/:id/crews/:cid/packet` (saves notes/important/files/materials/phone/email; `new_link` replaces the token), `…/packet/sent` (logs WhatsApp/text), `…/packet/email` (Resend). Public: `GET /api/public/crew/:token`, `GET /api/public/crew/:token/files/:fid` (only files picked for that crew; others 404). Every send is logged in the job history.
 - Columns on `job_crews`: `email, packet_token, packet_note, packet_important, packet_files INT[], packet_materials, packet_sent_at`.
+
+## 33. Crew parts list (ContractorPOS v1.22)
+- In the crew's **📤 Send** window: **🧰 Parts for this crew to bring**. Lines of qty, unit, part and note. **＋ Add a line** (type anything), **📦 From products** (search, click to add; click again adds one more), **⇣ Copy the job's list** (ticket items + bid products, then edit quantities / add extras; unticks the job list so it isn't shown twice).
+- For turnkey jobs or when the crew needs different/extra parts. Not charged to the customer, doesn't change the quote or stock.
+- Stored in `job_crew_materials` (saved with `PUT …/crews/:cid/packet` as `parts`, replaces the list); job GET returns `crew.parts`.
+- Crew page (`c.html`): **🧰 Parts to bring** table at the top with tap-to-tick boxes (only on their phone, for loading the truck); prints with the page. The crew email lists the parts in the text.
