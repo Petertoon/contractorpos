@@ -594,6 +594,15 @@ CREATE TABLE IF NOT EXISTS job_bid_items (
 );
 CREATE INDEX IF NOT EXISTS job_bid_items_job ON job_bid_items(job_id);
 -- Platform-wide settings set by the platform admin (v1.19): the top-left button shown in every account.
+-- Crew packet (v1.21): what a crew is sent (notes, files, material list) and their private link /c#token.
+ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS packet_token TEXT;
+ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS packet_note TEXT;
+ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS packet_important BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS packet_files INT[] NOT NULL DEFAULT '{}';
+ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS packet_materials BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS packet_sent_at TIMESTAMPTZ;
+CREATE UNIQUE INDEX IF NOT EXISTS job_crews_packet_token ON job_crews(packet_token) WHERE packet_token IS NOT NULL;
 CREATE TABLE IF NOT EXISTS platform_settings (
   key TEXT PRIMARY KEY,
   value TEXT,
