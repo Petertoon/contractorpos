@@ -625,6 +625,11 @@ CREATE TABLE IF NOT EXISTS platform_settings (
 -- Businesses that existed before keep the dark look (NULL); new businesses start on ranch.
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS theme TEXT;
 ALTER TABLE businesses ALTER COLUMN theme SET DEFAULT 'ranch';
+-- Plan levels (v1.23): basic / standard / advanced. Businesses from before plans existed get advanced (keep everything);
+-- new businesses default to basic (the admin picks the plan).
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS plan TEXT;
+UPDATE businesses SET plan = 'advanced' WHERE plan IS NULL;
+ALTER TABLE businesses ALTER COLUMN plan SET DEFAULT 'basic';
 -- Security (v1.17): support access codes + account recovery (see SECURITY-HANDOVER.md).
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS acting_until TIMESTAMPTZ;
 CREATE TABLE IF NOT EXISTS support_codes (
