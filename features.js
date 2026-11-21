@@ -38,6 +38,7 @@ function can(b) {
   out.ai = !!(b && b.ai_enabled);
   out.gc = !!(b && b.gc_enabled);      // GC add-on: Bid Builder + sub tracking (bids, change orders, payments to subs)
   out.subs = out.gc;
+  out.calendar = !!(b && b.calendar_enabled); // Crew Calendar add-on
   out.limits = Object.fromEntries(Object.entries(LIMITS).map(([k, v]) => [k, Number.isFinite(v[plan]) ? v[plan] : null]));
   return out;
 }
@@ -48,13 +49,14 @@ const upgradeMsg = (key) => {
 
 module.exports = function features({ pool, fail, wrap }) {
   const loadBiz = async (req) => {
-    if (!req._biz) req._biz = (await pool.query('SELECT plan, rentals_enabled, qbo_enabled, ai_enabled, gc_enabled FROM businesses WHERE id=$1', [req.user.business_id])).rows[0] || {};
+    if (!req._biz) req._biz = (await pool.query('SELECT plan, rentals_enabled, qbo_enabled, ai_enabled, gc_enabled, calendar_enabled FROM businesses WHERE id=$1', [req.user.business_id])).rows[0] || {};
     return req._biz;
   };
   // Throws a friendly 403 if the business's plan doesn't include the feature.
   async function check(req, key) {
     const c = can(await loadBiz(req));
     if (key === 'subs' || key === 'gc') { if (!c.gc) fail(403, 'Tracking subs (bids, change orders, payments to subs) is part of the GC add-on. Ask ContractorPOS to turn it on.'); return; }
+    if (key === 'calendar') { if (!c.calendar) fail(403, 'The Crew Calendar is an add-on. Ask ContractorPOS to turn it on.'); return; }
     if (!c[key]) fail(403, upgradeMsg(key));
   }
   const needs = (key) => wrap(async (req, res, next) => { await check(req, key); next(); });
