@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><meta name="referrer" content="no-referrer">
+<title>Job info for the crew</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f2f2f0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1d1d1b; padding: 16px 10px 40px; }
+  .doc { max-width: 720px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 22px 20px; box-shadow: 0 2px 14px rgba(0,0,0,.06); }
+  .head { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+  .biz img { max-height: 50px; max-width: 180px; display: block; margin-bottom: 6px; }
+  .biz b { font-size: 19px; display: block; } .biz div { color: #666; font-size: 14px; }
+  .for { text-align: right; } .for h1 { margin: 0; font-size: 22px; } .for div { color: #555; font-size: 14px; }
+  .job { margin-top: 16px; padding: 12px 14px; background: #f6f6f3; border-radius: 8px; font-size: 16px; line-height: 1.55; }
+  .job a { color: #1f6feb; }
+  .note { margin-top: 14px; padding: 14px; border-radius: 8px; background: #f6f6f3; white-space: pre-wrap; font-size: 16px; line-height: 1.5; }
+  .note.imp { background: #fdecea; border: 2px solid #b3261e; }
+  .note.imp .tag { color: #b3261e; font-weight: 800; display: block; margin-bottom: 4px; letter-spacing: .04em; }
+  h3 { margin: 22px 0 6px; font-size: 14px; text-transform: uppercase; color: #555; letter-spacing: .05em; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th { text-align: left; font-size: 12px; text-transform: uppercase; color: #777; border-bottom: 2px solid #ddd; padding: 6px 4px; }
+  td { padding: 7px 4px; border-bottom: 1px solid #eee; vertical-align: top; } td.q { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; width: 90px; }
+  td small { color: #777; display: block; }
+  .files { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .files a { display: block; text-decoration: none; color: #1d1d1b; border: 1px solid #e2e2dc; border-radius: 8px; overflow: hidden; background: #fafaf8; }
+  .files a img { width: 100%; height: 120px; object-fit: cover; display: block; background: #fff; }
+  .files a .pdf { height: 120px; display: flex; align-items: center; justify-content: center; font-size: 44px; background: #fff; }
+  .files a span { display: block; padding: 6px 8px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qa { margin-top: 8px; padding: 10px 12px; background: #f6f6f3; border-radius: 8px; font-size: 14.5px; white-space: pre-wrap; }
+  .qa b { display: block; margin-bottom: 4px; }
+  .bar { max-width: 720px; margin: 0 auto 10px; display: flex; justify-content: flex-end; }
+  .bar button { background: #1d1d1b; color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .foot { text-align: center; color: #888; font-size: 13px; margin-top: 22px; }
+  .err { max-width: 520px; margin: 15vh auto; background: #fff; border-radius: 12px; padding: 26px; text-align: center; }
+  .printphotos { display: none; }
+  @media print {
+    body { background: #fff; padding: 0; } .doc { box-shadow: none; padding: 0; } .bar { display: none; }
+    .files { display: none; } .printphotos { display: block; } .printphotos img { max-width: 100%; max-height: 9in; display: block; margin: 10px 0; page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="bar" id="bar" hidden><button onclick="print()">🖨 Print / save as PDF</button></div>
+<div id="out"></div>
+<script>
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const t = location.hash.slice(1);
+const fileUrl = (f) => `/api/public/crew/${t}/files/${f.id}`;
+(async () => {
+  let p;
+  try { const r = await fetch('/api/public/crew/' + encodeURIComponent(t)); if (!r.ok) throw new Error(); p = await r.json(); }
+  catch (e) { document.getElementById('out').innerHTML = '<div class="err"><h2>This link isn\'t working</h2><p>Ask the office to send you a new one.</p></div>'; return; }
+  document.title = `Job #${p.job_number} · ${p.name}`;
+  const map = p.job_address ? `https://maps.google.com/?q=${encodeURIComponent(p.job_address)}` : '';
+  const photos = p.files.filter((f) => f.kind === 'photo'), pdfs = p.files.filter((f) => f.kind === 'pdf');
+  document.getElementById('out').innerHTML = `<div class="doc">
+    <div class="head"><div class="biz">${p.logo_url ? `<img src="${esc(p.logo_url)}" alt="">` : ''}<b>${esc(p.business_name)}</b>${p.location_phone ? `<div>Office: <a href="tel:${esc(p.location_phone)}">${esc(p.location_phone)}</a></div>` : ''}</div>
+      <div class="for"><h1>Job #${p.job_number}</h1><div>For <b>${esc(p.crew_trade)}${p.crew_name ? ' · ' + esc(p.crew_name) : ''}</b></div>${p.crew_phase ? `<div>Phase: ${esc(p.crew_phase)}</div>` : ''}</div></div>
+    <div class="job"><b>${esc(p.name)}</b>${p.description ? ' — ' + esc(p.description) : ''}
+      ${p.customer_name ? `<br>Customer: ${esc(p.customer_name)}` : ''}
+      ${p.job_address ? `<br>Job site: <a href="${map}" target="_blank" rel="noopener">${esc(p.job_address)} 📍</a>` : ''}
+      ${p.start_date ? `<br>Start: ${new Date(String(p.start_date).slice(0, 10) + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}` : ''}
+      ${p.crew_scope ? `<br>Your part: ${esc(p.crew_scope)}` : ''}</div>
+    ${p.note ? `<div class="note ${p.important ? 'imp' : ''}">${p.important ? '<span class="tag">⚠ IMPORTANT</span>' : ''}${esc(p.note)}</div>` : ''}
+    ${p.files.length ? `<h3>Plans, PDFs &amp; pictures (${p.files.length})</h3><div class="files">${pdfs.concat(photos).map((f) => `<a href="${fileUrl(f)}" target="_blank" rel="noopener">${f.kind === 'photo' ? `<img src="${fileUrl(f)}" alt="" loading="lazy">` : '<div class="pdf">📄</div>'}<span>${esc(f.name)}</span></a>`).join('')}</div>
+      ${pdfs.length ? `<div class="printphotos"><div style="font-size:13px;color:#555">PDFs (open the link to view): ${pdfs.map((f) => esc(f.name)).join(', ')}</div></div>` : ''}
+      <div class="printphotos">${photos.map((f) => `<img src="${fileUrl(f)}" alt="">`).join('')}</div>` : ''}
+    ${p.materials.length ? `<h3>Material list</h3><table><thead><tr><th>Item</th><th style="text-align:right">Qty</th></tr></thead><tbody>
+      ${p.materials.map((m) => `<tr><td>${esc(m.name)}</td><td class="q">${m.qty}</td></tr>`).join('')}</tbody></table>` : ''}
+    ${p.estimates.map((e) => `<h3>Material estimate: ${esc(e.name)}</h3>${e.summary ? `<div class="muted" style="color:#555;font-size:14px;margin-bottom:6px">${esc(e.summary)}</div>` : ''}
+      <table><thead><tr><th>Item</th><th style="text-align:right">Qty</th></tr></thead><tbody>${e.materials.map((m) => `<tr><td>${esc(m.name)}${m.notes ? `<small>${esc(m.notes)}</small>` : ''}</td><td class="q">${esc(m.qty)} ${esc(m.unit || '')}</td></tr>`).join('')}</tbody></table>`).join('')}
+    ${p.answers.map((a) => `<h3>Notes: ${esc(a.name)}</h3>${a.thread.map((x) => `<div class="qa"><b>${esc(x.q)}</b>${esc(x.a)}</div>`).join('')}`).join('')}
+    <div class="foot">Sent by ${esc(p.business_name)} · Questions? Call the office.</div>
+  </div>`;
+  document.getElementById('bar').hidden = false;
+  history.replaceState(null, '', location.pathname + location.hash);
+})();
+</script>
+</body>
+</html>
