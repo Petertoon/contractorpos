@@ -1,2204 +1,1183 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Job Board</title>
-<link rel="stylesheet" href="/style.css">
-<style>
-  :root { --jbg: #121418; --jpanel: #1b1e24; --jcard: #22262e; --jline: #30353f; --jink: #f1f2f4; --jmuted: #9aa0aa; --red: #ff5a5a; }
-  html, body { background: var(--jbg); color: var(--jink); }
-  body { min-height: 100vh; }
-  a { color: #8fd16a; }
-  .jtop { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #17191e; border-bottom: 1px solid var(--jline); flex-wrap: wrap; }
-  .jtop .brand { font-weight: 800; font-size: 20px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-  .jtop .brand img { height: 30px; border-radius: 6px; background: #fff; }
-  .jtop .topbtn img { height: 34px; }
-  .jtop .brand small { color: var(--jmuted); font-weight: 600; font-size: 14px; }
-  .jtop .spacer { flex: 1; }
-  .jtop a, .jtop .link { color: #e6e8ec; text-decoration: none; padding: 8px 10px; border-radius: 6px; font-weight: 600; background: transparent; }
-  .jtop a:hover, .jtop .link:hover { background: rgba(255,255,255,.08); }
-  .jtop input, .jtop select { width: auto; background: #22262e; color: var(--jink); border-color: var(--jline); padding: 8px 10px; }
-  .jtop #search { width: 230px; }
-  button.dk { background: #262a32; color: var(--jink); border: 1px solid var(--jline); }
-  button.dk:hover { background: #30353f; }
-  #clock { color: var(--jmuted); font-size: 14px; white-space: nowrap; }
-  .counts { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 14px 0; }
-  .counts span { border: 1px solid var(--c, var(--jline)); color: var(--jink); border-radius: 7px; padding: 3px 9px; font-size: 13px; font-weight: 700; background: #1b1e24; }
+// Jobs add-on: the contractor job board.
+// A job is a card on the board. Its columns (phases) and card buttons are set by each company.
+// Opening a card shows the job ticket: quoted price, everything added along the way
+// (inventory items, extra charges, equipment rental), payments over time, a final discount, and the balance.
+const crypto = require('crypto');
 
-  /* board */
-  #board { display: flex; gap: 10px; padding: 10px 14px 18px; overflow-x: auto; align-items: flex-start; min-height: calc(100vh - 110px); }
-  .col { flex: 1 1 0; min-width: 250px; background: var(--colbg, var(--jpanel)); color: var(--cardtx, var(--jink)); border-radius: 10px; display: flex; flex-direction: column; max-height: calc(100vh - 125px); }
-  .col.drop { outline: 2px dashed #8fd16a; }
-  .colhead { background: var(--c); color: var(--ht, #fff); border-radius: 10px 10px 0 0; padding: 10px 12px; display: flex; align-items: center; gap: 8px; }
-  .colhead div { flex: 1; }
-  .colhead b { display: block; font-size: 16px; letter-spacing: .02em; }
-  .colhead small { opacity: .9; font-size: 12.5px; }
-  .gear { background: transparent; color: inherit; padding: 4px 6px; font-size: 18px; }
-  .cards { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
-  .empty { color: inherit; opacity: .6; text-align: center; padding: 16px 0; font-size: 14px; }
-  .jc { background: var(--cardbg, var(--jcard)); color: var(--cardtx, var(--jink)); border-radius: 9px; border-left: 4px solid var(--c); padding: 9px 10px 10px; cursor: pointer; position: relative; }
-  .jc:hover { filter: brightness(1.1); }
-  .jc.dragging { opacity: .4; }
-  .jc .t { font-weight: 800; font-size: 15px; padding-right: 26px; }
-  .jc .t span { opacity: .65; font-weight: 700; margin-right: 6px; }
-  .jc .d { opacity: .85; font-size: 13.5px; line-height: 1.35; }
-  .jc .muted, .jc .clip { color: inherit; opacity: .7; }
-  .jc .m { font-size: 13.5px; line-height: 1.45; font-variant-numeric: tabular-nums; }
-  .jc .owed { color: var(--red); font-weight: 800; }
-  .jc .ok { color: #34d399; font-weight: 800; }
-  .flag { position: absolute; right: 8px; top: 30px; background: #7f1d1d; color: #fecaca; font-size: 11.5px; font-weight: 800; border-radius: 5px; padding: 2px 6px; }
-  .bar { height: 6px; background: #30353f; border-radius: 9px; overflow: hidden; margin: 6px 0 2px; }
-  .bar i { display: block; height: 100%; background: #7cc04a; }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-  .chip { border: 1.5px solid var(--b); color: var(--b); background: transparent; padding: 4px 10px; font-size: 12.5px; border-radius: 7px; font-weight: 800; }
-  .chip.on { background: var(--b); color: #121418; }
-  .back { background: #7c2d12; color: #fed7aa; border-radius: 6px; padding: 3px 7px; font-size: 12.5px; font-weight: 700; margin: 4px 0;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .nx { position: absolute; right: 6px; top: 6px; background: #2c3039; color: #e6e8ec; padding: 1px 8px; font-size: 16px; border-radius: 6px; }
-  .nx:hover { background: #2f4170; }
-
-  /* job ticket (opens over the board) */
-  .ticket { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; }
-  .thead { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--c, #17191e); color: var(--ht, #fff); border-bottom: 1px solid var(--jline); flex-wrap: wrap; }
-  .thead .colchip { background: rgba(0,0,0,.28); color: inherit; border: 1px solid rgba(255,255,255,.35); }
-  .thead .chip:not(.on) { background: rgba(11,18,32,.88); }
-  /* The middle "Job ticket" panel takes the column's card colors, so what's on the ticket stands out from the
-     information panels on the left and right. Neutral see-through shades keep it readable on light or dark colors. */
-  #tLines { background: var(--cardbg, var(--jpanel)); color: var(--cardtx, var(--jink)); }
-  #tLines h3, #tLines .muted, #tLines table.lines th, #tLines .crewhead .sum, #tLines .crewhead .tog, #tLines .phase h4 small,
-  #tLines .crow .who small, #tLines .frow .fname small, #tLines .crewtot { color: inherit; opacity: .72; }
-  #tLines table.lines th, #tLines table.lines td { border-color: rgba(127,127,127,.32); }
-  #tLines tr.quote td { background: rgba(127,127,127,.14); }
-  #tLines .crewbox { background: rgba(127,127,127,.10); border-color: rgba(127,127,127,.32); }
-  #tLines .crow, #tLines .frow { background: rgba(127,127,127,.14); color: inherit; }
-  #tLines .qbtn { background: rgba(127,127,127,.28); color: inherit; }
-  #tLines .xbtn { color: #e5484d; }
-  #tLines .crow .amt small.inc, #tLines .crow .amt small.ext, #tLines .crow .amt small.cp { display: inline-block; background: #2a2e37; padding: 1px 6px; border-radius: 4px; margin-top: 2px; opacity: 1; }
-  #tLines a:not(.fact a) { color: inherit; }
-  .thead .flag { box-shadow: 0 0 0 1px rgba(255,255,255,.4); }
-  .ticket { background: var(--colbg, var(--jbg)); }
-  .ticket .pane { border-top: 4px solid var(--c, transparent); }
-  .thead .tt { font-size: 20px; font-weight: 800; }
-  .thead .tt span { opacity: .7; margin-right: 6px; }
-  .colchip { background: var(--c); color: #fff; padding: 4px 10px; border-radius: 7px; font-weight: 800; font-size: 13px; }
-  .tgrid { flex: 1; display: grid; grid-template-columns: 330px 1fr 360px; gap: 10px; padding: 10px 14px; min-height: 0; }
-  .pane { background: var(--jpanel); border-radius: 10px; padding: 12px; overflow-y: auto; min-height: 0; min-width: 0; }
-  .pane h3 { margin: 0 0 8px; font-size: 15px; color: #d9a93a; text-transform: uppercase; letter-spacing: .04em; }
-  .pane input, .pane select, .modal input, .modal select, .modal textarea { background: #16181d; color: var(--jink); border-color: var(--jline); }
-  .addrow { display: flex; gap: 6px; }
-  .addrow #qty { width: 70px; }
-  .results { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
-  .res { display: flex; justify-content: space-between; gap: 8px; background: var(--jcard); border-radius: 8px; padding: 9px 10px; cursor: pointer; text-align: left; color: var(--jink); font-weight: 600; width: 100%; }
-  .res:hover { background: #2c3039; }
-  .res small { color: var(--jmuted); display: block; font-weight: 500; }
-  .bigbtns { display: grid; gap: 8px; margin: 10px 0; }
-  .bigbtns button { padding: 13px; font-size: 15px; }
-  table.lines { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-  table.lines th { text-align: left; color: var(--jmuted); font-size: 12.5px; text-transform: uppercase; padding: 6px; border-bottom: 1px solid var(--jline); }
-  table.lines td { padding: 9px 6px; border-bottom: 1px solid var(--jline); vertical-align: middle; }
-  table.lines .num { text-align: right; white-space: nowrap; }
-  table.lines tr.quote td { font-weight: 800; background: #1d2026; }
-  .kind { font-size: 11px; font-weight: 800; border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
-  .k-item { background: #1e3a5f; color: #9cc8ff; } .k-charge { background: #4a3510; color: #ffd27a; } .k-rental { background: #3b2259; color: #d6b4ff; }
-  .tx { color: var(--jmuted); font-size: 11px; margin-left: 4px; }
-  .qbtn { padding: 2px 9px; background: #2c3039; color: var(--jink); }
-  .xbtn { padding: 2px 9px; background: transparent; color: #ff8a8a; font-size: 18px; }
-  .tot { font-variant-numeric: tabular-nums; }
-  .tot div { display: flex; justify-content: space-between; padding: 4px 0; }
-  .tot .sep { border-top: 1px solid var(--jline); margin-top: 4px; padding-top: 8px; }
-  .tot .big { font-size: 26px; font-weight: 800; }
-  .tot .big.owed { color: var(--red); }
-  .tot .big.zero { color: #34d399; }
-  .side-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
-  .side-actions button { padding: 13px 8px; }
-  .plist div, .hist div { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--jline); font-size: 14px; }
-  .plist .v { text-decoration: line-through; color: var(--jmuted); }
-  .hist div { display: block; color: #c7cbd2; }
-  .hist small { color: var(--jmuted); display: block; }
-  .info div { padding: 3px 0; font-size: 14px; }
-  .info b { color: var(--jmuted); font-weight: 600; display: inline-block; min-width: 82px; }
-  .lockmsg { background: #2a2140; color: #e4d2ff; border-radius: 8px; padding: 8px 10px; font-size: 14px; margin-bottom: 10px; }
-
-  /* dialogs (dark) */
-  .modal { background: #1b1e24; color: var(--jink); max-width: 520px; }
-  .modal label { color: #c7cbd2; }
-  .modal textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--jline); border-radius: 8px; font: inherit; }
-  .modal .muted, .muted { color: var(--jmuted); }
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .prow { display: grid; grid-template-columns: 110px 1fr 1fr 34px; gap: 6px; align-items: center; margin-top: 8px; }
-  .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-  .presets button { padding: 5px 10px; font-size: 13px; }
-  .btnset { border: 1px solid var(--jline); border-radius: 9px; padding: 8px 10px; margin-top: 8px; }
-  .btnset .row { display: grid; grid-template-columns: auto 1fr 52px; gap: 8px; align-items: center; }
-  .btnset .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
-  .btnset .row2 label { margin: 0; font-size: 12.5px; color: var(--jmuted); } .btnset .row2 select { margin-top: 2px; }
-  .btnset input[type=color] { padding: 2px; height: 38px; }
-  .colors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .colors div { background: #16181d; border: 1px solid var(--jline); border-radius: 8px; padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .colors span { width: 100%; font-weight: 700; font-size: 13px; }
-  .colors small { width: 100%; color: var(--jmuted); font-size: 11.5px; }
-  .colors input[type=color] { width: 46px; height: 34px; padding: 2px; }
-  #themes button { padding: 5px 10px; font-size: 12.5px; }
-  .collist div { display: flex; align-items: center; gap: 6px; padding: 7px 0; border-bottom: 1px solid var(--jline); }
-  .collist div b { flex: 1; }
-  .collist i { width: 14px; height: 14px; border-radius: 4px; background: var(--c); display: inline-block; }
-  .collist button { padding: 5px 9px; }
-  .custlist button { display: block; width: 100%; text-align: left; margin-top: 4px; background: var(--jcard); color: var(--jink); }
-  .summary { background: #16181d; border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-variant-numeric: tabular-nums; }
-  .summary div { display: flex; justify-content: space-between; padding: 2px 0; }
-  .summary .big { font-size: 20px; font-weight: 800; }
-  #toast { z-index: 200; }
-  .filebtns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-  .filebtns .ai { grid-column: 1 / -1; background: linear-gradient(90deg, #5b3fd6, #c4622d); color: #fff; border: 0; }
-  .files { display: flex; flex-direction: column; gap: 6px; }
-  .frow { display: flex; align-items: center; gap: 10px; background: var(--jcard); border-radius: 8px; padding: 8px 10px; }
-  .frow .ficon { font-size: 22px; width: 28px; text-align: center; }
-  .frow img.fthumb { width: 54px; height: 54px; object-fit: cover; border-radius: 6px; background: #fff; flex: none; }
-  .frow .fname { flex: 1; min-width: 0; }
-  .frow .fname b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .frow .fname small { color: var(--jmuted); }
-  .frow .fact { display: flex; gap: 6px; align-items: center; }
-  .frow .fact button, .frow .fact a { padding: 6px 10px; font-size: 13px; border-radius: 7px; text-decoration: none; background: #2c3039; color: var(--jink); font-weight: 600; }
-  .frow .fact .estb { background: #4b33b5; }
-  .frow.est { border-left: 4px solid #8b6cff; }
-  .modal.wide { max-width: 980px; }
-  #crewBox .crow { flex-wrap: wrap; } #crewBox .crow .who { flex: 1 1 300px; } #crewBox .crow .amt { margin-left: auto; }
-  .crow .cbtns { display: flex; gap: 6px; align-items: center; } .crow .subl b { white-space: nowrap; }
-  .gcw .presets button.on { background: #ea580c; color: #fff; }
-  .gcbtn { background: #1f2a17 !important; color: #8fd16a !important; border: 1.5px solid #7cc04a !important; }
-  .gcw .gcstep { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-  .gcw .gcdots { display: flex; gap: 5px; flex-wrap: wrap; }
-  .gcw .gcdots button { padding: 3px 9px; font-size: 12.5px; border-radius: 12px; background: #2c3039; color: var(--jink); }
-  .gcw .gcdots button.on { background: #ea580c; color: #fff; }
-  .gcw .big2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 4px; }
-  .gcw .big2 input { font-size: 22px; font-weight: 700; padding: 12px; }
-  .gcw .mk { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-  .gcw .mk button { padding: 5px 10px; font-size: 13px; background: #2c3039; color: var(--jink); }
-  .gcw .gcfoot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-  .gcw .gcfoot .primary { font-size: 17px; padding: 12px 20px; }
-  .gcw .margin { font-size: 13.5px; color: var(--jmuted); margin-top: 6px; }
-  .gcw table.est td.n, .gcw table.est th.n { text-align: right; }
-  .gcw .qtot { font-size: 26px; font-weight: 800; color: #fdba74; }
-  @media (max-width: 760px) { .gcw .big2 { grid-template-columns: 1fr; } }
-  .crow .subl { display: block; font-size: 12.5px; margin-top: 3px; font-variant-numeric: tabular-nums; }
-  .crow .subl b.owe { color: #fca5a5; } .crow .subl b.paidup { color: #86efac; }
-  #tLines .crow .subl b.owe, #tLines .crow .subl b.paidup { background: #2a2e37; padding: 0 5px; border-radius: 4px; }
-  .crow button.subb { background: #7c4a03; color: #ffedd5; }
-  .crow button.sendb { background: #1d4f8a; color: #e0edff; }
-  .partsbox { border: 1px solid var(--jline); border-radius: 8px; padding: 8px 10px; }
-  .partsbox table.parts { width: 100%; border-collapse: collapse; } .partsbox table.parts td { padding: 2px 3px; }
-  .partsbox input { padding: 6px 8px; font-size: 14px; } .partsbox input.pq { width: 64px; text-align: right; } .partsbox input.pu { width: 70px; }
-  .cplist { max-height: 260px; overflow: auto; border: 1px solid var(--jline); border-radius: 8px; padding: 6px 10px; }
-  .cplist label.check { margin: 6px 0; font-weight: 500; }
-  .subsum { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 6px 0 14px; }
-  .subsum div { background: #23272f; border-radius: 8px; padding: 8px 10px; }
-  .subsum small { display: block; color: var(--jmuted); font-size: 12px; } .subsum b { font-size: 17px; font-variant-numeric: tabular-nums; }
-  .subsum .owe b { color: #fca5a5; } .subsum .paidup b { color: #86efac; }
-  .subcols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .subcols h3 { margin: 4px 0 8px; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
-  .sublist > div { display: flex; justify-content: space-between; gap: 8px; background: #23272f; border-radius: 7px; padding: 7px 10px; margin-bottom: 5px; font-size: 14px; }
-  .sublist > div small { display: block; color: var(--jmuted); font-size: 12px; }
-  .sublist > div.v { opacity: .45; text-decoration: line-through; }
-  .sublist .amt { white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
-  .sublist a { font-size: 12px; font-weight: 500; }
-  .subform { background: #16181d; border: 1px solid var(--jline); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
-  .subform label { margin-top: 6px; }
-  .subfiles { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-  .subfiles a { display: flex; align-items: center; gap: 6px; background: #23272f; border-radius: 7px; padding: 5px 8px; color: var(--jink); text-decoration: none; font-size: 13px; max-width: 230px; }
-  .subfiles img { width: 40px; height: 40px; object-fit: cover; border-radius: 5px; background: #fff; }
-  .subfiles span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ftag { display: inline-block; background: #7c4a03; color: #ffedd5; border-radius: 4px; padding: 0 5px; font-size: 11.5px; font-weight: 700; margin-right: 4px; }
-  @media (max-width: 760px) { .subsum { grid-template-columns: repeat(2, 1fr); } .subcols { grid-template-columns: 1fr; } }
-  table.est { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
-  table.est th { text-align: left; color: var(--jmuted); font-size: 12px; text-transform: uppercase; padding: 6px 4px; border-bottom: 1px solid var(--jline); }
-  table.est td { padding: 6px 4px; border-bottom: 1px solid var(--jline); vertical-align: middle; }
-  table.est td small { color: var(--jmuted); display: block; }
-  table.est input, table.est select { padding: 6px 8px; font-size: 14px; }
-  table.est .q { width: 74px; } table.est .pr { width: 96px; } table.est select { max-width: 230px; }
-  .estlist { margin: 6px 0 0 18px; padding: 0; color: #c7cbd2; font-size: 14px; }
-  .spin { display: inline-block; width: 18px; height: 18px; border: 3px solid #8b6cff; border-right-color: transparent; border-radius: 50%; animation: sp 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
-  @keyframes sp { to { transform: rotate(360deg); } }
-  .clip { color: var(--jmuted); font-size: 12.5px; }
-  .modal .sendgrid { grid-template-columns: 1fr 1fr 1fr 1fr; }
-  @media (max-width: 520px) { .modal .sendgrid { grid-template-columns: 1fr 1fr; } }
-  .modal .sendgrid button.wa { background: #25d366; color: #06290f; }
-  .chat { max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-  .chat .q { align-self: flex-end; background: #2f4a22; border-radius: 10px 10px 2px 10px; padding: 8px 12px; max-width: 85%; white-space: pre-wrap; }
-  .chat .a { background: #16181d; border: 1px solid var(--jline); border-radius: 10px 10px 10px 2px; padding: 6px 14px; line-height: 1.45; font-size: 15px; }
-  .chat .a h4 { margin: 10px 0 4px; font-size: 15px; color: #c9b8ff; } .chat .a p { margin: 6px 0; } .chat .a ul, .chat .a ol { margin: 4px 0; padding-left: 22px; }
-  .chat .a code { background: #2c3039; padding: 0 4px; border-radius: 4px; }
-  table.mdt { border-collapse: collapse; margin: 6px 0; font-size: 14px; display: block; overflow-x: auto; }
-  table.mdt th, table.mdt td { border: 1px solid var(--jline); padding: 4px 8px; text-align: left; }
-  table.mdt th { background: #2a2e37; }
-  .crewbox { background: #1d2026; border: 1px solid var(--jline); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
-  .crewhead { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-  .crewhead b { font-size: 15px; } .crewhead .sum { flex: 1; color: #c7cbd2; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .crewhead .tog { color: var(--jmuted); font-size: 13px; }
-  .phase { margin-top: 10px; }
-  .phase h4 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 8px; }
-  .phase h4 i { width: 10px; height: 10px; border-radius: 3px; background: var(--c); display: inline-block; }
-  .phase h4 small { color: var(--jmuted); text-transform: none; letter-spacing: 0; font-weight: 600; }
-  .crow { display: flex; align-items: center; gap: 10px; background: var(--jcard); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
-  .crow.done { opacity: .55; }
-  .crow .who { flex: 1; min-width: 0; }
-  .crow .who b { font-size: 15px; } .crow .who small { color: var(--jmuted); display: block; }
-  .crow .amt { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .crow .amt small { display: block; font-size: 11.5px; font-weight: 800; }
-  .crow .amt .inc { color: #8fb4ff; } .crow .amt .ext { color: #ffd27a; } .crow .amt .cp { color: #f0a5ff; }
-  .crow .amt .cpd { color: var(--jmuted); font-weight: 600; font-size: 11.5px; }
-  .cpbox { display: grid; grid-template-columns: 1fr 130px; gap: 8px; margin-top: 8px; align-items: center; }
-  .cpbox .prev { grid-column: 1 / -1; font-size: 14px; color: #c7cbd2; }
-  .crow button { padding: 5px 9px; font-size: 13px; background: #2c3039; color: var(--jink); }
-  .crow button.ok { background: #14532d; color: #bbf7d0; }
-  .crewtot { display: flex; gap: 14px; flex-wrap: wrap; color: #c7cbd2; font-size: 13.5px; margin-top: 6px; }
-  .k-crew { background: #12443a; color: #8ff0cf; }
-  .billopt { display: grid; gap: 6px; margin-top: 6px; }
-  .billopt label { margin: 0; display: flex; gap: 8px; align-items: flex-start; font-weight: 600; background: #16181d; border: 1px solid var(--jline); border-radius: 8px; padding: 9px 10px; cursor: pointer; }
-  .billopt label input { width: auto; margin-top: 3px; } .billopt label small { display: block; color: var(--jmuted); font-weight: 500; }
-  #printArea { display: none; }
-
-  @media (max-width: 1100px) { .tgrid { grid-template-columns: 1fr 1fr; } .tgrid .add { grid-column: 1 / -1; } }
-  @media (max-width: 760px) {
-    .tgrid { grid-template-columns: 1fr; flex: none; padding: 8px; } .ticket { overflow-y: auto; } .jtop #search { width: 140px; }
-    .pane { overflow: visible; } .ticket { overflow-x: hidden; } .addrow input:first-child { min-width: 0; } .results { max-height: 250px; overflow-y: auto; }
-    table.lines { font-size: 14px; } table.lines th:nth-child(3), table.lines td:nth-child(3) { display: none; }
-    table.lines td, table.lines th { padding: 8px 3px; } .qbtn { padding: 2px 7px; }
-    .prow { grid-template-columns: 90px 1fr 1fr 30px; } .btnset .row2 { grid-template-columns: 1fr; }
-    #board { min-height: auto; } .col { min-width: 82vw; }
-  }
-
-
-  /* ---- Bid Builder (GC add-on) ---- */
-  #bb { position: fixed; inset: 0; z-index: 45; background: rgba(20,14,6,.55); display: flex; align-items: flex-start; justify-content: center; padding: 18px; overflow: auto; }
-  #bb[hidden] { display: none; }
-  #bb .bbwin { background: #f4ecdb; color: #2b2417; width: 100%; max-width: 1180px; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.5); overflow: hidden; position: relative; padding-bottom: 64px; }
-  #bb .bbhead { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 18px; background: linear-gradient(180deg, #e7d4ac, #d9c093); border-bottom: 1px solid #c4a874; flex-wrap: wrap; }
-  #bb .bblogo { display: flex; align-items: center; gap: 10px; } #bb .bbicon { font-size: 40px; line-height: 1; }
-  #bb .bblogo small { display: block; font-size: 17px; font-weight: 800; color: #2f5a2a; } #bb .bblogo b { display: block; font-size: 30px; font-weight: 900; color: #7f3b33; line-height: 1; }
-  #bb .bbtools { display: flex; gap: 4px; align-items: stretch; background: rgba(255,255,255,.25); border-radius: 8px; padding: 4px; }
-  #bb .bbtools button { background: transparent; color: #2b2010; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 14px; font-size: 13.5px; font-weight: 600; border-radius: 6px; }
-  #bb .bbtools button span { font-size: 22px; } #bb .bbtools button:hover { background: rgba(255,255,255,.5); }
-  #bb .bbtools button.dirty { background: #2f5a2a; color: #fff; } #bb .bbtools .bbx { font-size: 20px; justify-content: center; }
-  #bb .bbmeta { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; padding: 14px 18px 8px; }
-  #bb .bbmeta label { margin: 0; color: #2b2417; font-weight: 800; font-size: 16px; }
-  #bb .bbbox { background: #fff; border: 1px solid #cdbb98; border-radius: 6px; padding: 8px 12px; font-size: 17px; }
-  #bb .bbbox small { color: #7a6a50; }
-  #bb .bbtablewrap { margin: 6px 18px 0; border: 1px solid #c9b48c; border-radius: 6px; overflow: auto; background: #fff; }
-  #bb table.bbt { width: 100%; border-collapse: collapse; font-size: 16px; min-width: 820px; }
-  #bb .bbt th { background: #2f5a2a; color: #fff; padding: 10px 8px; text-align: left; font-size: 14.5px; white-space: nowrap; }
-  #bb .bbt th.n, #bb .bbt td.n { text-align: right; } #bb .bbt th:first-child, #bb .bbt td.num { text-align: center; width: 44px; }
-  #bb .bbt td { padding: 6px 8px; border-bottom: 1px solid #e6dcc6; vertical-align: middle; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  #bb .bbt tbody tr:nth-child(even) td { background: #faf6ec; }
-  #bb .bbt tr.sel td { background: #fde7b0 !important; }
-  #bb .bbt td.num { cursor: pointer; color: #6b5a3c; font-weight: 700; user-select: none; }
-  #bb .bbt td small { display: block; color: #7a6a50; font-size: 12px; margin-top: 2px; }
-  #bb .bbt input { background: #fff; color: #2b2417; border: 1px solid #d6c7a6; border-radius: 4px; padding: 6px 8px; font-size: 16px; width: 100%; min-width: 200px; }
-  #bb .bbt input:focus { outline: 2px solid #2f5a2a; outline-offset: -1px; }
-  #bb .bbt input.amt { width: 130px; min-width: 0; text-align: right; } #bb .bbt input.pct { width: 92px; min-width: 0; text-align: right; }
-  #bb .bbt input:disabled { background: #eee6d4; color: #8a7a5c; }
-  #bb .bbfiles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; white-space: normal; }
-  #bb .bbfiles a { display: inline-flex; align-items: center; gap: 5px; background: #f3ead6; border: 1px solid #d8c9a8; border-radius: 5px; padding: 2px 7px 2px 3px; color: #3a2c17; text-decoration: none; font-size: 12.5px; max-width: 210px; }
-  #bb .bbfiles a:hover { background: #ead9b6; }
-  #bb .bbfiles img { width: 26px; height: 26px; object-fit: cover; border-radius: 3px; background: #fff; }
-  #bb .bbfiles span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #bb .bbt td { vertical-align: top; } #bb .bbt td[data-mk], #bb .bbt td.tot, #bb .bbt td.num { padding-top: 13px; } #bb .bbt td.acts { padding-top: 8px; }
-  #bb .bbt tr.prod td { background: #f6f9f0 !important; } #bb .bbt tr.prod.sel td { background: #fde7b0 !important; }
-  #bb .pname { font-weight: 700; padding: 6px 0 2px; } #bb .pqty { font-size: 14px; color: #6b5a3c; }
-  #bb .bbt input.qty { width: 80px; min-width: 0; text-align: right; padding: 4px 6px; }
-  #bb .bbbtns .bbprod { background: #fffaf0; border-color: #2f5a2a; color: #2f5a2a; font-weight: 700; }
-  #bb .bbt .cur { color: #6b5a3c; margin: 0 4px; } #bb .bbt td.tot { font-weight: 700; }
-  #bb .bbt .acts { width: 116px; } #bb .bbt .acts button { background: transparent; color: #4b3d26; padding: 4px 7px; font-size: 18px; }
-  #bb .bbt .acts button.del { color: #7f3b33; } #bb .bbt .acts button:hover { background: #efe5cf; }
-  #bb .bbbottom { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 14px 18px; }
-  #bb .bbbtns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-  #bb .bbbtns button { background: #fbf7ee; color: #2b2417; border: 1px solid #cdbb98; padding: 10px 14px; font-size: 14.5px; }
-  #bb .bbbtns button:disabled { opacity: .5; }
-  #bb .bbbtns .bbadd { background: #2f5a2a; color: #fff; border-color: #2f5a2a; font-weight: 700; }
-  #bb .bbset { border: 1px solid #d8c9a8; border-radius: 6px; background: #f8f1e2; }
-  #bb .bbsethead { background: #ead9b6; padding: 8px 14px; font-weight: 800; font-size: 16px; border-radius: 6px 6px 0 0; }
-  #bb .bbset label { display: flex; align-items: center; gap: 8px; color: #2b2417; font-weight: 500; font-size: 15px; margin: 8px 14px; }
-  #bb .bbset input[type=radio] { width: 18px; height: 18px; accent-color: #2f5a2a; }
-  #bb .bbset input[type=number] { width: 90px; padding: 5px 8px; border: 1px solid #d6c7a6; border-radius: 4px; background: #fff; color: #2b2417; text-align: right; }
-  #bb .bbset input:disabled { background: #eee6d4; color: #8a7a5c; }
-  #bb .bbtotals { border: 1px solid #d8c9a8; border-radius: 6px; background: #fbf7ee; padding: 8px 12px; align-self: start; }
-  #bb .bbtotals > div { display: flex; justify-content: space-between; padding: 7px 4px; font-size: 17px; border-bottom: 1px solid #e6dcc6; font-variant-numeric: tabular-nums; }
-  #bb .bbtotals .grand { background: #2f5a2a; color: #fff; border-radius: 6px; padding: 12px 14px; margin-top: 6px; font-size: 20px; border: 0; }
-  #bb .bbtotals .grand b { font-size: 26px; } #bb .bbtotals .was { font-size: 13px; color: #7a6a50; border: 0; justify-content: flex-end; }
-  #bb .bbfoot { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 64px; }
-  @media (max-width: 800px) { #bb { padding: 0; } #bb .bbwin { border-radius: 0; } #bb .bbbottom { grid-template-columns: 1fr; } #bb .bbmeta { grid-template-columns: auto 1fr; } #bb .bblogo b { font-size: 22px; } }
-
-  /* ---- Ranch look (Settings → Look of the program) ---- */
-  html[data-theme=ranch] { --jbg: #efe5cf; --jpanel: #f7f0e1; --jcard: #fffaf0; --jline: #d8c9a8; --jink: #2b2417; --jmuted: #7a6a50; --red: #8b2e24; --burg: #7f3b33; }
-  html[data-theme=ranch] a { color: #2f5a2a; }
-  html[data-theme=ranch] .jtop { background: linear-gradient(180deg, #e7d4ac, #d9c093); border-bottom-color: #c4a874; }
-  html[data-theme=ranch] .jtop a, html[data-theme=ranch] .jtop .link { color: #2b2010; }
-  html[data-theme=ranch] .jtop input, html[data-theme=ranch] .jtop select { background: #fffaf0; color: #2b2417; border-color: #c4a874; }
-  html[data-theme=ranch] button.dk { background: #fbf7ee; color: #2b2417; border-color: #cdbb98; }
-  html[data-theme=ranch] button.dk:hover { background: #f1e6cd; }
-  html[data-theme=ranch] button.primary { background: #2f5a2a; color: #fff; }
-  html[data-theme=ranch] .gcbtn { background: #2f5a2a !important; color: #fff !important; border-color: #2f5a2a !important; }
-  html[data-theme=ranch] .counts span { background: #fbf7ee; }
-  html[data-theme=ranch] .col { border: 1px solid #ddd0b3; box-shadow: 0 1px 2px rgba(80,60,20,.08); }
-  html[data-theme=ranch] .jc { box-shadow: 0 1px 3px rgba(80,60,20,.12); }
-  html[data-theme=ranch] .col.drop { outline-color: #2f5a2a; }
-  html[data-theme=ranch] .jc .ok, html[data-theme=ranch] .tot .big.zero { color: #2f7a33; }
-  html[data-theme=ranch] .chip.on { color: #fff; }
-  html[data-theme=ranch] .bar { background: #e6dcc6; }
-  html[data-theme=ranch] .pane h3 { color: var(--burg); }
-  html[data-theme=ranch] .xbtn, html[data-theme=ranch] #tLines .xbtn, html[data-theme=ranch] #bb .bbt .acts button.del { color: var(--burg); }
-  html[data-theme=ranch] .modal h2, html[data-theme=ranch] .subcols h3, html[data-theme=ranch] .crewhead b { color: var(--burg); }
-  html[data-theme=ranch] .jtop .brand span:not(.bbicon) { color: var(--burg); }
-  html[data-theme=ranch] .counts span { border-color: var(--c, #cdbb98); }
-  html[data-theme=ranch] .chat .a h4 { color: #5b3a9a; }
-  html[data-theme=ranch] .nx { background: #ead9b6; color: #2b2010; }
-  html[data-theme=ranch] .pane input, html[data-theme=ranch] .pane select, html[data-theme=ranch] .modal input, html[data-theme=ranch] .modal select, html[data-theme=ranch] .modal textarea { background: #fff; color: #2b2417; border-color: #cdbb98; }
-  html[data-theme=ranch] table.lines tr.quote td { background: #f3ead6; }
-  html[data-theme=ranch] #tLines tr.quote td { background: rgba(120,90,40,.08); }
-  html[data-theme=ranch] .k-item { background: #dbe8f7; color: #1d4f8a; } html[data-theme=ranch] .k-charge { background: #f8e3b5; color: #7a4b00; } html[data-theme=ranch] .k-rental { background: #eadcf6; color: #5b2d86; } html[data-theme=ranch] .k-crew { background: #d8efe3; color: #1c5b3c; }
-  html[data-theme=ranch] .hist div, html[data-theme=ranch] .modal label, html[data-theme=ranch] .estlist, html[data-theme=ranch] .crewhead .sum, html[data-theme=ranch] .cpbox .prev, html[data-theme=ranch] .crewtot { color: #4b3d26; }
-  html[data-theme=ranch] .modal { background: #f4ecdb; color: #2b2417; }
-  html[data-theme=ranch] .colors div, html[data-theme=ranch] .summary, html[data-theme=ranch] .subform, html[data-theme=ranch] .billopt label, html[data-theme=ranch] .chat .a { background: #fbf7ee; border-color: #d8c9a8; color: #2b2417; }
-  html[data-theme=ranch] .chat .q { background: #2f5a2a; color: #fff; }
-  html[data-theme=ranch] .chat .a code, html[data-theme=ranch] table.mdt th { background: #ead9b6; }
-  html[data-theme=ranch] .frow .fact button, html[data-theme=ranch] .frow .fact a, html[data-theme=ranch] .crow button, html[data-theme=ranch] .gcw .mk button { background: #ece2cc; color: #2b2417; }
-  html[data-theme=ranch] .frow .fact .estb { background: #6d4fc4; color: #fff; }
-  html[data-theme=ranch] .crow button.ok { background: #2f7a33; color: #fff; }
-  html[data-theme=ranch] .crow button.subb { background: #b45309; color: #fff; }
-  html[data-theme=ranch] .crow button.sendb { background: #2f5a2a; color: #fff; }
-  html[data-theme=ranch] .crewbox { background: #f7f0e1; border-color: #d8c9a8; }
-  html[data-theme=ranch] #tLines .crewbox { background: rgba(120,90,40,.06); border-color: rgba(120,90,40,.22); }
-  html[data-theme=ranch] #tLines .crow, html[data-theme=ranch] #tLines .frow { background: rgba(120,90,40,.08); }
-  html[data-theme=ranch] #tLines .crow .amt small.inc, html[data-theme=ranch] #tLines .crow .amt small.ext, html[data-theme=ranch] #tLines .crow .amt small.cp, html[data-theme=ranch] #tLines .crow .subl b.owe, html[data-theme=ranch] #tLines .crow .subl b.paidup { background: #fffaf0; }
-  html[data-theme=ranch] .crow .amt .inc { color: #1d4f8a; } html[data-theme=ranch] .crow .amt .ext { color: #8a5300; } html[data-theme=ranch] .crow .amt .cp { color: #7a2d9a; }
-  html[data-theme=ranch] .crow .subl b.owe, html[data-theme=ranch] .subsum .owe b { color: var(--burg); } html[data-theme=ranch] .crow .subl b.paidup, html[data-theme=ranch] .subsum .paidup b { color: #2f7a33; }
-  html[data-theme=ranch] .subsum div, html[data-theme=ranch] .sublist > div, html[data-theme=ranch] .subfiles a { background: #fbf7ee; border: 1px solid #e3d6ba; color: #2b2417; }
-  html[data-theme=ranch] .ftag { background: #b45309; color: #fff; }
-  html[data-theme=ranch] .back { background: #f3dcd6; color: var(--burg); border: 1px solid #d9a99f; }
-  html[data-theme=ranch] .flag { background: var(--burg); color: #fff; }
-  html[data-theme=ranch] .modal .sendgrid button.wa { background: #25d366; color: #06290f; }
-  @media print {
-    body { background: #fff; color: #000; }
-    body > *:not(#printArea) { display: none !important; }
-    #printArea { display: block; color: #000; font-size: 13px; }
-    #printArea h1 { font-size: 22px; margin: 0; }
-    #printArea table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    #printArea th, #printArea td { border-bottom: 1px solid #ccc; padding: 5px 4px; text-align: left; }
-    #printArea .num { text-align: right; }
-    #printArea .head { display: flex; justify-content: space-between; gap: 20px; }
-    #printArea .totals { margin-left: auto; width: 320px; margin-top: 10px; }
-    #printArea .totals div { display: flex; justify-content: space-between; padding: 2px 0; }
-    #printArea .totals .b { font-weight: 800; font-size: 16px; border-top: 2px solid #000; padding-top: 4px; }
-  }
-</style>
-</head>
-<body class="cp">
-<header class="jtop">
-  <div class="brand"><span>🏗</span><span id="bizName">Job Board</span><small>Job Board</small></div>
-  <button class="primary" id="newJob">+ New job</button>
-  <button class="dk gcbtn" id="gcBoardBtn" hidden>🏗 Bid Builder</button>
-  <input id="search" placeholder="Search job #, name, customer…" autocomplete="off">
-  <select id="viewSel" aria-label="Which jobs">
-    <option value="">All jobs</option><option value="high">High priority</option><option value="owed">Balance owed</option>
-  </select>
-  <label class="check" style="margin:0;color:var(--jmuted);font-size:13px"><input type="checkbox" id="allClosed"> Older closed jobs</label>
-  <div class="spacer"></div>
-  <button class="dk" id="setupBtn" hidden>⚙ Workflow setup</button>
-  <a href="/checkout">Checkout</a>
-  <a href="/admin" id="manageLink" hidden>Manage</a>
-  <span id="clock"></span>
-  <button class="link" onclick="logout()">Log out</button>
-</header>
-<div class="counts" id="counts"></div>
-<main id="board"></main>
-
-<div class="ticket" id="ticket" hidden>
-  <div class="thead" id="tHead"></div>
-  <div class="tgrid">
-    <div class="pane add">
-      <h3>Add to this job</h3>
-      <div class="addrow">
-        <input id="tSearch" placeholder="Scan barcode or type item name" autocomplete="off">
-        <input id="qty" type="number" min="1" value="1" aria-label="Quantity">
-      </div>
-      <div class="bigbtns">
-        <button class="dk" id="chargeBtn">+ Extra charge / change order</button>
-        <button class="dk" id="rentalBtn" hidden>🔑 Equipment rental</button>
-      </div>
-      <h3 style="margin-top:4px">Plans, photos &amp; estimates</h3>
-      <div class="filebtns">
-        <button class="dk" id="pdfBtn">📄 Attach PDF</button>
-        <button class="dk" id="photoBtn">📷 Add photo</button>
-        <button class="ai" id="aiBtn" hidden>✨ Ask Claude about a plan or photo</button>
-      </div>
-      <input type="file" id="pdfFile" accept="application/pdf,.pdf" multiple hidden>
-      <input type="file" id="photoFile" accept="image/*" multiple hidden>
-      <input type="file" id="bbFile" accept="application/pdf,.pdf,image/*" multiple hidden>
-      <input type="file" id="subPdfFile" accept="application/pdf,.pdf" multiple hidden>
-      <input type="file" id="subPhotoFile" accept="image/*" multiple hidden>
-      <div style="height:12px"></div>
-      <div class="muted" style="font-size:13px" id="resHint">Inventory items</div>
-      <div class="results" id="tResults"></div>
-    </div>
-    <div class="pane" id="tLines"></div>
-    <div class="pane" id="tSide"></div>
-  </div>
-</div>
-
-<div class="modal-back" id="m"><form class="modal" id="mBody" onsubmit="return false"></form></div>
-<div id="printArea"></div>
-
-<script src="/app.js"></script>
-<script>
-let me, isMgr = false, cols = [], jobs = [], products = [], openId = null, cur = null, rentalsOn = false, files = [], crewOpen = false;
-const usd = (c) => (c < 0 ? '-' : '') + '$' + (Math.abs(c || 0) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-const dollars = (c) => (c == null ? '' : (c / 100).toFixed(2));
-const shortDate = (d) => (d ? new Date(d.length === 10 ? d + 'T12:00:00' : d).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '');
-const METHOD = { cash: 'Cash', card: 'Card', check: 'Check', other: 'Other' };
-
-// ---------- small dialog helper ----------
-let mResolve = null;
-function openModal(html) {
-  const mb = $('#mBody'); mb.onclick = mb.oninput = mb.onchange = null; mb.classList.remove('wide');
-  $('#mBody').innerHTML = html;
-  $('#m').classList.add('open');
-  const f = $('#mBody input:not([type=hidden]):not([type=checkbox]), #mBody select, #mBody textarea');
-  if (f && window.innerWidth > 700) setTimeout(() => f.focus(), 30);
-  return $('#mBody');
-}
-function closeModal() { $('#m').classList.remove('open'); $('#mBody').innerHTML = ''; if (typeof gcIdx !== 'undefined') gcIdx = null; if (typeof cp !== 'undefined') cp = null; }
-$('#m').addEventListener('mousedown', (e) => { if (e.target.id === 'm') closeModal(); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if ($('#m').classList.contains('open')) closeModal(); else if (bb) bbLeave(bbClose); else if (openId) closeTicket(); } });
-// Moving a job back needs a note saying why. Resolves true when the job moved.
-function moveBackDialog(j) {
-  const ci = cols.findIndex((c) => c.id === j.column_id);
-  const from = cols[ci], to = cols[ci - 1];
-  return new Promise((resolve) => {
-    const f = openModal(`<h2>Move job back</h2>
-      <p class="muted" style="margin-top:0">#${j.job_number} ${esc(j.name)}: <b>${esc(from ? from.name : '')}</b> → <b>${esc(to ? to.name : '')}</b></p>
-      <label>Why is this job moving back? (required)</label>
-      <textarea name="reason" rows="3" maxlength="500" placeholder="e.g. Customer changed the cabinet order, needs a new quote"></textarea>
-      <div class="err" id="mbErr" style="color:#ff8a8a;min-height:18px"></div>
-      <div class="actions"><button type="button" class="dk" id="mbCancel">Cancel</button><button class="primary" id="mbGo">Move back</button></div>`);
-    f.onclick = async (e) => {
-      if (e.target.id === 'mbCancel') { closeModal(); resolve(false); }
-      if (e.target.id !== 'mbGo') return;
-      const reason = f.reason.value.trim();
-      if (reason.length < 3) { $('#mbErr').textContent = 'Write a note explaining why it is moving back.'; f.reason.focus(); return; }
-      e.target.disabled = true;
-      try { await api(`/api/jobs/${j.id}/move`, { direction: -1, reason }); closeModal(); toast('Moved back'); resolve(true); }
-      catch (err) { $('#mbErr').textContent = err.message; e.target.disabled = false; }
-    };
-  });
-}
-async function run(fn) { try { return await fn(); } catch (e) { toast(e.message, 'bad'); return null; } }
-
-// ---------- board ----------
-async function loadBoard() {
-  const d = await api('/api/jobs/board' + ($('#allClosed').checked ? '?closed=all' : ''));
-  cols = d.columns; jobs = d.jobs;
-  renderBoard();
-}
-function matches(j) {
-  const q = $('#search').value.trim().toLowerCase();
-  const v = $('#viewSel').value;
-  if (v === 'high' && j.priority !== 'high') return false;
-  if (v === 'owed' && !(j.balance_cents > 0 && j.paid_cents > 0)) return false;
-  if (!q) return true;
-  return [String(j.job_number), j.name, j.description, j.customer_name, j.customer_phone, j.job_address, j.crew]
-    .some((s) => (s || '').toLowerCase().includes(q.replace(/^#/, '')));
-}
-function moneyLines(j, i) {
-  const last = i === cols.length - 1;
-  if (last) return `<div class="m">Paid: ${usd(j.paid_cents)}</div><div class="m">Closed: ${shortDate(j.closed_at)} <span class="ok">✓</span></div>`;
-  if (i === 0 && !j.paid_cents && !j.extras_cents) return `<div class="m">${usd(j.total_cents)}</div>`;
-  const bal = j.balance_cents;
-  return `<div class="m">Total: ${usd(j.total_cents)}</div>
-    <div class="m">Balance: <span class="${bal > 0 ? 'owed' : 'ok'}">${usd(bal)}</span></div>`;
-}
-function card(j, c, i) {
-  const btns = (c.buttons || []).map((b, k) => ({ ...b, k })).filter((b) => b.enabled);
-  const last = i === cols.length - 1;
-  const next = cols[i + 1];
-  const extra = [];
-  if (j.start_date && i <= 2) extra.push(`📅 Start: ${shortDate(j.start_date)}`);
-  if (j.crews_now) extra.push(`👷 ${esc(j.crews_now)}`); else if (j.crew) extra.push(`👷 ${esc(j.crew)}`);
-  if (j.file_count) extra.push(`<span class="clip">📎 ${j.file_count} file${j.file_count === 1 ? '' : 's'}</span>`);
-  if (i > 0 && !last) extra.push(`<span class="muted">In ${esc(c.name)} since ${shortDate(j.column_entered_at)}</span>`);
-  return `<div class="jc" draggable="true" data-job="${j.id}">
-    <div class="t"><span>#${j.job_number}</span>${esc(j.name)}</div>
-    ${j.priority === 'high' ? '<div class="flag">⚑ High</div>' : ''}
-    ${!last && next ? `<button class="nx" data-next="${j.id}" title="Move to ${esc(next.name)}">›</button>` : ''}
-    ${j.back_reason ? `<div class="back" title="Moved back ${shortDate(j.back_at)}${j.back_by ? ' by ' + esc(j.back_by) : ''}">↩ Moved back: ${esc(j.back_reason)}</div>` : ''}
-    ${j.description ? `<div class="d">${esc(j.description.split('\n')[0])}</div>` : ''}
-    ${j.customer_name && j.customer_name !== j.name ? `<div class="d">👤 ${esc(j.customer_name)}</div>` : ''}
-    ${moneyLines(j, i)}
-    ${extra.map((x) => `<div class="m">${x}</div>`).join('')}
-    ${j.progress > 0 && !last ? `<div class="m" style="display:flex;justify-content:space-between"><span></span><span>${j.progress}%</span></div><div class="bar"><i style="width:${j.progress}%"></i></div>` : ''}
-    ${btns.length ? `<div class="chips">${btns.map((b) => `<button class="chip ${j.status_label === b.label ? 'on' : ''}" style="--b:${b.color || '#3b82f6'}" data-btn="${b.k}" data-jid="${j.id}">${esc(b.label)}</button>`).join('')}</div>` : ''}
-  </div>`;
-}
-// Cards sort themselves: by where their status button says (top, middle, bottom), then high priority first,
-// then the longest in the column first (the order the server sends).
-const PLACE_RANK = { top: 0, middle: 1, bottom: 2 };
-// A column's colors as CSS settings (empty ones fall back to the standard dark look).
-const colVars = (c) => `--c:${c.color};` + [['--ht', c.text_color], ['--colbg', c.bg_color], ['--cardbg', c.card_color], ['--cardtx', c.card_text_color]]
-  .filter(([, v]) => v).map(([k, v]) => `${k}:${v};`).join('');
-function sortCards(list, c) {
-  const rank = (j) => {
-    const b = (c.buttons || []).find((x) => x.enabled && x.label === j.status_label);
-    return PLACE_RANK[(b && b.place) || 'middle'];
-  };
-  return list.map((j, i) => ({ j, i })).sort((a, b) => rank(a.j) - rank(b.j)
-    || (b.j.priority === 'high') - (a.j.priority === 'high') || a.i - b.i).map((x) => x.j);
-}
-function renderBoard() {
-  const shown = jobs.filter(matches);
-  $('#counts').innerHTML = `<span>${shown.length} Total</span>` +
-    cols.map((c) => `<span style="--c:${c.color}">${shown.filter((j) => j.column_id === c.id).length} ${esc(c.name)}</span>`).join('');
-  $('#board').innerHTML = cols.map((c, i) => {
-    const list = sortCards(shown.filter((j) => j.column_id === c.id), c);
-    const nb = (c.buttons || []).filter((b) => b.enabled).length;
-    return `<section class="col" data-col="${c.id}" style="${colVars(c)}">
-      <div class="colhead"><div><b>${i + 1}. ${esc(c.name.toUpperCase())}</b><small>${list.length} Job${list.length === 1 ? '' : 's'} • ${nb} Button${nb === 1 ? '' : 's'}</small></div>
-        ${isMgr ? `<button class="gear" data-gear="${c.id}" title="Column settings">⚙</button>` : ''}</div>
-      <div class="cards">${list.map((j) => card(j, c, i)).join('') || '<div class="empty">No jobs</div>'}</div></section>`;
-  }).join('');
-}
-$('#board').addEventListener('click', async (e) => {
-  const g = e.target.closest('[data-gear]');
-  if (g) return columnSettings(Number(g.dataset.gear));
-  const nx = e.target.closest('[data-next]');
-  if (nx) { e.stopPropagation(); return run(async () => { await api(`/api/jobs/${nx.dataset.next}/move`, { direction: 1 }); await loadBoard(); }); }
-  const b = e.target.closest('[data-btn]');
-  if (b) {
-    e.stopPropagation();
-    return run(async () => {
-      const r = await api(`/api/jobs/${b.dataset.jid}/button`, { index: Number(b.dataset.btn) });
-      if (r.moved) toast('Moved to the next column');
-      await loadBoard();
-    });
-  }
-  const c = e.target.closest('[data-job]');
-  if (c) openTicket(Number(c.dataset.job));
-});
-// Drag a card to the next (or previous) column.
-let dragId = null;
-$('#board').addEventListener('dragstart', (e) => {
-  const c = e.target.closest('[data-job]'); if (!c) return;
-  dragId = Number(c.dataset.job); c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move';
-});
-$('#board').addEventListener('dragend', () => { dragId = null; $$('.dragging, .drop').forEach((x) => x.classList.remove('dragging', 'drop')); });
-$('#board').addEventListener('dragover', (e) => {
-  const col = e.target.closest('[data-col]'); if (!col || !dragId) return;
-  e.preventDefault(); $$('.drop').forEach((x) => x !== col && x.classList.remove('drop')); col.classList.add('drop');
-});
-$('#board').addEventListener('drop', (e) => {
-  const col = e.target.closest('[data-col]'); if (!col || !dragId) return;
-  e.preventDefault();
-  const id = dragId;
-  const j = jobs.find((x) => x.id === id);
-  if (j && j.column_id === Number(col.dataset.col)) return;
-  const ci = cols.findIndex((c) => j && c.id === j.column_id);
-  if (j && cols[ci - 1] && cols[ci - 1].id === Number(col.dataset.col)) {
-    if (!isMgr) return toast('Only an owner or manager can move a job back', 'bad');
-    return moveBackDialog(j).then((ok) => ok && loadBoard());
-  }
-  run(async () => { await api(`/api/jobs/${id}/move`, { column_id: Number(col.dataset.col) }); await loadBoard(); });
-});
-$('#search').addEventListener('input', renderBoard);
-$('#viewSel').addEventListener('change', renderBoard);
-$('#allClosed').addEventListener('change', () => run(loadBoard));
-
-// ---------- new job / edit details ----------
-function jobForm(j = {}) {
-  return `<h2>${j.id ? `Edit job #${j.job_number}` : 'New job'}</h2>
-    <label>Job name</label><input name="name" required maxlength="120" value="${esc(j.name || '')}" placeholder="e.g. Miller Remodel">
-    <label>Description</label><textarea name="description" rows="2" maxlength="1000" placeholder="e.g. Kitchen & Bath">${esc(j.description || '')}</textarea>
-    <label>Customer</label>
-    <div class="addrow"><input name="customer_name" value="${esc(j.customer_name || '')}" placeholder="Name"><button type="button" class="dk" id="findCust">Find…</button></div>
-    <input type="hidden" name="customer_id" value="${j.customer_id || ''}"><div class="custlist" id="custList"></div>
-    <div class="two"><div><label>Phone</label><input name="customer_phone" value="${esc(j.customer_phone || '')}" inputmode="tel"></div>
-      <div><label>PO #</label><input name="po_number" value="${esc(j.po_number || '')}"></div></div>
-    <label>Job site address</label><input name="job_address" value="${esc(j.job_address || '')}">
-    <div class="two"><div><label>Quoted price</label><input name="quoted" inputmode="decimal" value="${dollars(j.quoted_cents ?? '')}" placeholder="0.00"></div>
-      <div><label>Priority</label><select name="priority"><option value="normal">Normal</option><option value="high" ${j.priority === 'high' ? 'selected' : ''}>High</option></select></div></div>
-    <div class="two"><div><label>Crew</label><input name="crew" value="${esc(j.crew || '')}" placeholder="e.g. Crew 1"></div>
-      <div><label>Start date</label><input name="start_date" type="date" value="${j.start_date || ''}"></div></div>
-    ${j.id ? `<label>Progress: <span id="pv">${j.progress || 0}</span>%</label><input name="progress" type="range" min="0" max="100" step="5" value="${j.progress || 0}" oninput="$('#pv').textContent=this.value">` : ''}
-    <label class="check"><input type="checkbox" name="tax_exempt" ${j.tax_exempt ? 'checked' : ''}> Tax exempt (no sales tax on this job)</label>
-    <div class="err" id="fErr"></div>
-    <div class="actions">${j.id && isMgr ? '<button type="button" class="danger" id="delJob" style="margin-right:auto">Delete</button>' : ''}
-      <button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="saveJob">${j.id ? 'Save' : 'Create job'}</button></div>`;
-}
-function readJobForm(f) {
-  const v = Object.fromEntries(new FormData(f).entries());
-  const q = v.quoted.trim() === '' ? 0 : toCents(v.quoted);
-  if (q == null) throw new Error('Quoted price is not a valid amount');
-  return { ...v, quoted_cents: q, tax_exempt: !!f.tax_exempt.checked, customer_id: v.customer_id || null };
-}
-function wireCustomerFind(f) {
-  $('#findCust').onclick = () => run(async () => {
-    const q = f.customer_name.value.trim() || f.customer_phone.value.trim();
-    const list = await api('/api/customers?q=' + encodeURIComponent(q));
-    $('#custList').innerHTML = list.length ? list.slice(0, 8).map((c) => `<button type="button" data-cid="${c.id}">${esc(c.name)}${c.company ? ' · ' + esc(c.company) : ''} <span class="muted">${esc(c.phone || '')}</span></button>`).join('')
-      : '<div class="muted" style="margin-top:4px">No saved customers match. The name you typed will be used.</div>';
-    $('#custList').onclick = (e) => {
-      const b = e.target.closest('[data-cid]'); if (!b) return;
-      const c = list.find((x) => x.id === Number(b.dataset.cid));
-      f.customer_id.value = c.id; f.customer_name.value = c.name; f.customer_phone.value = c.phone || '';
-      if (!f.job_address.value && c.address) f.job_address.value = c.address;
-      $('#custList').innerHTML = `<div class="muted" style="margin-top:4px">✓ Linked to saved customer ${esc(c.name)}</div>`;
-    };
-  });
-  f.customer_name.addEventListener('input', () => { f.customer_id.value = ''; });
-}
-$('#newJob').onclick = () => {
-  const f = openModal(jobForm());
-  wireCustomerFind(f);
-  $('#saveJob').onclick = () => run(async () => {
-    if (!f.reportValidity()) return;
-    const r = await api('/api/jobs', readJobForm(f));
-    closeModal(); toast(`Job #${r.job_number} created`); await loadBoard();
-  });
-};
-function editDetails() {
-  const f = openModal(jobForm(cur));
-  wireCustomerFind(f);
-  $('#saveJob').onclick = () => run(async () => {
-    if (!f.reportValidity()) return;
-    await api(`/api/jobs/${cur.id}`, readJobForm(f), 'PUT');
-    closeModal(); toast('Saved'); await refreshTicket();
-  });
-  if ($('#delJob')) $('#delJob').onclick = () => run(async () => {
-    if (!confirm(`Delete job #${cur.job_number} ${cur.name}? This can't be undone.`)) return;
-    await api(`/api/jobs/${cur.id}`, undefined, 'DELETE');
-    closeModal(); closeTicket(); toast('Job deleted');
-  });
-}
-
-// ---------- job ticket ----------
-async function openTicket(id) {
-  openId = id;
-  $('#ticket').hidden = false;
-  history.replaceState(null, '', '#job-' + id);
-  await run(refreshTicket);
-  if (!products.length) products = await api('/api/products').catch(() => []);
-  showResults();
-  if (window.innerWidth > 760) $('#tSearch').focus();
-}
-function closeTicket() {
-  openId = null; cur = null; $('#ticket').hidden = true;
-  history.replaceState(null, '', location.pathname);
-  run(loadBoard);
-}
-async function refreshTicket() {
-  if (!openId) return;
-  const [j, f] = await Promise.all([api('/api/jobs/' + openId), api(`/api/jobs/${openId}/files`)]);
-  cur = j; files = f;
-  renderTicket();
-}
-function renderTicket() {
-  const j = cur, c = j.column || { name: '', color: '#444', buttons: [] };
-  const locked = j.is_closed;
-  const btns = (c.buttons || []).map((b, k) => ({ ...b, k })).filter((b) => b.enabled);
-  const i = j.column_index;
-  $('#ticket').setAttribute('style', colVars(c));
-  $('#tHead').innerHTML = `<button class="dk" onclick="closeTicket()">← Board</button>
-    <div class="tt"><span>#${j.job_number}</span>${esc(j.name)}</div>
-    <span class="colchip" style="--c:${c.color}">${esc(c.name)}</span>
-    ${j.priority === 'high' ? '<span class="flag" style="position:static">⚑ High</span>' : ''}
-    ${j.back_reason ? `<span class="back" style="margin:0;max-width:340px" title="${esc(j.back_reason)}">↩ Moved back${j.back_by ? ' by ' + esc(j.back_by) : ''}: ${esc(j.back_reason)}</span>` : ''}
-    <div class="chips" style="margin:0">${btns.map((b) => `<button class="chip ${j.status_label === b.label ? 'on' : ''}" style="--b:${b.color || '#3b82f6'}" data-tbtn="${b.k}">${esc(b.label)}</button>`).join('')}</div>
-    <div class="spacer" style="flex:1"></div>
-    ${i > 0 && isMgr ? '<button class="dk" id="tPrev">‹ Move back</button>' : ''}
-    ${i < j.columns_count - 1 ? `<button class="dk" id="tNext">Move to next ›</button>` : ''}
-    ${gcOn() && !locked ? '<button class="dk gcbtn" id="tGC">🏗 Bid Builder</button>' : ''}
-    <button class="dk" id="tCrews">👷 Crews (${j.crews.length})</button>
-    <button class="dk" onclick="editDetails()">Edit details</button>
-    <button class="dk" onclick="sendJob()">📤 Send</button>
-    <button class="dk" onclick="printChoice()">🖨 Print</button>`;
-  $('#tHead').onclick = (e) => {
-    const b = e.target.closest('[data-tbtn]');
-    if (b) return run(async () => { const r = await api(`/api/jobs/${j.id}/button`, { index: Number(b.dataset.tbtn) }); if (r.moved) toast('Moved to the next column'); await refreshTicket(); });
-    if (e.target.closest('#tGC')) return openBidBuilder(j.id);
-    if (e.target.id === 'tCrews') { crewOpen = !crewOpen; renderTicket(); if (crewOpen) $('#crewBox').scrollIntoView({ block: 'nearest' }); return; }
-    if (e.target.id === 'tNext') return run(async () => { await api(`/api/jobs/${j.id}/move`, { direction: 1 }); toast('Moved'); await refreshTicket(); });
-    if (e.target.id === 'tPrev') return moveBackDialog(j).then((ok) => ok && refreshTicket());
-  };
-  // Center: the job's lines, starting with the quoted price.
-  $('#tLines').innerHTML = `${crewPanel(j)}<h3>Job ticket</h3>
-    ${locked ? '<div class="lockmsg">🔒 This job is closed. Move it back a column to make changes.</div>' : ''}
-    <table class="lines"><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th><th></th></tr></thead><tbody>
-      <tr class="quote"><td>Quoted price <a href="#" onclick="editDetails();return false" style="font-weight:600;font-size:13px;margin-left:6px">${locked ? '' : 'change'}</a></td><td class="num"></td><td class="num"></td><td class="num">${usd(j.quoted_cents)}</td><td></td></tr>
-      ${j.items.map((it) => `<tr>
-        <td>${esc(it.name)}${it.crew_id ? `<span class="kind k-crew">${/ \(cost \$/.test(it.name) ? 'Crew cost plus' : 'Crew up-charge'}</span>` : `<span class="kind k-${it.kind}">${{ item: 'Item', charge: 'Charge', rental: 'Rental' }[it.kind]}</span>`}${it.taxable ? '<span class="tx">T</span>' : ''}
-          <div class="muted" style="font-size:12px">${shortDate(it.created_at)}</div></td>
-        <td class="num">${locked || it.crew_id ? it.qty : `<button class="qbtn" data-dq="${it.id}" data-q="${it.qty - 1}" ${it.qty <= 1 ? 'disabled' : ''}>−</button> ${it.qty} <button class="qbtn" data-dq="${it.id}" data-q="${it.qty + 1}">+</button>`}</td>
-        <td class="num">${usd(it.unit_cents)}</td><td class="num">${usd(it.unit_cents * it.qty)}</td>
-        <td>${locked || it.crew_id ? '' : `<button class="xbtn" data-del="${it.id}" title="Remove">×</button>`}</td></tr>`).join('')}
-    </tbody></table>
-    ${!j.items.length ? '<p class="muted">Nothing added yet. Items, extra charges and equipment rental added along the way show here.</p>' : ''}
-    <div class="muted" style="font-size:12.5px;margin-top:8px">T = taxable${j.tax_exempt ? ' (this job is tax exempt)' : ` at ${Number(j.tax_rate)}%`}</div>
-    <h3 style="margin-top:20px">Plans, photos &amp; estimates (${files.length})</h3>
-    <div class="files">${files.map(fileRow).join('') || '<div class="muted">No files yet. Attach plans or blueprints as a PDF, or add photos of the job site.</div>'}</div>`;
-  $('#tLines').onclick = (e) => {
-    if (e.target.closest('[data-crewtoggle]')) { crewOpen = !crewOpen; return renderTicket(); }
-    if (e.target.closest('[data-crewadd]')) return crewDialog(null, Number(e.target.closest('[data-crewadd]').dataset.crewadd) || null);
-    const sb = e.target.closest('[data-sub]');
-    if (sb) return subDialog(Number(sb.dataset.sub));
-    const cs = e.target.closest('[data-crewsend]');
-    if (cs) return crewPacket(Number(cs.dataset.crewsend));
-    const ce = e.target.closest('[data-crewedit]');
-    if (ce) return crewDialog(j.crews.find((x) => x.id === Number(ce.dataset.crewedit)));
-    const cd = e.target.closest('[data-crewdone]');
-    if (cd) { const c = j.crews.find((x) => x.id === Number(cd.dataset.crewdone));
-      return run(async () => { await api(`/api/jobs/${j.id}/crews/${c.id}`, { done: !c.done }, 'PUT'); await refreshTicket(); }); }
-    const cx = e.target.closest('[data-crewdel]');
-    if (cx) { const c = j.crews.find((x) => x.id === Number(cx.dataset.crewdel));
-      if (!confirm(`Remove ${c.trade}${c.name ? ' (' + c.name + ')' : ''} from this job?${c.billing !== 'included' ? ' Its charge comes off the ticket.' : ''}`)) return;
-      return run(async () => { await api(`/api/jobs/${j.id}/crews/${c.id}`, undefined, 'DELETE'); toast('Crew removed'); await refreshTicket(); }); }
-    const fv = e.target.closest('[data-fview]');
-    if (fv) { const f = files.find((x) => x.id === Number(fv.dataset.fview)); return f.kind === 'answer' ? showAnswer(f) : showEstimate(f); }
-    const fe = e.target.closest('[data-fest]');
-    if (fe) return estimateDialog(Number(fe.dataset.fest));
-    const fd = e.target.closest('[data-fdel]');
-    if (fd) {
-      const f = files.find((x) => x.id === Number(fd.dataset.fdel));
-      if (!confirm(`Remove ${f.name}?`)) return;
-      return run(async () => { await api(`/api/jobs/${j.id}/files/${f.id}`, undefined, 'DELETE'); toast('Removed'); await refreshTicket(); });
-    }
-    const q = e.target.closest('[data-dq]');
-    if (q) return run(async () => { await api(`/api/jobs/${j.id}/items/${q.dataset.dq}`, { qty: Number(q.dataset.q) }, 'PUT'); await refreshTicket(); });
-    const d = e.target.closest('[data-del]');
-    if (d) {
-      const it = j.items.find((x) => x.id === Number(d.dataset.del));
-      if (!confirm(`Remove ${it.name}?`)) return;
-      run(async () => { await api(`/api/jobs/${j.id}/items/${it.id}`, undefined, 'DELETE'); await refreshTicket(); });
-    }
-  };
-  // Right: totals, payments, details, history.
-  const bal = j.balance_cents;
-  const mapUrl = mapLink(null, null, j.job_address);
-  $('#tSide').innerHTML = `<h3>Totals</h3>
-    <div class="tot">
-      <div><span>Quoted price</span><span>${usd(j.quoted_cents)}</span></div>
-      <div><span>Added along the way</span><span>${usd(j.extras_cents)}</span></div>
-      <div><span>Sales tax${j.tax_exempt ? ' (exempt)' : ` ${Number(j.tax_rate)}%`}</span><span>${usd(j.tax_cents)}</span></div>
-      ${j.discount_cents ? `<div><span>Discount${j.discount_note ? ` <span class="muted">(${esc(j.discount_note)})</span>` : ''}</span><span>−${usd(j.discount_cents)}</span></div>` : ''}
-      <div class="sep"><b>Job total</b><b>${usd(j.total_cents)}</b></div>
-      <div><span>Paid so far</span><span>${usd(j.paid_cents)}</span></div>
-      <div class="sep"><b>${bal < 0 ? 'Overpaid' : 'Balance owed'}</b><span class="big ${bal > 0 ? 'owed' : 'zero'}">${usd(Math.abs(bal))}</span></div>
-    </div>
-    <div class="side-actions">
-      <button class="primary" id="payBtn" ${locked || bal <= 0 ? 'disabled' : ''}>Take payment</button>
-      <button class="dk" id="finishBtn" ${locked ? 'disabled' : ''}>Finish job…</button>
-    </div>
-    ${subTotalsHtml(j)}
-    <h3>Payments (${j.payments.filter((p) => !p.voided).length})</h3>
-    <div class="plist">${j.payments.map((p) => `<div class="${p.voided ? 'v' : ''}"><span>${shortDate(p.created_at)} · ${METHOD[p.method]}${p.check_number ? ' #' + esc(p.check_number) : ''}${p.note ? ` · <span class="muted">${esc(p.note)}</span>` : ''}${p.voided ? ' (void)' : ''}</span>
-      <span>${usd(p.amount_cents)}${isMgr && !p.voided && !p.deposit_id && !locked ? ` <a href="#" data-void="${p.id}" style="font-size:12px">void</a>` : ''}</span></div>`).join('') || '<div class="muted">No payments yet</div>'}</div>
-    <h3 style="margin-top:16px">Job details</h3>
-    <div class="info">
-      ${j.description ? `<div>${esc(j.description).replace(/\n/g, '<br>')}</div>` : ''}
-      ${j.customer_name ? `<div><b>Customer</b>${esc(j.customer_name)}</div>` : ''}
-      ${j.customer_phone ? `<div><b>Phone</b><a href="tel:${esc(j.customer_phone)}">${esc(j.customer_phone)}</a></div>` : ''}
-      ${j.job_address ? `<div><b>Job site</b>${mapUrl ? `<a href="${mapUrl}" target="_blank" rel="noopener">${esc(j.job_address)}</a>` : esc(j.job_address)}</div>` : ''}
-      ${j.po_number ? `<div><b>PO #</b>${esc(j.po_number)}</div>` : ''}
-      ${j.crew ? `<div><b>Crew</b>${esc(j.crew)}</div>` : ''}
-      ${j.start_date ? `<div><b>Start</b>${shortDate(j.start_date)}</div>` : ''}
-      <div><b>Progress</b>${j.progress}%</div>
-    </div>
-    <h3 style="margin-top:16px">History</h3>
-    <div class="hist">${j.history.slice(0, 40).map((h) => `<div>${esc(h.action)}<small>${fmtDateTime(h.created_at)}${h.user_name ? ' · ' + esc(h.user_name) : ''}</small></div>`).join('')}</div>`;
-  $('#payBtn').onclick = () => payDialog();
-  $('#finishBtn').onclick = () => finishDialog();
-  $('#tSide').onclick = (e) => {
-    const sb = e.target.closest('[data-sub]'); if (sb) { e.preventDefault(); return subDialog(Number(sb.dataset.sub)); }
-    const v = e.target.closest('[data-void]'); if (!v) return;
-    e.preventDefault();
-    const p = j.payments.find((x) => x.id === Number(v.dataset.void));
-    if (!confirm(`Void the ${METHOD[p.method]} payment of ${usd(p.amount_cents)}?`)) return;
-    run(async () => { await api(`/api/jobs/${j.id}/payments/${p.id}/void`, {}); toast('Payment voided'); await refreshTicket(); });
-  };
-  $('#tSearch').disabled = locked; $('#chargeBtn').disabled = locked; $('#rentalBtn').disabled = locked;
-}
-
-// ---------- add items ----------
-function showResults() {
-  const q = $('#tSearch').value.trim().toLowerCase();
-  const list = products.filter((p) => !p.is_rental && (!q || [p.name, p.barcode, p.category].some((s) => (s || '').toLowerCase().includes(q)))).slice(0, 40);
-  $('#tResults').innerHTML = list.map((p) => `<button class="res" data-pid="${p.id}"><span>${esc(p.name)}<small>${esc(p.category || '')}${p.track_stock ? ` · ${p.stock_qty} in stock` : ''}</small></span><span>${usd(p.price_cents)}</span></button>`).join('')
-    || `<div class="muted">${products.length ? 'No items match.' : 'No products yet. Add them under Manage → Products.'}</div>`;
-}
-const qtyNow = () => Math.max(1, parseInt($('#qty').value, 10) || 1);
-async function addItem(body) {
-  if (!cur || cur.is_closed) return;
-  const r = await api(`/api/jobs/${cur.id}/items`, { ...body, qty: qtyNow() });
-  if (r.found === false) { toast('No item with that barcode', 'bad'); return; }
-  if (r.rental) { rentalDialog(r.rental.id); return; }
-  toast('Added ' + r.item.name);
-  $('#qty').value = 1;
-  products = await api('/api/products').catch(() => products);
-  await refreshTicket(); showResults();
-}
-$('#tSearch').addEventListener('input', showResults);
-$('#tSearch').addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter') return;
-  e.preventDefault();
-  const v = $('#tSearch').value.trim(); if (!v) return;
-  const exact = products.find((p) => p.barcode && p.barcode === v);
-  const matchesNow = products.filter((p) => !p.is_rental && p.name.toLowerCase().includes(v.toLowerCase()));
-  run(async () => {
-    if (exact || /^\d{6,}$/.test(v)) await addItem({ code: v });
-    else if (matchesNow.length === 1) await addItem({ kind: 'item', product_id: matchesNow[0].id });
-    else return;
-    $('#tSearch').value = ''; showResults();
-  });
-});
-$('#tResults').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-pid]'); if (!b) return;
-  run(() => addItem({ kind: 'item', product_id: Number(b.dataset.pid) }));
-});
-$('#chargeBtn').onclick = () => {
-  const f = openModal(`<h2>Extra charge</h2><p class="muted" style="margin:0">Up-charges and change orders added along the way.</p>
-    <label>Description</label><input name="name" required maxlength="120" placeholder="e.g. Change order: extra outlet">
-    <div class="presets">${['Change order', 'Labor', 'Delivery fee', 'Fuel charge', 'Disposal / dumpster', 'Permit fee'].map((s) => `<button type="button" class="dk" data-pre="${s}">${s}</button>`).join('')}</div>
-    <div class="two"><div><label>Amount</label><input name="amt" required inputmode="decimal" placeholder="0.00"></div><div><label>Quantity</label><input name="qty" type="number" min="1" value="1"></div></div>
-    <label class="check"><input type="checkbox" name="taxable"> Taxable</label>
-    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="addCharge">Add to job</button></div>`);
-  f.querySelector('.presets').onclick = (e) => { const b = e.target.closest('[data-pre]'); if (b) { f.name.value = b.dataset.pre + ': '; f.name.focus(); } };
-  $('#addCharge').onclick = () => run(async () => {
-    if (!f.reportValidity()) return;
-    const c = toCents(f.amt.value); if (!c) throw new Error('Enter the amount');
-    await api(`/api/jobs/${cur.id}/items`, { kind: 'charge', name: f.name.value, unit_cents: c, qty: f.qty.value, taxable: f.taxable.checked });
-    closeModal(); toast('Charge added'); await refreshTicket();
-  });
-};
-const PERIOD_NAMES = { half_day: 'Half day', day: 'Day', week: 'Week', month: 'Month' };
-function rentalDialog(preselect) {
-  const items = products.filter((p) => p.is_rental);
-  if (!items.length) { toast('No rental items yet. Mark products as rental items under Manage → Products.', 'bad'); return; }
-  const f = openModal(`<h2>Equipment rental</h2><p class="muted" style="margin:0">Charged to this job at your rental rates.</p>
-    <label>Equipment</label><select name="pid">${items.map((p) => `<option value="${p.id}" ${p.id === preselect ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
-    <div class="two"><div><label>Period</label><select name="period"></select></div><div><label>How many periods</label><input name="count" type="number" min="1" value="1"></div></div>
-    <label>Units</label><input name="qty" type="number" min="1" value="1" style="max-width:120px">
-    <div class="summary"><div><span>Charge</span><span class="big" id="rPrice">$0.00</span></div></div>
-    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="addRent">Add to job</button></div>`);
-  const fill = () => {
-    const p = items.find((x) => x.id === Number(f.pid.value));
-    const keep = f.period.value;
-    f.period.innerHTML = Object.keys(PERIOD_NAMES).filter((k) => p['rate_' + k] != null).map((k) => `<option value="${k}" ${k === keep ? 'selected' : ''}>${PERIOD_NAMES[k]} · ${usd(p['rate_' + k])}</option>`).join('');
-    price();
-  };
-  const price = () => {
-    const p = items.find((x) => x.id === Number(f.pid.value));
-    const rate = p['rate_' + f.period.value] || 0;
-    f.count.disabled = f.period.value === 'half_day';
-    const n = f.period.value === 'half_day' ? 1 : Math.max(1, parseInt(f.count.value, 10) || 1);
-    $('#rPrice').textContent = usd(rate * n * Math.max(1, parseInt(f.qty.value, 10) || 1));
-  };
-  f.pid.onchange = fill; f.period.onchange = price; f.count.oninput = price; f.qty.oninput = price;
-  fill();
-  $('#addRent').onclick = () => run(async () => {
-    if (!f.period.value) throw new Error('This item has no rental rates set');
-    await api(`/api/jobs/${cur.id}/items`, { kind: 'rental', product_id: Number(f.pid.value), period: f.period.value, count: f.count.value, qty: f.qty.value });
-    closeModal(); toast('Rental added'); await refreshTicket();
-  });
-}
-$('#rentalBtn').onclick = () => rentalDialog();
-
-// ---------- payments (split pay) ----------
-function payDialog(afterPaid) {
-  const bal = cur.balance_cents;
-  const f = openModal(`<h2>Take payment</h2>
-    <div class="summary"><div><span>Job total</span><span>${usd(cur.total_cents)}</span></div><div><span>Paid so far</span><span>${usd(cur.paid_cents)}</span></div>
-      <div><span>Balance owed</span><span class="big">${usd(bal)}</span></div></div>
-    <div class="presets"><button type="button" class="dk" data-amt="${bal}">Full balance</button><button type="button" class="dk" data-amt="${Math.round(bal / 2)}">Half</button>
-      <button type="button" class="dk" data-amt="${Math.round(bal / 4)}">25%</button></div>
-    <div id="rows"></div>
-    <button type="button" class="dk" id="addRow" style="margin-top:8px">+ Split with another method</button>
-    <label>Note (optional)</label><input name="note" maxlength="200" placeholder="e.g. Deposit, Progress payment 2, Final payment">
-    <div class="summary"><div><span>This payment</span><b id="pSum">$0.00</b></div><div><span>Balance after</span><b id="pAfter">${usd(bal)}</b></div></div>
-    <div class="err" id="pErr"></div>
-    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="recPay">Record payment</button></div>`);
-  const rows = $('#rows');
-  const addRow = (amt) => {
-    const d = document.createElement('div');
-    d.className = 'prow';
-    d.innerHTML = `<select class="pm">${Object.entries(METHOD).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
-      <input class="pa" inputmode="decimal" placeholder="Amount" value="${amt != null ? dollars(amt) : ''}">
-      <input class="px" inputmode="decimal" placeholder="Cash received">
-      <button type="button" class="xbtn" title="Remove">×</button>`;
-    rows.appendChild(d);
-    const sync = () => { const m = d.querySelector('.pm').value; const x = d.querySelector('.px'); x.hidden = !(m === 'cash' || m === 'check'); x.placeholder = m === 'check' ? 'Check #' : 'Cash received'; x.inputMode = m === 'check' ? 'text' : 'decimal'; };
-    d.querySelector('.pm').onchange = () => { d.querySelector('.px').value = ''; sync(); };
-    d.querySelector('.xbtn').onclick = () => { if (rows.children.length > 1) { d.remove(); total(); } };
-    d.querySelector('.pa').oninput = total;
-    sync();
-  };
-  const parts = () => [...rows.children].map((d) => ({ method: d.querySelector('.pm').value, amt: toCents(d.querySelector('.pa').value), x: d.querySelector('.px').value.trim() }));
-  const total = () => {
-    const s = parts().reduce((a, p) => a + (p.amt || 0), 0);
-    $('#pSum').textContent = usd(s); $('#pAfter').textContent = usd(bal - s);
-  };
-  addRow(bal);
-  total();
-  $('#addRow').onclick = () => {
-    const s = parts().reduce((a, p) => a + (p.amt || 0), 0);
-    addRow(Math.max(0, bal - s) || null); total();
-  };
-  f.querySelector('.presets').onclick = (e) => {
-    const b = e.target.closest('[data-amt]'); if (!b) return;
-    while (rows.children.length > 1) rows.lastChild.remove();
-    rows.firstChild.querySelector('.pa').value = dollars(Number(b.dataset.amt)); total();
-  };
-  $('#recPay').onclick = () => run(async () => {
-    $('#pErr').textContent = '';
-    const list = parts().map((p) => {
-      if (!p.amt) throw new Error('Enter an amount for each payment');
-      const o = { method: p.method, amount_cents: p.amt };
-      if (p.method === 'cash' && p.x) { o.tendered_cents = toCents(p.x); if (o.tendered_cents == null) throw new Error('Cash received is not a valid amount'); }
-      if (p.method === 'check') o.check_number = p.x;
-      return o;
-    });
-    const r = await api(`/api/jobs/${cur.id}/payments`, { payments: list, note: f.note.value });
-    await refreshTicket();
-    openModal(`<h2>Payment recorded</h2>
-      ${r.change_cents ? `<div class="summary"><div><span>Change due</span><span class="big">${usd(r.change_cents)}</span></div></div>` : ''}
-      <div class="summary"><div><span>Paid now</span><b>${usd(r.paid_cents)}</b></div><div><span>Balance owed</span><b>${usd(r.balance_cents)}</b></div></div>
-      <div class="actions"><button type="button" class="dk" onclick="printTicket()">🖨 Print statement</button><button class="primary" id="pDone">Done</button></div>`);
-    $('#pDone').onclick = () => { closeModal(); if (afterPaid) afterPaid(); };
-  });
-}
-
-// ---------- finish: final price, discount, last payment, close ----------
-function finishDialog() {
-  const j = cur;
-  const before = j.subtotal_cents + j.tax_cents;
-  const canClose = j.column_index === j.columns_count - 2;
-  const f = openModal(`<h2>Finish job #${j.job_number}</h2>
-    <div class="summary">
-      <div><span>Quoted price</span><span>${usd(j.quoted_cents)}</span></div>
-      <div><span>Added along the way</span><span>${usd(j.extras_cents)}</span></div>
-      <div><span>Sales tax</span><span>${usd(j.tax_cents)}</span></div>
-      <div><b>Before discount</b><b>${usd(before)}</b></div>
-    </div>
-    ${isMgr ? `<div class="two"><div><label>Discount</label><input name="disc" inputmode="decimal" value="${j.discount_cents ? dollars(j.discount_cents) : ''}" placeholder="0.00"></div>
-      <div><label>Reason</label><input name="note" maxlength="200" value="${esc(j.discount_note || '')}" placeholder="e.g. Smaller than projected"></div></div>
-      <div class="presets"><button type="button" class="dk" id="toQuote" title="Bring the final total back down to the quoted price">Finish at quoted price</button><button type="button" class="dk" id="noDisc">No discount</button></div>`
-      : `<p class="muted">Only an owner or manager can give a discount.</p>`}
-    <div class="summary"><div><span>Final total</span><span class="big" id="fTotal">${usd(j.total_cents)}</span></div>
-      <div><span>Paid so far</span><span>${usd(j.paid_cents)}</span></div><div><span>Balance owed</span><b id="fBal">${usd(j.balance_cents)}</b></div></div>
-    <p class="muted" style="font-size:13px">The discount comes off the final amount. ${canClose ? '' : `Jobs move one column at a time — the job can be closed from the column just before the last one.`}</p>
-    <div class="err" id="fErr"></div>
-    <div class="actions" style="flex-wrap:wrap">
-      <button type="button" class="dk" onclick="closeModal()">Cancel</button>
-      ${isMgr ? '<button type="button" class="dk" id="saveDisc">Save discount</button>' : ''}
-      <button type="button" class="primary" id="fPay" ${j.balance_cents > 0 ? '' : 'hidden'}>Take final payment</button>
-      ${canClose ? `<button type="button" class="primary" id="fClose" ${j.balance_cents === 0 ? '' : 'hidden'}>Close job ✓</button>` : ''}
-    </div>`);
-  const discNow = () => (f.disc && f.disc.value.trim() !== '' ? toCents(f.disc.value) : 0);
-  const preview = () => {
-    const d = discNow();
-    if (d == null) return;
-    $('#fTotal').textContent = usd(before - d); $('#fBal').textContent = usd(before - d - j.paid_cents);
-  };
-  if (f.disc) {
-    f.disc.oninput = preview;
-    $('#toQuote').onclick = () => { f.disc.value = dollars(Math.max(0, before - j.quoted_cents)); if (!f.note.value) f.note.value = 'Finished at quoted price'; preview(); };
-    $('#noDisc').onclick = () => { f.disc.value = ''; f.note.value = ''; preview(); };
-    $('#saveDisc').onclick = () => run(async () => {
-      const d = discNow(); if (d == null) throw new Error('Discount is not a valid amount');
-      await api(`/api/jobs/${j.id}/discount`, { discount_cents: d, note: f.note.value }, 'PUT');
-      await refreshTicket(); toast('Discount saved'); finishDialog();
-    });
-  }
-  $('#fPay').onclick = () => payDialog(() => finishDialog());
-  if ($('#fClose')) $('#fClose').onclick = () => run(async () => {
-    await api(`/api/jobs/${j.id}/move`, { direction: 1 });
-    closeModal(); await refreshTicket(); toast('Job closed');
-  });
-}
-
-// ---------- column settings (buttons per column) & workflow setup ----------
-// The standard (dark) look, and ready-made color sets for a column.
-const STD = { text_color: '#ffffff', bg_color: '#1b1e24', card_color: '#22262e', card_text_color: '#f1f2f4' };
-const THEMES = [
-  { name: 'Standard dark' },
-  { name: 'Light cards', card_color: '#ffffff', card_text_color: '#111827', bg_color: '#dfe5ee' },
-  { name: 'Blue', color: '#1d4ed8', bg_color: '#dbeafe', card_color: '#ffffff', card_text_color: '#1e3a8a' },
-  { name: 'Green', color: '#15803d', bg_color: '#dcfce7', card_color: '#ffffff', card_text_color: '#14532d' },
-  { name: 'Yellow', color: '#facc15', text_color: '#111827', bg_color: '#fef9c3', card_color: '#ffffff', card_text_color: '#713f12' },
-  { name: 'Orange', color: '#ea580c', bg_color: '#ffedd5', card_color: '#ffffff', card_text_color: '#7c2d12' },
-  { name: 'Red', color: '#dc2626', bg_color: '#fee2e2', card_color: '#ffffff', card_text_color: '#7f1d1d' },
-  { name: 'Purple', color: '#7e22ce', bg_color: '#f3e8ff', card_color: '#ffffff', card_text_color: '#3b0764' },
+const BLUE = '#3b82f6', GOLD = '#e0a526', GREEN = '#22c55e', GRAY = '#94a3b8';
+const DEFAULT_COLUMNS = [
+  { name: 'Quoting', color: '#2f4fd8', buttons: [['Quoting', BLUE], ['Submitted', GOLD], ['On Hold', GRAY, 'bottom']] },
+  { name: 'Scheduled', color: '#2e8b3e', buttons: [['Ready', GREEN], ['Reschedule', GRAY]] },
+  { name: 'In Progress', color: '#c9921a', buttons: [['Working', BLUE]] },
+  { name: 'Completed', color: '#7a3cc4', buttons: [['Final Check', BLUE], ['Punch List', GOLD], ['Approve', GREEN]] },
+  { name: 'Payment', color: '#1f7f9e', buttons: [['Invoice', BLUE], ['Paid', GREEN]] },
+  { name: 'Closed', color: '#4b5a6a', buttons: [['Closed', GRAY]] },
 ];
-function columnSettings(id) {
-  const c = cols.find((x) => x.id === id); if (!c) return;
-  const b = [0, 1, 2].map((k) => (c.buttons || [])[k] || { label: '', enabled: false, action: 'mark', color: '#3b82f6' });
-  const f = openModal(`<h2>Customize column</h2>
-    <label>Column name</label><input name="name" required maxlength="40" value="${esc(c.name)}">
-    <label style="margin-top:14px">Colors</label>
-    <div class="colors">
-      <div><span>Header</span><input name="color" type="color" value="${c.color}" title="Header background"><input name="text_color" type="color" value="${c.text_color || STD.text_color}" title="Header lettering"><small>background · letters</small></div>
-      <div><span>Column</span><input name="bg_color" type="color" value="${c.bg_color || STD.bg_color}" title="Column background"><small>background</small></div>
-      <div><span>Cards</span><input name="card_color" type="color" value="${c.card_color || STD.card_color}" title="Card background"><input name="card_text_color" type="color" value="${c.card_text_color || STD.card_text_color}" title="Card lettering"><small>background · letters</small></div>
-    </div>
-    <div class="presets" id="themes">${THEMES.map((t, k) => `<button type="button" class="dk" data-theme="${k}" style="background:${t.card_color || STD.card_color};color:${t.card_text_color || STD.card_text_color};border-left:6px solid ${t.color || c.color}">${esc(t.name)}</button>`).join('')}</div>
-    <label style="margin-top:16px">Card buttons</label><div class="muted" style="font-size:13px">Turn on up to three buttons and name them. "Mark + move" also sends the job to the next column.</div>
-    ${b.map((x, k) => `<div class="btnset"><div class="row">
-      <label class="check" style="margin:0"><input type="checkbox" name="en${k}" ${x.enabled ? 'checked' : ''}> ${k + 1}</label>
-      <input name="lb${k}" maxlength="24" value="${esc(x.label)}" placeholder="Button ${k + 1} name">
-      <input name="co${k}" type="color" value="${x.color || '#3b82f6'}" title="Button color"></div>
-      <div class="row2">
-        <label>When pressed<select name="ac${k}"><option value="mark">Just mark</option><option value="next" ${x.action === 'next' ? 'selected' : ''}>Mark + move to next column</option></select></label>
-        <label>Card goes to<select name="pl${k}"><option value="top" ${x.place === 'top' ? 'selected' : ''}>⬆ Top of column</option><option value="middle" ${!x.place || x.place === 'middle' ? 'selected' : ''}>Middle</option><option value="bottom" ${x.place === 'bottom' ? 'selected' : ''}>⬇ Bottom of column</option></select></label>
-      </div></div>`).join('')}
-    <div class="muted" style="font-size:12.5px;margin-top:6px">Cards sort themselves by the button they're marked with: top, then middle (also cards with no button pressed), then bottom. High-priority jobs come first within each group.</div>
-    <label style="margin-top:14px">Card preview</label><div id="prev"></div>
-    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="saveCol">Save</button></div>`);
-  const read = () => [0, 1, 2].map((k) => ({ label: f['lb' + k].value.trim(), enabled: f['en' + k].checked && !!f['lb' + k].value.trim(), action: f['ac' + k].value, color: f['co' + k].value, place: f['pl' + k].value }))
-    .filter((x) => x.label);
-  // Which optional colors were set (unset ones keep the standard look and follow future changes to it).
-  const custom = { text_color: c.text_color, bg_color: c.bg_color, card_color: c.card_color, card_text_color: c.card_text_color };
-  ['text_color', 'bg_color', 'card_color', 'card_text_color'].forEach((k) => f[k].addEventListener('input', () => { custom[k] = f[k].value; }));
-  $('#themes').onclick = (e) => {
-    const b = e.target.closest('[data-theme]'); if (!b) return;
-    const t = THEMES[Number(b.dataset.theme)];
-    if (t.color) f.color.value = t.color;
-    for (const k of Object.keys(custom)) { custom[k] = t[k] || null; f[k].value = t[k] || STD[k]; }
-    prev();
-  };
-  const prev = () => {
-    const look = { color: f.color.value, ...Object.fromEntries(Object.entries(custom).map(([k, v]) => [k, v ? f[k].value : null])) };
-    $('#prev').innerHTML = `<section class="col" style="${colVars(look)};max-height:none;min-width:0">
-      <div class="colhead"><div><b>${esc(f.name.value.toUpperCase())}</b><small>2 Jobs • ${read().filter((x) => x.enabled).length} Buttons</small></div><span class="gear">⚙</span></div>
-      <div class="cards"><div class="jc" style="cursor:default"><div class="t"><span>#1045</span>Johnson Remodel</div><div class="d">Kitchen &amp; Bath</div>
-      <div class="m">Total: $28,500.00</div><div class="m">Balance: <span class="owed">$8,500.00</span></div>
-      <div class="chips">${read().filter((x) => x.enabled).map((x, i) => `<span class="chip ${i === 0 ? 'on' : ''}" style="--b:${x.color}">${esc(x.label)}</span>`).join('') || '<span class="muted" style="font-size:13px">No buttons</span>'}</div></div></div></section>`;
-  };
-  f.oninput = prev; f.onchange = prev; prev();
-  $('#saveCol').onclick = () => run(async () => {
-    if (!f.reportValidity()) return;
-    await api('/api/job-columns/' + id, { name: f.name.value, color: f.color.value, buttons: read(),
-      ...Object.fromEntries(Object.entries(custom).map(([k, v]) => [k, v ? f[k].value : ''])) }, 'PUT');
-    closeModal(); toast('Column saved'); await loadBoard();
+const METHODS = ['cash', 'card', 'check', 'other'];
+const METHOD_NAMES = { cash: 'Cash', card: 'Card', check: 'Check', other: 'Other' };
+const PERIODS = { half_day: 'Half day', day: 'Day', week: 'Week', month: 'Month' };
+const usd = (c) => (c < 0 ? '-' : '') + '$' + (Math.abs(c) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+module.exports = function setupJobs(app, deps) {
+  const { pool, wrap, fail, text, cents, requireLogin, requireBusiness, requireRole, barcodeVariants, publicOrigin, token } = deps;
+  const biz = [requireLogin, requireBusiness];
+  const isManager = (u) => ['admin', 'owner', 'manager'].includes(u.role);
+  const needManager = (u) => { if (!isManager(u)) fail(403, 'Only an owner or manager can do this'); };
+
+  const jobsOn = wrap(async (req, res, next) => {
+    const b = await pool.query('SELECT jobs_enabled FROM businesses WHERE id=$1', [req.user.business_id]);
+    if (!b.rows[0] || !b.rows[0].jobs_enabled) fail(403, 'The job board is not turned on for this business');
+    next();
   });
-}
-function workflowSetup() {
-  openModal(`<h2>Workflow setup</h2><p class="muted" style="margin:0 0 8px">Columns run left to right. Jobs move one column at a time. The last column is where finished, fully paid jobs close.</p>
-    <div class="collist">${cols.map((c, i) => `<div><i style="--c:${c.color}"></i><b>${i + 1}. ${esc(c.name)}
-      <small class="muted" style="display:block;font-weight:500;font-size:12.5px">${(c.buttons || []).filter((x) => x.enabled).map((x) => esc(x.label) + (x.place === 'top' ? ' ⬆' : x.place === 'bottom' ? ' ⬇' : '')).join(' · ') || 'No buttons'}</small></b>
-      ${i > 0 && i < cols.length - 1 ? `<button type="button" class="dk" data-up="${c.id}" title="Move left">↑</button>` : ''}
-      ${i < cols.length - 2 ? `<button type="button" class="dk" data-down="${c.id}" title="Move right">↓</button>` : ''}
-      <button type="button" class="dk" data-edit="${c.id}">⚙</button>
-      ${i < cols.length - 1 ? `<button type="button" class="dk" data-rm="${c.id}" title="Remove">🗑</button>` : ''}</div>`).join('')}</div>
-    <div class="addrow" style="margin-top:12px"><input id="newCol" maxlength="40" placeholder="New column name, e.g. Permits"><button type="button" class="primary" id="addCol">+ Add column</button></div>
-    <div class="muted" style="font-size:12.5px;margin-top:4px">New columns are added just before the last column.</div>
-    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Done</button></div>`);
-  $('#mBody').onclick = (e) => {
-    const t = e.target.closest('button'); if (!t) return;
-    const d = t.dataset;
-    if (d.edit) return columnSettings(Number(d.edit));
-    if (d.up || d.down) return run(async () => { await api(`/api/job-columns/${d.up || d.down}/move`, { direction: d.up ? -1 : 1 }); await loadBoard(); workflowSetup(); });
-    if (d.rm) {
-      const c = cols.find((x) => x.id === Number(d.rm));
-      if (!confirm(`Remove the "${c.name}" column?`)) return;
-      return run(async () => { await api('/api/job-columns/' + d.rm, undefined, 'DELETE'); await loadBoard(); workflowSetup(); });
-    }
-    if (t.id === 'addCol') return run(async () => {
-      const name = $('#newCol').value.trim(); if (!name) throw new Error('Type a name for the column');
-      await api('/api/job-columns', { name, buttons: [{ label: name, enabled: true, action: 'mark' }] }); await loadBoard(); workflowSetup();
-    });
-  };
-}
-$('#setupBtn').onclick = workflowSetup;
+  const J = [...biz, jobsOn];
 
-// ---------- crews (who's working the job, per phase) ----------
-const TRADES = ['Plumber', 'Electrician', 'Dirt work', 'Concrete', 'Framing', 'HVAC', 'Roofing', 'Drywall', 'Painting', 'Cleanup'];
-function crewPanel(j) {
-  const locked = j.is_closed;
-  const nowList = j.crews.filter((c) => c.column_id === j.column_id && !c.done);
-  const summary = nowList.length ? 'On the job now: ' + nowList.map((c) => esc(c.trade) + (c.name ? ' · ' + esc(c.name) : '')).join(', ')
-    : (j.crews.length ? `${j.crews.length} crew${j.crews.length === 1 ? '' : 's'} on this job` : 'No crews assigned yet');
-  if (!crewOpen) {
-    return `<div class="crewbox" id="crewBox"><div class="crewhead" data-crewtoggle="1"><b>👷 Crews</b><span class="sum">${summary}</span><span class="tog">Show ▾</span></div></div>`;
+  // ---------- live updates: every open board in a business hears about changes ----------
+  const listeners = new Map(); // businessId -> Set(res)
+  function notify(businessId, payload) {
+    const set = listeners.get(businessId);
+    if (!set) return;
+    const data = `data: ${JSON.stringify(payload)}\n\n`;
+    for (const r of set) r.write(data);
   }
-  // Phases in board order: the current phase always shows (so you can add to it), others only if they have crews.
-  const phases = (j.columns || []).filter((c) => c.id === j.column_id || j.crews.some((x) => x.column_id === c.id));
-  const orphan = j.crews.filter((x) => !(j.columns || []).some((c) => c.id === x.column_id));
-  const row = (c) => `<div class="crow ${c.done ? 'done' : ''}">
-      <div class="who"><b>${esc(c.trade)}</b>${c.name ? ' · ' + esc(c.name) : ''}${c.done ? ' <span class="muted" style="font-size:12px">✓ done</span>' : ''}
-        <small>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : ''}${c.phone && c.note ? ' · ' : ''}${esc(c.note || '')}</small>${subLine(c)}</div>
-      <div class="amt">${c.billing === 'costplus'
-        ? `${usd(c.charge_cents)}<small class="cp">COST PLUS</small><small class="cpd">cost ${usd(c.amount_cents)} + ${c.markup_type === 'dollar' ? usd(c.markup_cents || 0) : Number(c.markup_percent || 0) + '%'}</small>`
-        : `${c.amount_cents ? usd(c.amount_cents) : '<span class="muted">—</span>'}<small class="${c.billing === 'extra' ? 'ext' : 'inc'}">${c.billing === 'extra' ? 'UP-CHARGE' : 'PART OF QUOTE'}</small>`}</div>
-      <span class="cbtns"><button class="sendb" data-crewsend="${c.id}" title="Send this crew the job site, notes, plans, pictures and material list">📤 Send</button><button class="subb" data-sub="${c.id}" title="Bid, change orders, payments to this sub and their files">💵 Sub</button>
-      ${locked ? '' : `<button class="${c.done ? '' : 'ok'}" data-crewdone="${c.id}" title="${c.done ? 'Put back on the job' : 'Mark finished'}">${c.done ? '↺' : '✓ Done'}</button>
-        <button data-crewedit="${c.id}">Edit</button><button class="xbtn" data-crewdel="${c.id}" title="Remove">×</button>`}</span></div>`;
-  const inc = j.crews.filter((c) => c.billing === 'included').reduce((a, c) => a + c.amount_cents, 0);
-  const ext = j.crews.filter((c) => c.billing !== 'included').reduce((a, c) => a + (c.charge_cents || c.amount_cents), 0);
-  return `<div class="crewbox" id="crewBox"><div class="crewhead" data-crewtoggle="1"><b>👷 Crews</b><span class="sum">${summary}</span><span class="tog">Hide ▴</span></div>
-    ${phases.map((p) => {
-      const list = j.crews.filter((c) => c.column_id === p.id);
-      return `<div class="phase"><h4><i style="--c:${p.color}"></i>${esc(p.name)}${p.id === j.column_id ? ' <small>(current phase)</small>' : ''}</h4>
-        ${list.map(row).join('') || '<div class="muted" style="font-size:14px;margin-bottom:6px">No crews in this phase yet.</div>'}
-        ${locked ? '' : `<button class="dk" data-crewadd="${p.id}" style="padding:7px 12px;font-size:14px">+ Add crew to ${esc(p.name)}</button>`}</div>`;
-    }).join('')}
-    ${orphan.length ? `<div class="phase"><h4>Other</h4>${orphan.map(row).join('')}</div>` : ''}
-    ${j.crews.length ? `<div class="crewtot"><span>Part of the quote: <b>${usd(inc)}</b>${j.quoted_cents ? ` of ${usd(j.quoted_cents)} quoted` : ''}</span><span>Up-charges &amp; cost plus on the ticket: <b>${usd(ext)}</b></span></div>` : ''}
-  </div>`;
-}
-function crewDialog(c, phaseId) {
-  const j = cur, isNew = !c;
-  c = c || { trade: '', name: '', phone: '', amount_cents: 0, billing: 'included', note: '', column_id: phaseId || j.column_id };
-  const f = openModal(`<h2>${isNew ? 'Add crew' : 'Edit crew'}</h2>
-    <label>Phase</label><select name="column_id">${(j.columns || []).map((p) => `<option value="${p.id}" ${p.id === c.column_id ? 'selected' : ''}>${esc(p.name)}${p.id === j.column_id ? ' (current)' : ''}</option>`).join('')}</select>
-    <label>Trade / crew</label><input name="trade" required maxlength="60" value="${esc(c.trade)}" placeholder="e.g. Plumber">
-    <div class="presets">${TRADES.map((t) => `<button type="button" class="dk" data-trade="${t}">${t}</button>`).join('')}</div>
-    <div class="two"><div><label>Name or company</label><input name="name" maxlength="100" value="${esc(c.name || '')}" placeholder="e.g. Mike's Plumbing"></div>
-      <div><label>Phone</label><input name="phone" maxlength="40" inputmode="tel" value="${esc(c.phone || '')}"></div></div>
-    <label id="amtLabel">Amount for this crew</label><input name="amt" inputmode="decimal" value="${c.amount_cents ? dollars(c.amount_cents) : ''}" placeholder="0.00" style="max-width:200px">
-    <div class="billopt">
-      <label><input type="radio" name="billing" value="included" ${c.billing !== 'extra' ? 'checked' : ''}><span>Part of the quote<small>Already in the quoted price; the job total doesn't change. Shows what this crew costs out of the quote.</small></span></label>
-      <label><input type="radio" name="billing" value="extra" ${c.billing === 'extra' ? 'checked' : ''}><span>Up-charge<small>Added to the job ticket as a charge, so the total and balance owed go up.</small></span></label>
-      <label><input type="radio" name="billing" value="costplus" ${c.billing === 'costplus' ? 'checked' : ''}><span>Cost plus<small>The amount above is the crew's cost. Add a markup (percent or dollars); cost + markup goes on the ticket as a charge.</small></span></label>
-    </div>
-    <div class="cpbox" id="cpBox" hidden>
-      <input name="mk" inputmode="decimal" placeholder="Markup" value="${c.billing === 'costplus' ? (c.markup_type === 'dollar' ? dollars(c.markup_cents || 0) : Number(c.markup_percent || 0)) : ''}">
-      <select name="mktype"><option value="percent">% of cost</option><option value="dollar" ${c.markup_type === 'dollar' ? 'selected' : ''}>$ amount</option></select>
-      <div class="prev" id="cpPrev"></div>
-    </div>
-    <label>Note</label><input name="note" maxlength="300" value="${esc(c.note || '')}" placeholder="e.g. Rough-in Tuesday, finish after drywall">
-    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button><button class="primary" id="saveCrew">${isNew ? 'Add crew' : 'Save'}</button></div>`);
-  f.querySelector('.presets').onclick = (e) => { const b = e.target.closest('[data-trade]'); if (b) { f.trade.value = b.dataset.trade; f.name.focus(); } };
-  // Cost plus: show the markup fields and what will be charged.
-  const markup = () => {
-    const cost = toCents(f.amt.value) || 0, raw = f.mk.value.trim();
-    if (f.mktype.value === 'percent') { const pct = raw === '' ? 0 : Number(raw); return Number.isFinite(pct) && pct >= 0 ? { cost, mk: Math.round(cost * pct / 100 + 1e-9), pct } : null; }
-    const mk = raw === '' ? 0 : toCents(raw); return mk == null ? null : { cost, mk };
-  };
-  const cpSync = () => {
-    const on = f.billing.value === 'costplus';
-    $('#cpBox').hidden = !on;
-    $('#amtLabel').textContent = on ? "Crew's cost" : 'Amount for this crew';
-    if (!on) return;
-    const m = markup();
-    $('#cpPrev').innerHTML = m ? `Cost ${usd(m.cost)} + markup ${usd(m.mk)}${m.pct != null ? ` (${m.pct}%)` : ''} = <b>${usd(m.cost + m.mk)}</b> charged on the ticket` : 'Markup is not valid';
-  };
-  f.oninput = cpSync; f.onchange = cpSync; cpSync();
-  $('#saveCrew').onclick = () => run(async () => {
-    if (!f.reportValidity()) return;
-    const amt = f.amt.value.trim() === '' ? 0 : toCents(f.amt.value);
-    if (amt == null) throw new Error('Amount is not valid');
-    const body = { column_id: Number(f.column_id.value), trade: f.trade.value, name: f.name.value, phone: f.phone.value,
-      amount_cents: amt, billing: f.billing.value, note: f.note.value };
-    if (body.billing === 'costplus') {
-      const m = markup(); if (!m) throw new Error('Markup is not valid');
-      body.markup_type = f.mktype.value;
-      if (f.mktype.value === 'percent') body.markup_percent = m.pct; else body.markup_cents = m.mk;
-    }
-    if (isNew) await api(`/api/jobs/${j.id}/crews`, body); else await api(`/api/jobs/${j.id}/crews/${c.id}`, body, 'PUT');
-    closeModal(); crewOpen = true; toast(isNew ? 'Crew added' : 'Saved'); await refreshTicket();
+  app.get('/api/jobs/events', ...J, (req, res) => {
+    res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+    res.flushHeaders();
+    res.write('data: {"type":"hello"}\n\n');
+    const id = req.user.business_id;
+    if (!listeners.has(id)) listeners.set(id, new Set());
+    listeners.get(id).add(res);
+    const ping = setInterval(() => res.write(': ping\n\n'), 25000);
+    req.on('close', () => { clearInterval(ping); listeners.get(id)?.delete(res); });
   });
-}
 
-// ---------- subcontracts: bid, change orders, payments to the sub, their files ----------
-const SUB_METHOD = { check: 'Check', cash: 'Cash', card: 'Card', transfer: 'Bank transfer', other: 'Other' };
-const todayISO = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
-const crewTag = (f) => { const c = f.crew_id && cur && cur.crews.find((x) => x.id === f.crew_id); return c ? `<span class="ftag">👷 ${esc(c.trade)}</span>` : ''; };
-const hasSub = (c) => c.amount_cents || c.quote_cents || c.co_count || c.payments.length;
-function subLine(c) {
-  if (!hasSub(c)) return '';
-  const parts = [`Bid ${usd(c.amount_cents)}`];
-  if (c.quote_cents) parts.push(`Quoted ${usd(c.quote_cents)}`);
-  if (c.co_count) parts.push(`${c.co_count} change order${c.co_count === 1 ? '' : 's'} ${c.co_cents < 0 ? '−' : '+'}${usd(Math.abs(c.co_cents))}`);
-  if (c.sub_paid_cents) parts.push(`Paid ${usd(c.sub_paid_cents)}`);
-  const owe = c.sub_owed_cents;
-  parts.push(owe > 0 ? `<b class="owe">Owe ${usd(owe)}</b>` : `<b class="paidup">Paid in full</b>`);
-  if (c.file_count) parts.push(`📎 ${c.file_count}`);
-  return `<span class="subl">${parts.join(' · ')}</span>`;
-}
-function subTotalsHtml(j) {
-  const list = j.crews.filter(hasSub);
-  if (!list.length) return '';
-  const sum = (k) => list.reduce((a, c) => a + c[k], 0);
-  const owed = sum('sub_owed_cents');
-  return `<h3>Subcontractors</h3>
-    <div class="tot">
-      ${list.map((c) => `<div><span><a href="#" data-sub="${c.id}">${esc(c.trade)}${c.name ? ' · ' + esc(c.name) : ''}</a></span><span>${c.sub_owed_cents > 0 ? 'owe ' + usd(c.sub_owed_cents) : '✓ paid'}</span></div>`).join('')}
-      <div class="sep"><span>Sub contracts (bids + change orders)</span><span>${usd(sum('contract_cents'))}</span></div>
-      <div><span>Paid to subs</span><span>${usd(sum('sub_paid_cents'))}</span></div>
-      <div class="sep"><b>Still owed to subs</b><b class="${owed > 0 ? 'owed' : 'zero'}">${usd(owed)}</b></div>
-    </div>`;
-}
-let subCrewId = null, subForm = null;
-function subDialog(cid, form) {
-  const j = cur, c = j.crews.find((x) => x.id === cid);
-  if (!c) return closeModal();
-  subCrewId = cid; subForm = form || null; gcIdx = null; cp = null;
-  const myFiles = files.filter((f) => f.crew_id === c.id);
-  const owe = c.sub_owed_cents;
-  const payForm = `<div class="subform">
-      <div class="two"><div><label>Amount paid</label><input name="amt" inputmode="decimal" value="${owe > 0 ? dollars(owe) : ''}" placeholder="0.00"></div>
-        <div><label>Date paid</label><input name="paid_on" type="date" value="${todayISO()}"></div></div>
-      <div class="two"><div><label>How</label><select name="paymethod">${Object.entries(SUB_METHOD).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
-        <div><label>Check #</label><input name="check_number" maxlength="30"></div></div>
-      <label>Note (optional)</label><input name="note" maxlength="200" placeholder="e.g. Rough-in draw">
-      <div class="actions"><button type="button" class="dk" data-subcancel="1">Cancel</button><button class="primary" data-subsave="pay">Save payment</button></div></div>`;
-  const coForm = `<div class="subform">
-      <label>What is the change order for? (required)</label>
-      <textarea name="note" rows="2" maxlength="300" placeholder="e.g. Customer added 6 recessed lights in the kitchen"></textarea>
-      <div class="two"><div><label>Amount</label><input name="amt" inputmode="decimal" placeholder="0.00"></div>
-        <div><label>This change order…</label><select name="credit"><option value="">Adds to the sub's price</option><option value="1">Is a credit (takes off)</option></select></div></div>
-      <label class="check" style="margin-top:10px"><input type="checkbox" name="bill" ${j.is_closed ? 'disabled' : ''}> Also charge the customer for it${j.is_closed ? ' (job is closed)' : ''}</label>
-      <div id="billAmt" hidden><label>Amount to charge the customer</label><input name="camt" inputmode="decimal" placeholder="0.00" style="max-width:200px">
-        <div class="muted" style="font-size:12.5px">Goes on the job ticket as a change-order charge, so the customer's total and balance go up.</div></div>
-      <div class="actions"><button type="button" class="dk" data-subcancel="1">Cancel</button><button class="primary" data-subsave="co">Save change order</button></div></div>`;
-  const f = openModal(`<h2 style="margin-bottom:2px">💵 ${esc(c.trade)}${c.name ? ' · ' + esc(c.name) : ''}</h2>
-    <div class="muted" style="margin-bottom:6px">${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a> · ` : ''}${esc(c.column_name || '')}${c.done ? ' · ✓ done' : ''}</div>
-    <div class="subsum">
-      <div><small>Original bid</small><b>${usd(c.amount_cents)}</b></div>
-      <div><small>Change orders</small><b>${c.co_cents < 0 ? '−' : '+'}${usd(Math.abs(c.co_cents))}</b></div>
-      <div><small>Contract now</small><b>${usd(c.contract_cents)}</b></div>
-      <div><small>Paid to sub</small><b>${usd(c.sub_paid_cents)}</b></div>
-      <div class="${owe > 0 ? 'owe' : 'paidup'}"><small>${owe < 0 ? 'Overpaid' : 'Still owed'}</small><b>${usd(Math.abs(owe))}</b></div>
-    </div>
-    ${!c.amount_cents ? `<p class="muted" style="margin-top:-6px">No bid amount on this crew yet. Use <b>Edit</b> on the crew to enter the sub's bid.</p>` : ''}
-    <div class="subcols">
-      <div><h3>Payments to sub ${isMgr && subForm !== 'pay' ? '<button class="dk" data-subnew="pay" style="padding:5px 10px;font-size:13px">+ Record payment</button>' : ''}</h3>
-        ${subForm === 'pay' ? payForm : ''}
-        <div class="sublist">${c.payments.map((p) => `<div class="${p.voided ? 'v' : ''}"><span>${shortDate(p.paid_on)} · ${SUB_METHOD[p.method] || p.method}${p.check_number ? ' #' + esc(p.check_number) : ''}
-            <small>${p.note ? esc(p.note) + ' · ' : ''}${p.taken_by ? esc(p.taken_by) : ''}${p.voided ? ` · VOID: ${esc(p.void_reason || '')}` : ''}</small></span>
-          <span class="amt">${usd(p.amount_cents)}${isMgr && !p.voided ? `<br><a href="#" data-subvoid="${p.id}">void</a>` : ''}</span></div>`).join('') || '<div class="muted" style="background:none;padding:0">No payments yet.</div>'}</div></div>
-      <div><h3>Change orders ${isMgr && subForm !== 'co' ? '<button class="dk" data-subnew="co" style="padding:5px 10px;font-size:13px">+ Change order</button>' : ''}</h3>
-        ${subForm === 'co' ? coForm : ''}
-        <div class="sublist">${c.changes.map((x) => `<div><span><b>CO #${x.number}</b> · ${shortDate(x.created_at)}<small>${esc(x.note)}${x.customer_cents ? ` · charged customer ${usd(x.customer_cents)}` : ''}${x.taken_by ? ' · ' + esc(x.taken_by) : ''}</small></span>
-          <span class="amt">${x.amount_cents < 0 ? '−' : '+'}${usd(Math.abs(x.amount_cents))}${isMgr ? `<br><a href="#" data-codel="${x.id}">remove</a>` : ''}</span></div>`).join('') || '<div class="muted" style="background:none;padding:0">No change orders.</div>'}</div></div>
-    </div>
-    <h3 style="margin:14px 0 4px;font-size:15px">Files for this sub (${myFiles.length})</h3>
-    <div class="muted" style="font-size:13px">Their bid, change orders, invoices, lien waivers, photos of the work…</div>
-    <div class="subfiles">${myFiles.map((x) => `<a href="${fileUrl(x)}" target="_blank" rel="noopener">${x.kind === 'photo' ? `<img src="${fileUrl(x)}" alt="" loading="lazy">` : '📄'}<span>${esc(x.name)}</span></a>`).join('')}</div>
-    <div class="actions" style="justify-content:space-between;flex-wrap:wrap">
-      <span style="display:flex;gap:8px"><button type="button" class="dk" data-subfile="pdf">📄 Attach PDF</button><button type="button" class="dk" data-subfile="photo">📷 Add photo</button></span>
-      <button type="button" class="dk" data-subclose="1">Close</button></div>`);
-  f.classList.add('wide');
-  if (subForm) setTimeout(() => { const i = f.querySelector('.subform input[name=amt], .subform textarea'); if (i) i.focus(); }, 30);
-  f.onchange = (e) => { if (e.target.name === 'bill') { $('#billAmt').hidden = !e.target.checked; if (e.target.checked && !f.camt.value) f.camt.value = f.amt.value; } };
-  f.onclick = async (e) => {
-    const t = e.target;
-    if (t.closest('[data-subclose]')) return closeModal();
-    if (t.closest('[data-subcancel]')) return subDialog(cid);
-    const nw = t.closest('[data-subnew]'); if (nw) return subDialog(cid, nw.dataset.subnew);
-    const sf = t.closest('[data-subfile]'); if (sf) return $(sf.dataset.subfile === 'pdf' ? '#subPdfFile' : '#subPhotoFile').click();
-    const sv = t.closest('[data-subsave]');
-    if (sv) {
-      const amt = Math.round(parseFloat(f.amt.value) * 100);
-      if (!(amt > 0)) return toast('Enter the amount', 'bad');
-      const body = sv.dataset.subsave === 'pay'
-        ? { amount_cents: amt, paid_on: f.paid_on.value, method: f.paymethod.value, check_number: f.check_number.value, note: f.note.value }
-        : { amount_cents: amt, note: f.note.value.trim(), credit: !!f.credit.value, bill_customer: f.bill.checked, customer_cents: Math.round(parseFloat(f.camt.value || '0') * 100) };
-      if (sv.dataset.subsave === 'co' && body.note.length < 3) return toast('Write what the change order is for', 'bad');
-      sv.disabled = true;
-      const ok = await run(async () => { await api(`/api/jobs/${j.id}/crews/${cid}/${sv.dataset.subsave === 'pay' ? 'payments' : 'changes'}`, body); return true; });
-      if (!ok) { sv.disabled = false; return; }
-      toast(sv.dataset.subsave === 'pay' ? 'Payment recorded' : 'Change order saved');
-      await refreshTicket(); return subDialog(cid);
-    }
-    const pv = t.closest('[data-subvoid]');
-    if (pv) {
-      e.preventDefault();
-      const p = c.payments.find((x) => x.id === Number(pv.dataset.subvoid));
-      const reason = prompt(`Void the ${usd(p.amount_cents)} payment to ${c.trade}? Write why:`);
-      if (reason == null) return;
-      if (reason.trim().length < 3) return toast('Write why this payment is being voided', 'bad');
-      await run(async () => { await api(`/api/jobs/${j.id}/crews/${cid}/payments/${p.id}/void`, { reason: reason.trim() }); toast('Payment voided'); });
-      await refreshTicket(); return subDialog(cid);
-    }
-    const cd = t.closest('[data-codel]');
-    if (cd) {
-      e.preventDefault();
-      const x = c.changes.find((y) => y.id === Number(cd.dataset.codel));
-      if (!confirm(`Remove change order #${x.number} (${x.note})?${x.customer_cents ? ' Its charge on the customer\'s ticket comes off too.' : ''}`)) return;
-      await run(async () => { await api(`/api/jobs/${j.id}/crews/${cid}/changes/${x.id}`, undefined, 'DELETE'); toast('Change order removed'); });
-      await refreshTicket(); return subDialog(cid);
-    }
-  };
-}
-const subUpload = (kind) => run(async () => {
-  const r = await uploadPicked($(kind === 'pdf' ? '#subPdfFile' : '#subPhotoFile'), kind, subCrewId);
-  if ($('#m').classList.contains('open')) { if (cp) crewPacket(cp.cid); else if (gcIdx != null) bidEdit(gcIdx); else if (subCrewId) subDialog(subCrewId); }
-  return r;
-});
-$('#subPdfFile').onchange = () => subUpload('pdf');
-$('#subPhotoFile').onchange = () => subUpload('photo');
+  // ---------- helpers ----------
+  const cleanButtons = (list) => (Array.isArray(list) ? list : []).slice(0, 3).map((b) => ({
+    label: text(b && b.label, 'Button name', { required: false, max: 24 }) || 'Button',
+    enabled: !!(b && b.enabled),
+    action: b && b.action === 'next' ? 'next' : 'mark',
+    color: /^#[0-9a-fA-F]{6}$/.test((b && b.color) || '') ? b.color : BLUE,
+    // Where a card with this status sits in the column: top, middle (default) or bottom.
+    place: ['top', 'bottom'].includes(b && b.place) ? b.place : 'middle',
+  }));
+  const cleanColor = (c, fallback) => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : fallback);
 
-// ---------- crew packet: send a crew the job site, notes, plans, pictures and material list ----------
-let cp = null; // { cid, note, important, materials, files:Set, known:Set, phone, email }
-const FILE_ICON = { pdf: '📄', photo: '📷', estimate: '📋', answer: '💬' };
-function crewPacket(cid, how) {
-  const c = cur.crews.find((x) => x.id === cid); if (!c) return;
-  if (!cp || cp.cid !== cid) {
-    const preset = (c.packet_files || []).length ? c.packet_files : files.filter((f) => f.crew_id === cid).map((f) => f.id);
-    cp = { cid, note: c.packet_note || '', important: !!c.packet_important, materials: c.packet_materials !== false,
-      files: new Set(preset), known: new Set(files.map((f) => f.id)), phone: c.phone || '', email: c.email || '',
-      parts: (c.parts || []).map((m) => ({ product_id: m.product_id, name: m.name, qty: m.qty, unit: m.unit || '', note: m.note || '' })) };
+  async function columns(db, businessId) {
+    const sql = 'SELECT * FROM job_columns WHERE business_id=$1 ORDER BY position, id';
+    let r = await db.query(sql, [businessId]);
+    if (!r.rows.length) {
+      // First time: set up the standard six phases (in its own transaction, locked so two screens can't both do it).
+      // The company can change them in Workflow setup.
+      await withTx(async (t) => {
+        await t.query('SELECT pg_advisory_xact_lock(4242, $1)', [businessId]);
+        if ((await t.query(sql, [businessId])).rows.length) return;
+        for (const [i, c] of DEFAULT_COLUMNS.entries()) {
+          await t.query('INSERT INTO job_columns (business_id, name, color, position, buttons) VALUES ($1,$2,$3,$4,$5)',
+            [businessId, c.name, c.color, i + 1,
+              JSON.stringify(c.buttons.map(([label, color, place]) => ({ label, enabled: true, action: 'mark', color, place: place || 'middle' })))]);
+        }
+      });
+      r = await db.query(sql, [businessId]);
+    }
+    return r.rows;
   }
-  // files attached from this window (tagged to the crew) are ticked automatically
-  for (const f of files) if (!cp.known.has(f.id)) { cp.known.add(f.id); if (f.crew_id === cid) cp.files.add(f.id); }
-  subCrewId = cid; gcIdx = null;
-  const matCount = cur.items.filter((i) => i.kind === 'item' || i.kind === 'rental').length + (cur.bid_items || []).length;
-  const fl = [...files].sort((a, b) => (b.crew_id === cid) - (a.crew_id === cid) || a.id - b.id);
-  const f = openModal(`<h2 style="margin-bottom:2px">📤 Send to crew: ${esc(c.trade)}${c.name ? ' · ' + esc(c.name) : ''}</h2>
-    <div class="muted" style="margin-bottom:8px">Job #${cur.job_number} ${esc(cur.name)}${cur.job_address ? ' · ' + esc(cur.job_address) : ''}${c.packet_sent_at ? ` · last sent ${shortDate(c.packet_sent_at)}` : ''}</div>
-    <label>Notes for the crew</label>
-    <textarea name="cpnote" rows="4" maxlength="4000" placeholder="e.g. Gate code 4512. Use the side entrance. Customer's dog is in the back yard. Rough-in inspection Thursday 9am.">${esc(cp.note)}</textarea>
-    <label class="check" style="margin-top:6px"><input type="checkbox" name="cpimp" ${cp.important ? 'checked' : ''}> ⚠ Mark the notes as <b>important</b> (shown in red at the top)</label>
-    <label style="margin-top:12px">🧰 Parts for this crew to bring <span class="muted" style="font-weight:400">(not charged to the customer, no stock change)</span></label>
-    <div class="partsbox"><table class="parts"><tbody>${cp.parts.map((m, i) => `<tr data-pi="${i}">
-        <td><input data-pf="qty" class="pq" inputmode="decimal" value="${esc(m.qty)}" title="Quantity"></td>
-        <td><input data-pf="unit" class="pu" value="${esc(m.unit)}" placeholder="unit" maxlength="20"></td>
-        <td><input data-pf="name" value="${esc(m.name)}" placeholder="Part, e.g. 12/2 Romex 250ft" maxlength="120"></td>
-        <td><input data-pf="note" value="${esc(m.note)}" placeholder="note" maxlength="200"></td>
-        <td><button type="button" class="xbtn" data-pdel="${i}" title="Remove">×</button></td></tr>`).join('')
-        || '<tr><td class="muted" style="padding:6px 2px">No parts yet. Turnkey job? Add what the crew needs to bring.</td></tr>'}</tbody></table>
-      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><button type="button" class="dk" data-padd="1">＋ Add a line</button>
-        <button type="button" class="dk" data-pprod="1">📦 From products</button>
-        ${matCount ? `<button type="button" class="dk" data-pcopy="1">⇣ Copy the job's list (${matCount})</button>` : ''}</div>
-      <div id="pFind" hidden style="margin-top:8px"><input id="pFindQ" placeholder="Search products…" autocomplete="off"><div class="sublist" id="pFindList" style="max-height:200px;overflow:auto;margin-top:6px"></div></div>
-    </div>
-    <label style="margin-top:12px">What to include</label>
-    <div class="cplist">
-      <label class="check"><input type="checkbox" name="cpmat" ${cp.materials ? 'checked' : ''} ${matCount ? '' : 'disabled'}> 🧱 Job material list from the ticket and bid (${matCount} item${matCount === 1 ? '' : 's'}, no prices)</label>
-      ${fl.map((x) => `<label class="check"><input type="checkbox" data-cpf="${x.id}" ${cp.files.has(x.id) ? 'checked' : ''}> ${FILE_ICON[x.kind] || '📎'} ${esc(x.name)} ${crewTag(x)}<span class="muted" style="font-size:12px">${x.kind === 'estimate' ? 'material estimate' : x.kind === 'answer' ? 'Claude notes' : ''}</span></label>`).join('')
-        || '<div class="muted">No files on this job yet. Attach plans, a material list or pictures below.</div>'}
-    </div>
-    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button type="button" class="dk" data-cpup="pdf">📄 Attach PDF</button><button type="button" class="dk" data-cpup="photo">📷 Add picture</button></div>
-    <div class="two" style="margin-top:6px"><div><label>Crew's cell (WhatsApp / text)</label><input name="cpphone" type="tel" inputmode="tel" value="${esc(cp.phone)}" placeholder="(806) 555-1234"></div>
-      <div><label>Crew's email</label><input name="cpemail" type="email" inputmode="email" value="${esc(cp.email)}" placeholder="name@example.com"></div></div>
-    <div class="err" id="cpErr"></div>
-    <div class="sendgrid"><button type="button" class="wa" data-cphow="wa">🟢 WhatsApp</button><button type="button" class="dk" data-cphow="sms">💬 Text</button>
-      <button type="button" class="dk" data-cphow="email">✉️ Email</button><button type="button" class="dk" data-cphow="open">👁 Preview</button></div>
-    <div class="presets" style="justify-content:center"><button type="button" class="dk" data-cphow="copy">📋 Copy link</button><button type="button" class="dk" data-cphow="newlink" title="The old link stops working">🔄 New link</button></div>
-    <div class="actions"><button type="button" class="dk" data-cphow="close">Close</button><button class="primary" data-cphow="save">Save</button></div>`);
-  f.classList.add('wide');
-  const sync = () => {
-    cp.note = f.cpnote.value; cp.important = f.cpimp.checked; cp.materials = f.cpmat.checked;
-    cp.phone = f.cpphone.value.trim(); cp.email = f.cpemail.value.trim();
-    cp.files = new Set([...f.querySelectorAll('[data-cpf]')].filter((x) => x.checked).map((x) => Number(x.dataset.cpf)));
-    f.querySelectorAll('tr[data-pi]').forEach((tr) => {
-      const m = cp.parts[Number(tr.dataset.pi)]; if (!m) return;
-      for (const inp of tr.querySelectorAll('[data-pf]')) m[inp.dataset.pf] = inp.value;
-    });
-  };
-  const partsFor = () => cp.parts.filter((m) => String(m.name).trim()).map((m) => ({ product_id: m.product_id || null, name: String(m.name).trim(), qty: m.qty === '' ? 1 : m.qty, unit: m.unit, note: m.note }));
-  f.oninput = f.onchange = sync;
-  const save = async (extra) => {
-    sync();
-    const r = await api(`/api/jobs/${cur.id}/crews/${cid}/packet`, { note: cp.note, important: cp.important, materials: cp.materials, file_ids: [...cp.files],
-      phone: cp.phone, email: cp.email, parts: partsFor(), ...extra }, 'PUT');
-    const cc = cur.crews.find((x) => x.id === cid); if (cc) cc.parts = partsFor();
-    return r;
-  };
-  let pTimer = null;
-  const pDraw = () => { const pList = cp.pList || []; $('#pFindList').innerHTML = pList.map((p) => `<div data-ppick="${p.id}" style="cursor:pointer"><span><b>${esc(p.name)}</b><small>${esc(p.category || '')}${p.track_stock ? ` · ${p.stock_qty} in stock` : ''}</small></span><span class="amt">＋</span></div>`).join('') || '<div class="muted" style="background:none">No products found.</div>'; };
-  const pLoad = async () => { cp.pList = (await api('/api/products?q=' + encodeURIComponent($('#pFindQ').value.trim()))).filter((p) => !p.is_rental).slice(0, 40); pDraw(); };
-  f.addEventListener('input', (e) => { if (e.target.id === 'pFindQ') { clearTimeout(pTimer); pTimer = setTimeout(() => pLoad().catch(() => {}), 200); } });
-  const focusLast = () => { const rows = f.querySelectorAll('tr[data-pi]'); const last = rows[rows.length - 1]; if (last) last.querySelector('[data-pf=name]').focus(); };
-  f.onclick = async (e) => {
-    if (e.target.closest('[data-padd]')) { sync(); cp.parts.push({ product_id: null, name: '', qty: 1, unit: '', note: '' }); crewPacket(cid); return focusLast(); }
-    const pd = e.target.closest('[data-pdel]'); if (pd) { sync(); cp.parts.splice(Number(pd.dataset.pdel), 1); return crewPacket(cid); }
-    if (e.target.closest('[data-pcopy]')) {
-      sync();
-      const have = new Set(cp.parts.map((m) => String(m.name).toLowerCase()));
-      const src = cur.items.filter((i) => i.kind === 'item' || i.kind === 'rental').map((i) => ({ product_id: i.product_id || null, name: i.name, qty: Number(i.qty) }))
-        .concat((cur.bid_items || []).map((x) => ({ product_id: x.product_id, name: x.name, qty: Number(x.qty) })));
-      let n = 0; for (const m of src) if (!have.has(m.name.toLowerCase())) { cp.parts.push({ ...m, unit: '', note: '' }); n++; }
-      cp.materials = false; crewPacket(cid); return toast(n ? `${n} line${n === 1 ? '' : 's'} copied. Change quantities or add extras.` : 'Those parts are already on the list');
-    }
-    if (e.target.closest('[data-pprod]')) { $('#pFind').hidden = !$('#pFind').hidden; if (!$('#pFind').hidden) { $('#pFindQ').focus(); pLoad().catch((x) => toast(x.message, 'bad')); } return; }
-    const pk = e.target.closest('[data-ppick]');
-    if (pk) {
-      sync(); const p = (cp.pList || []).find((x) => x.id === Number(pk.dataset.ppick)); if (!p) return;
-      const have = cp.parts.find((m) => m.product_id === p.id);
-      if (have) have.qty = Math.round((Number(have.qty) + 1) * 1000) / 1000; else cp.parts.push({ product_id: p.id, name: p.name, qty: 1, unit: '', note: '' });
-      const q = $('#pFindQ').value; crewPacket(cid); $('#pFind').hidden = false; $('#pFindQ').value = q; pDraw();
-      return toast(`${p.name} ${have ? '× ' + have.qty : 'added'}`);
-    }
-    const up = e.target.closest('[data-cpup]');
-    if (up) { sync(); return $(up.dataset.cpup === 'pdf' ? '#subPdfFile' : '#subPhotoFile').click(); }
-    const b = e.target.closest('[data-cphow]'); if (!b) return;
-    const k = b.dataset.cphow; $('#cpErr').textContent = '';
-    if (k === 'close') return closeModal();
-    if (k === 'sms' || k === 'wa') {
-      // open the app right away (inside the click) so the browser doesn't block it; save first
-      let s; try { s = await save(); } catch (x) { $('#cpErr').textContent = x.message; return; }
-      if (k === 'wa') {
-        const num = waNumber(cp.phone);
-        if (cp.phone && (num.length < 8 || num.length > 15)) { $('#cpErr').textContent = 'That phone number does not look right'; return; }
-        sendToWhatsApp(num, s.message);
-      } else {
-        let num = cp.phone.replace(/[^\d+]/g, ''); const digits = num.replace(/\D/g, '');
-        if (digits.length === 10 && !num.startsWith('+')) num = '+1' + digits;
-        if (num && (digits.length < 10 || digits.length > 15)) { $('#cpErr').textContent = 'That phone number does not look right'; return; }
-        launchLink(`sms:${num}?&body=${encodeURIComponent(s.message)}`);
-      }
-      api(`/api/jobs/${cur.id}/crews/${cid}/packet/sent`, { how: k === 'wa' ? 'whatsapp' : 'text', to: cp.phone }).then(refreshTicket).catch(() => {});
-      toast('Crew packet ready to send'); return closeModal();
-    }
-    b.disabled = true;
+  async function withTx(fn) {
+    const client = await pool.connect();
     try {
-      if (k === 'save') { await save(); toast('Saved'); await refreshTicket(); return closeModal(); }
-      if (k === 'open' || k === 'copy') {
-        const s = await save();
-        if (k === 'open') window.open(s.url, '_blank', 'noopener');
-        else { try { await navigator.clipboard.writeText(s.url); toast('Link copied'); } catch (x) { prompt('Copy this link:', s.url); } }
-      }
-      if (k === 'newlink') { if (confirm('Make a new link for this crew? The old link stops working.')) { await save({ new_link: true }); toast('New link made'); } }
-      if (k === 'email') {
-        if (!(me.features && me.features.email_receipts)) throw new Error("Email isn't set up on this server yet (RESEND_API_KEY in Render). WhatsApp and text still work.");
-        if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(cp.email)) { f.cpemail.focus(); throw new Error("Enter the crew's email address"); }
-        await save();
-        const r = await api(`/api/jobs/${cur.id}/crews/${cid}/packet/email`, { email: cp.email });
-        toast(`Emailed to ${r.to}`); await refreshTicket(); return closeModal();
-      }
-    } catch (x) { $('#cpErr').textContent = x.message; }
-    b.disabled = false;
-  };
-}
+      await client.query('BEGIN');
+      const out = await fn(client);
+      await client.query('COMMIT');
+      return out;
+    } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
+  }
+  const log = (db, jobId, user, action) => db.query(
+    'INSERT INTO job_history (job_id, user_id, user_name, action) VALUES ($1,$2,$3,$4)', [jobId, user.id, user.name, action]);
 
-// ---------- General Contractor Bid Builder (add-on) ----------
-// One screen: a row per sub (scope, their amount, your markup %), totals, and New Bid / Open / Save / Print.
-// Company, phone, what's included and the sub's bid PDF/pictures are behind ✎ on each row.
-const gcOn = () => !!(me && me.business && me.business.gc_enabled);
-let gcIdx = null; // crew being edited from the Bid Builder (for re-showing it after a file upload)
-let bb = null;
-const bbPct = (c) => (c.gc_markup_pct != null ? Number(c.gc_markup_pct) : (c.amount_cents && c.quote_cents ? Math.round((c.quote_cents - c.amount_cents) / c.amount_cents * 10000) / 100 : 15));
-const money2 = (c) => (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-function bbLoad() {
-  const j = cur;
-  bb = { jobId: j.id, removed: [], removedItems: [], sel: new Set(), dirty: false, each: j.gc_markup_each !== false, all: Number(j.gc_markup_all || 0) || 12,
-    rows: [...j.crews].filter((c) => c.billing === 'included').sort((a, b) => a.id - b.id)
-      .map((c) => ({ id: c.id, trade: c.trade, name: c.name || '', amount: c.amount_cents, pct: bbPct(c), files: c.file_count || 0, paid: c.sub_paid_cents || 0 }))
-      .concat((j.bid_items || []).map((x) => ({ kind: 'product', id: x.id, product_id: x.product_id, trade: x.name, qty: Number(x.qty), unit: x.unit_cents,
-        amount: Math.round(Number(x.qty) * x.unit_cents), pct: Number(x.markup_pct), paid: 0 }))) };
-  if (!bb.rows.length) bb.rows.push({ id: null, trade: '', name: '', amount: 0, pct: 15, files: 0, paid: 0 });
-}
-async function openBidBuilder(jobId) {
-  if (!cur || cur.id !== jobId) await openTicket(jobId);
-  bbLoad(); bbRender();
-  const first = $('#bb input[data-f=trade]'); if (first && !first.value) first.focus();
-}
-const bbRowPct = (r) => (bb.each ? Number(r.pct) || 0 : Number(bb.all) || 0);
-const bbMk = (r) => Math.round(r.amount * bbRowPct(r) / 100);
-function bbRender() {
-  const j = cur;
-  let el = $('#bb'); if (!el) { el = document.createElement('div'); el.id = 'bb'; document.body.appendChild(el); }
-  el.hidden = false;
-  el.innerHTML = `<div class="bbwin">
-    <div class="bbhead"><div class="bblogo"><span class="bbicon">🏗</span><div><small>General Contractor</small><b>Bid Builder</b></div></div>
-      <div class="bbtools">
-        <button type="button" data-bb="new"><span>📄</span>New Bid</button><button type="button" data-bb="open"><span>📂</span>Open</button>
-        <button type="button" data-bb="save" class="${bb.dirty ? 'dirty' : ''}"><span>💾</span>Save</button><button type="button" data-bb="send"><span>📤</span>Send / Print</button>
-        <button type="button" data-bb="close" class="bbx" title="Close">✕</button></div></div>
-    <div class="bbmeta"><label>Project:</label><div class="bbbox">#${j.job_number} ${esc(j.name)}${j.customer_name ? ` <small>· ${esc(j.customer_name)}</small>` : ''}</div>
-      <label>Date:</label><div class="bbbox" style="max-width:190px">${new Date(j.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</div></div>
-    <div class="bbtablewrap"><table class="bbt"><thead><tr><th>#</th><th>Subcontractor / Scope</th><th class="n">Subcontractor Amount</th><th class="n">Your % Markup</th><th class="n">Your Markup</th><th class="n">Total (With Markup)</th><th></th></tr></thead>
-      <tbody>${bb.rows.map((r, i) => `<tr class="${bb.sel.has(i) ? 'sel' : ''}${r.kind === 'product' ? ' prod' : ''}" data-i="${i}">
-        <td class="num" data-selrow="${i}" title="Click to select">${i + 1}</td>
-        ${r.kind === 'product'
-    ? `<td><div class="pname">📦 ${esc(r.trade)}</div><div class="pqty">Qty <input data-f="qty" class="qty" inputmode="decimal" value="${r.qty}"> × $ ${money2(r.unit)}</div></td>
-        <td class="n" data-amt="${i}">$ ${money2(r.amount)}</td>`
-    : `<td><input data-f="trade" value="${esc(r.trade)}" maxlength="60" placeholder="e.g. Excavation &amp; Site Prep">${r.name ? `<small>${esc(r.name)}</small>` : ''}${bbFiles(r)}</td>
-        <td class="n"><span class="cur">$</span><input data-f="amount" class="amt" inputmode="decimal" value="${r.amount ? money2(r.amount) : ''}" placeholder="0.00"></td>`}
-        <td class="n"><input data-f="pct" type="number" step="0.5" min="0" max="1000" class="pct" value="${bb.each ? r.pct : bb.all}" ${bb.each ? '' : 'disabled'}><span class="cur">%</span></td>
-        <td class="n" data-mk="${i}">$ ${money2(bbMk(r))}</td>
-        <td class="n tot" data-tot="${i}">$ ${money2(r.amount + bbMk(r))}</td>
-        <td class="acts">${r.kind === 'product' ? '' : `<button type="button" data-attach="${i}" title="Attach their bid, an invoice, a blueprint or a picture">📎</button><button type="button" data-edit="${i}" title="Company, phone, what's included, payments">✎</button>`}<button type="button" data-del="${i}" title="Remove" class="del">🗑</button></td></tr>`).join('')}</tbody></table></div>
-    <div class="bbbottom">
-      <div class="bbleft">
-        <div class="bbbtns"><button type="button" class="bbadd" data-bb="add">＋ Add Contractor / Scope</button><button type="button" class="bbprod" data-bb="products">📦 Add from Products</button>
-          <button type="button" data-bb="dup" ${bb.sel.size ? '' : 'disabled'}>⧉ Duplicate</button><button type="button" data-bb="remove" ${bb.sel.size ? '' : 'disabled'}>✕ Remove Selected</button></div>
-        <div class="bbset"><div class="bbsethead">Markup Settings</div>
-          <label><input type="radio" name="bbmode" value="each" ${bb.each ? 'checked' : ''}> Use individual % per contractor (as above)</label>
-          <label><input type="radio" name="bbmode" value="all" ${bb.each ? '' : 'checked'}> Use one overall markup % <input type="number" step="0.5" min="0" max="1000" id="bbAll" value="${bb.all}" ${bb.each ? 'disabled' : ''}> %</label>
-        </div></div>
-      <div class="bbtotals" id="bbTotals"></div>
-    </div>
-    <svg class="bbfoot" viewBox="0 0 1200 70" preserveAspectRatio="none" aria-hidden="true"><path d="M0 52 C200 30 380 58 600 44 C820 30 1000 56 1200 40 L1200 70 L0 70Z" fill="#c9ad7f"/><path d="M0 60 C260 48 520 66 800 56 C980 50 1100 60 1200 54 L1200 70 L0 70Z" fill="#a98a5c"/>
-      <g fill="#7f3b33"><path d="M70 58 V36 L95 22 L120 36 V58Z"/><rect x="88" y="44" width="14" height="14" fill="#c9ad7f"/><path d="M180 58 L184 20 L188 58Z"/><path d="M172 22 L196 18 M184 10 L184 30 M174 12 L194 28 M194 12 L174 28" stroke="#7f3b33" stroke-width="2"/>
-      <path d="M20 58 v-10 h40 v10 M130 58 v-8 h40 v8" stroke="#7f3b33" stroke-width="2" fill="none"/></g></svg>
-  </div>`;
-  bbTotals();
-}
-function bbTotals() {
-  const subs = bb.rows.reduce((a, r) => a + r.amount, 0), mk = bb.rows.reduce((a, r) => a + bbMk(r), 0);
-  const prods = bb.rows.filter((r) => r.kind === 'product').reduce((a, r) => a + r.amount, 0);
-  $('#bbTotals').innerHTML = `${prods ? `<div><span>Subcontractor Total:</span><b>$ ${money2(subs - prods)}</b></div><div><span>Products / Materials:</span><b>$ ${money2(prods)}</b></div>`
-    : `<div><span>Subcontractor Total:</span><b>$ ${money2(subs)}</b></div>`}<div><span>Total Markup:</span><b>$ ${money2(mk)}</b></div>
-    <div class="grand"><span>Project Total (Your Price):</span><b>$ ${money2(subs + mk)}</b></div>
-    ${cur.quoted_cents !== subs + mk ? `<div class="was">Quoted price now: ${usd(cur.quoted_cents)}${bb.dirty ? ' · not saved yet' : ''}</div>` : ''}`;
-  const sv = $('#bb [data-bb=save]'); if (sv) sv.classList.toggle('dirty', bb.dirty);
-}
-function bbRow(i) {
-  const r = bb.rows[i];
-  const ac = $(`#bb [data-amt="${i}"]`); if (ac) ac.textContent = '$ ' + money2(r.amount);
-  $(`#bb [data-mk="${i}"]`).textContent = '$ ' + money2(bbMk(r));
-  $(`#bb [data-tot="${i}"]`).textContent = '$ ' + money2(r.amount + bbMk(r));
-}
-async function bbSave(quiet) {
-  const zero = bb.rows.findIndex((r) => r.kind === 'product' && !(r.qty > 0));
-  if (zero >= 0) throw new Error(`Line ${zero + 1}: enter a quantity, or remove the line`);
-  const bad = bb.rows.findIndex((r) => r.kind !== 'product' && !r.trade.trim() && (r.amount || r.id));
-  if (bad >= 0) throw new Error(`Line ${bad + 1}: enter the subcontractor or scope`);
-  const rows = bb.rows.filter((r) => r.kind === 'product' || r.trade.trim()).map((r) => (r.kind === 'product'
-    ? { kind: 'product', id: r.id, product_id: r.product_id, name: r.trade, qty: r.qty, markup_pct: Number(r.pct) || 0 }
-    : { id: r.id, trade: r.trade.trim(), amount_cents: r.amount, markup_pct: Number(r.pct) || 0 }));
-  const out = await api(`/api/jobs/${bb.jobId}/bid`, { rows, removed: bb.removed, removed_items: bb.removedItems, markup_each: bb.each, markup_all: Number(bb.all) || 0 });
-  await refreshTicket();
-  const sel = bb.sel; bbLoad(); bb.sel = sel.size ? new Set() : sel;
-  bbRender();
-  if (!quiet) toast(`Bid saved · quoted price ${usd(out.quoted_cents)}`);
-}
-function bbClose() { const el = $('#bb'); if (el) { el.hidden = true; el.innerHTML = ''; } bb = null; }
-function bbLeave(then) {
-  if (bb && bb.dirty && !confirm('This bid has changes that are not saved. Leave without saving?')) return;
-  then();
-}
-// Picker used by the board button and by New Bid / Open.
-function bidPicker(mode) {
-  const open = jobs.filter((j) => !(cols.length && j.column_id === cols[cols.length - 1].id));
-  const colName = (id) => (cols.find((c) => c.id === id) || {}).name || '';
-  const startNew = () => {
-    const g = openModal(jobForm());
-    wireCustomerFind(g);
-    $('#saveJob').textContent = 'Next: build the bid ›';
-    $('#saveJob').onclick = () => run(async () => {
-      if (!g.reportValidity()) return;
-      const r = await api('/api/jobs', readJobForm(g));
-      closeModal(); bbClose(); toast(`Job #${r.job_number} created`); await loadBoard();
-      await openBidBuilder(r.id);
+  // Quote + everything added + tax − discount = total; total − payments = balance.
+  function totals(job, extras, taxable, paid) {
+    const rate = job.tax_exempt ? 0 : Number(job.tax_rate);
+    const tax = Math.round((taxable * rate) / 100 + 1e-9);
+    const subtotal = job.quoted_cents + extras;
+    const total = subtotal + tax - job.discount_cents;
+    return { quoted_cents: job.quoted_cents, extras_cents: extras, taxable_cents: taxable, tax_rate: rate, tax_cents: tax,
+      subtotal_cents: subtotal, discount_cents: job.discount_cents, total_cents: total, paid_cents: paid, balance_cents: total - paid };
+  }
+  const JOB_SUMS = `
+    COALESCE((SELECT sum(i.qty * i.unit_cents) FROM job_items i WHERE i.job_id = j.id), 0)::bigint AS extras,
+    COALESCE((SELECT sum(i.qty * i.unit_cents) FROM job_items i WHERE i.job_id = j.id AND i.taxable), 0)::bigint AS taxable_sum,
+    COALESCE((SELECT sum(p.amount_cents) FROM job_payments p WHERE p.job_id = j.id AND NOT p.voided), 0)::bigint AS paid`;
+  const withTotals = (j) => {
+    const t = totals(j, Number(j.extras), Number(j.taxable_sum), Number(j.paid));
+    delete j.extras; delete j.taxable_sum; delete j.paid;
+    return { ...j, ...t };
+  };
+  // Loads one job (locked for update when inside a transaction) with its totals and column place.
+  async function loadJob(db, id, businessId, lock = false) {
+    const r = await db.query(`SELECT j.* FROM jobs j WHERE j.id=$1 AND j.business_id=$2 ${lock ? 'FOR UPDATE' : ''}`, [id, businessId]);
+    if (!r.rows[0]) fail(404, 'Job not found');
+    const s = await db.query(`SELECT ${JOB_SUMS} FROM jobs j WHERE j.id=$1`, [id]);
+    const job = withTotals({ ...r.rows[0], ...s.rows[0] });
+    const cols = await columns(db, businessId);
+    const idx = cols.findIndex((c) => c.id === job.column_id);
+    job.column_index = idx;
+    job.is_closed = idx === cols.length - 1;
+    return { job, cols };
+  }
+  const notClosed = (job) => { if (job.is_closed) fail(400, 'This job is closed. Move it back out of the last column to change it.'); };
+
+  // ---------- board ----------
+  app.get('/api/jobs/board', ...J, wrap(async (req, res) => {
+    const cols = await columns(pool, req.user.business_id);
+    const last = cols[cols.length - 1];
+    // Closed jobs drop off the board after 60 days unless asked for.
+    const params = [req.user.business_id];
+    let where = 'j.business_id = $1';
+    if (req.query.closed !== 'all' && last) {
+      params.push(last.id);
+      where += ` AND NOT (j.column_id = $2 AND j.column_entered_at < now() - interval '60 days')`;
+    }
+    const { rows } = await pool.query(
+      `SELECT j.id, j.job_number, j.name, j.description, j.customer_name, j.customer_phone, j.job_address, j.column_id,
+              j.status_label, j.priority, j.crew, j.start_date, j.progress, j.quoted_cents, j.tax_rate, j.tax_exempt,
+              j.discount_cents, j.column_entered_at, j.closed_at, j.updated_at, j.back_reason, j.back_at, j.back_by, ${JOB_SUMS},
+              (SELECT count(*) FROM job_files f WHERE f.job_id = j.id)::int AS file_count,
+              (SELECT string_agg(c.trade || COALESCE(' · ' || c.name, ''), ', ' ORDER BY c.id) FROM job_crews c
+                WHERE c.job_id = j.id AND c.column_id = j.column_id AND NOT c.done) AS crews_now
+         FROM jobs j WHERE ${where} ORDER BY (j.priority = 'high') DESC, j.column_entered_at, j.id`, params);
+    // A job whose column was removed goes back to the first column.
+    const ids = new Set(cols.map((c) => c.id));
+    const jobs = rows.map(withTotals).map((j) => (ids.has(j.column_id) ? j : { ...j, column_id: cols[0].id }));
+    res.json({ columns: cols, jobs });
+  }));
+
+  // ---------- workflow setup (columns and their buttons) ----------
+  app.put('/api/job-columns/:id', ...J, wrap(async (req, res) => {
+    needManager(req.user);
+    const c = await pool.query('SELECT * FROM job_columns WHERE id=$1 AND business_id=$2', [req.params.id, req.user.business_id]);
+    if (!c.rows[0]) fail(404, 'Column not found');
+    // Optional colors: a #rrggbb value, or empty to use the standard look.
+    const opt = (k) => (k in req.body ? (/^#[0-9a-fA-F]{6}$/.test(req.body[k] || '') ? req.body[k] : null) : c.rows[0][k]);
+    await pool.query('UPDATE job_columns SET name=$1, color=$2, buttons=$3, text_color=$4, bg_color=$5, card_color=$6, card_text_color=$7 WHERE id=$8',
+      [text(req.body.name, 'Column name', { max: 40 }), cleanColor(req.body.color, c.rows[0].color),
+        JSON.stringify(cleanButtons(req.body.buttons)), opt('text_color'), opt('bg_color'), opt('card_color'), opt('card_text_color'), c.rows[0].id]);
+    notify(req.user.business_id, { type: 'columns' });
+    res.json({ ok: true });
+  }));
+  app.post('/api/job-columns', ...J, wrap(async (req, res) => {
+    needManager(req.user);
+    const id = await withTx(async (db) => {
+      const cols = await columns(db, req.user.business_id);
+      if (cols.length >= 12) fail(400, '12 columns is the most a board can have');
+      // New columns go just before the last (closing) column unless a place is given.
+      let at = cols.length - 1;
+      if (req.body.after_id) {
+        const i = cols.findIndex((c) => c.id === Number(req.body.after_id));
+        if (i >= 0) at = Math.min(i + 1, cols.length - 1);
+      }
+      const order = cols.map((c) => c.id);
+      const r = await db.query('INSERT INTO job_columns (business_id, name, color, position, buttons) VALUES ($1,$2,$3,0,$4) RETURNING id',
+        [req.user.business_id, text(req.body.name, 'Column name', { max: 40 }), cleanColor(req.body.color, '#2563c9'),
+          JSON.stringify(cleanButtons(req.body.buttons))]);
+      order.splice(at, 0, r.rows[0].id);
+      for (const [i, cid] of order.entries()) await db.query('UPDATE job_columns SET position=$1 WHERE id=$2', [i + 1, cid]);
+      return r.rows[0].id;
     });
-  };
-  if (mode === 'new') return startNew();
-  const f = openModal(`<h2>🏗 Bid Builder</h2>
-    <button type="button" class="primary" data-pnew="1" style="width:100%;padding:14px;font-size:16px">📄 New Bid (new job)</button>
-    <label style="margin-top:14px">📂 Open a job</label>
-    <input id="bbFind" placeholder="Search job #, name, customer…" autocomplete="off">
-    <div class="sublist" id="bbList" style="max-height:340px;overflow:auto;margin-top:6px"></div>
-    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Cancel</button></div>`);
-  const list = () => {
-    const q = $('#bbFind').value.trim().toLowerCase();
-    $('#bbList').innerHTML = open.filter((j) => !q || [String(j.job_number), j.name, j.customer_name].join(' ').toLowerCase().includes(q)).slice(0, 60)
-      .map((j) => `<div data-pjob="${j.id}" style="cursor:pointer"><span><b>#${j.job_number}</b> ${esc(j.name)}<small>${esc(j.customer_name || '')} · ${esc(colName(j.column_id))}</small></span>
-        <span class="amt">${j.quoted_cents ? usd(j.quoted_cents) : ''}</span></div>`).join('') || '<div class="muted" style="background:none">No open jobs found.</div>';
-  };
-  list(); $('#bbFind').oninput = list;
-  if (window.innerWidth > 700) setTimeout(() => $('#bbFind').focus(), 30);
-  f.onclick = async (e) => {
-    if (e.target.closest('[data-pnew]')) return startNew();
-    const pick = e.target.closest('[data-pjob]');
-    if (pick) { closeModal(); bbClose(); await openBidBuilder(Number(pick.dataset.pjob)); }
-  };
-}
-// ✎ on a row: who the sub is and their paperwork.
-function bidEdit(cid) {
-  const c = cur.crews.find((x) => x.id === cid); if (!c) return;
-  gcIdx = cid; subCrewId = cid;
-  const myFiles = files.filter((f) => f.crew_id === c.id);
-  const f = openModal(`<h2 style="margin-bottom:4px">✎ ${esc(c.trade)}</h2>
-    <div class="muted" style="margin-bottom:6px">Amount ${usd(c.amount_cents)} · customer price ${usd(c.quote_cents)}</div>
-    <div class="two"><div><label>Subcontractor (company)</label><input name="cname" maxlength="100" value="${esc(c.name || '')}" placeholder="e.g. Reyes Plumbing"></div>
-      <div><label>Phone</label><input name="phone" maxlength="40" inputmode="tel" value="${esc(c.phone || '')}"></div></div>
-    <label>What's included (shows on the detailed print)</label><input name="note" maxlength="300" value="${esc(c.note || '')}" placeholder="e.g. Rough-in and finish, fixtures by owner">
-    <label style="margin-top:12px">Their bid &amp; pictures (${myFiles.length})</label>
-    <div class="subfiles">${myFiles.map((x) => `<a href="${fileUrl(x)}" target="_blank" rel="noopener">${x.kind === 'photo' ? `<img src="${fileUrl(x)}" alt="" loading="lazy">` : '📄'}<span>${esc(x.name)}</span></a>`).join('')}
-      <button type="button" class="dk" data-bf="pdf">📄 Attach bid</button><button type="button" class="dk" data-bf="photo">📷 Add picture</button></div>
-    <div class="actions" style="justify-content:space-between;flex-wrap:wrap">
-      <button type="button" class="dk" data-be="money">💵 Payments &amp; change orders</button>
-      <span style="display:flex;gap:8px"><button type="button" class="dk" data-be="cancel">Close</button><button class="primary" data-be="save">Save</button></span></div>`);
-  const save = async () => {
-    const body = { name: f.cname.value.trim(), phone: f.phone.value.trim(), note: f.note.value.trim() };
-    if (body.name === (c.name || '') && body.phone === (c.phone || '') && body.note === (c.note || '')) return true;
-    return run(async () => { await api(`/api/jobs/${cur.id}/crews/${cid}`, body, 'PUT'); await refreshTicket(); return true; });
-  };
-  f.onclick = async (e) => {
-    const bf = e.target.closest('[data-bf]');
-    if (bf) { if (!(await save())) return; bidEdit(cid); return $(bf.dataset.bf === 'pdf' ? '#subPdfFile' : '#subPhotoFile').click(); }
-    const be = e.target.closest('[data-be]'); if (!be) return;
-    if (be.dataset.be === 'cancel') { closeModal(); return bbAfterEdit(); }
-    if (!(await save())) return;
-    if (be.dataset.be === 'money') return subDialog(cid);
-    closeModal(); toast('Saved'); bbAfterEdit();
-  };
-}
-// Files attached to a bid line (its sub): bids, invoices, blueprints, pictures. Click to open.
-function bbFiles(r) {
-  if (!r.id) return '';
-  const list = files.filter((f) => f.crew_id === r.id);
-  if (!list.length) return '';
-  return `<div class="bbfiles">${list.map((f) => `<a href="${fileUrl(f)}" target="_blank" rel="noopener" title="Open ${esc(f.name)}">${f.kind === 'photo' ? `<img src="${fileUrl(f)}" alt="" loading="lazy">` : '📄'}<span>${esc(f.name)}</span></a>`).join('')}</div>`;
-}
-let bbAttachId = null;
-async function bbAttach(input) {
-  const list = [...input.files]; input.value = '';
-  if (!list.length || !bbAttachId) return;
-  let n = 0;
-  for (const [i, f] of list.entries()) {
-    const kind = f.type === 'application/pdf' || /\.pdf$/i.test(f.name) ? 'pdf' : (f.type.startsWith('image/') ? 'photo' : null);
-    if (!kind) { toast(`${f.name}: only PDFs and pictures can be attached`, 'bad'); continue; }
-    toast(`Attaching ${list.length > 1 ? `${i + 1} of ${list.length}` : f.name}…`);
-    try { await uploadFile(f, kind, bbAttachId); n++; } catch (e) { toast(e.message, 'bad'); }
-  }
-  if (n) { toast(`${n} file${n === 1 ? '' : 's'} attached`); await refreshTicket(); bbAfterEdit(); }
-}
-// 📦 Add from Products: search the products list, click to add (click again to add one more).
-async function bbProductPicker() {
-  const f = openModal(`<h2>📦 Add from Products</h2>
-    <input id="bpFind" placeholder="Search name, barcode or category…" autocomplete="off">
-    <div class="sublist" id="bpList" style="max-height:420px;overflow:auto;margin-top:8px"><div class="muted" style="background:none">Loading…</div></div>
-    <div class="muted" style="font-size:13px;margin-top:6px">Click a product to add it to the bid. Click again to add one more. Change the quantity in the bid.</div>
-    <div class="actions"><button type="button" class="primary" data-bpdone>Done</button></div>`);
-  f.classList.add('wide');
-  let list = [], t = null;
-  const draw = () => {
-    $('#bpList').innerHTML = list.map((p) => {
-      const inBid = bb.rows.find((r) => r.kind === 'product' && r.product_id === p.id);
-      return `<div data-pid="${p.id}" style="cursor:pointer;align-items:center"><span style="display:flex;gap:10px;align-items:center">
-        ${p.has_image ? `<img src="/api/products/${p.id}/image?v=${p.image_version || 0}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:6px;background:#fff">` : '<span style="width:40px;text-align:center;font-size:22px">📦</span>'}
-        <span><b>${esc(p.name)}</b><small>${esc(p.category || '')}${p.track_stock ? ` · ${p.stock_qty} in stock` : ''}${p.barcode ? ' · ' + esc(p.barcode) : ''}</small></span></span>
-        <span class="amt">$ ${money2(p.price_cents)}${inBid ? `<br><small style="color:#2f7a33">✓ ${inBid.qty} in bid</small>` : ''}</span></div>`;
-    }).join('') || '<div class="muted" style="background:none">No products found. Add them in Manage → Products.</div>';
-  };
-  const load = async () => { list = (await api('/api/products?q=' + encodeURIComponent($('#bpFind').value.trim()))).filter((p) => !p.is_rental); draw(); };
-  $('#bpFind').oninput = () => { clearTimeout(t); t = setTimeout(() => load().catch((e) => toast(e.message, 'bad')), 200); };
-  if (window.innerWidth > 700) setTimeout(() => $('#bpFind').focus(), 30);
-  await load().catch((e) => toast(e.message, 'bad'));
-  f.onclick = (e) => {
-    if (e.target.closest('[data-bpdone]')) { closeModal(); return; }
-    const pick = e.target.closest('[data-pid]'); if (!pick) return;
-    const p = list.find((x) => x.id === Number(pick.dataset.pid)); if (!p) return;
-    const have = bb.rows.find((r) => r.kind === 'product' && r.product_id === p.id);
-    if (have) { have.qty = Math.round((have.qty + 1) * 1000) / 1000; have.amount = Math.round(have.qty * have.unit); }
-    else {
-      // drop an empty starter line so the product doesn't land below a blank row
-      if (bb.rows.length === 1 && !bb.rows[0].id && !bb.rows[0].kind && !bb.rows[0].trade && !bb.rows[0].amount) bb.rows = [];
-      bb.rows.push({ kind: 'product', id: null, product_id: p.id, trade: p.name, qty: 1, unit: p.price_cents, amount: p.price_cents, pct: bb.each ? 0 : bb.all, paid: 0 });
-    }
-    bb.dirty = true; bbRender(); draw(); toast(`${p.name} ${have ? `× ${have.qty}` : 'added'}`);
-  };
-}
-function bbAfterEdit() {
-  if (!bb) return;
-  // keep unsaved numbers; refresh names and file counts from the server
-  for (const r of bb.rows) { const c = r.id && cur.crews.find((x) => x.id === r.id); if (c) { r.name = c.name || ''; r.files = c.file_count || 0; } }
-  bbRender();
-}
-document.addEventListener('input', (e) => {
-  if (!bb || !e.target.closest('#bb')) return;
-  const t = e.target, tr = t.closest('tr[data-i]');
-  if (t.id === 'bbAll') { bb.all = Number(t.value) || 0; bb.dirty = true; bb.rows.forEach((_, i) => bbRow(i)); return bbTotals(); }
-  if (!tr) return;
-  const i = Number(tr.dataset.i), r = bb.rows[i];
-  if (t.dataset.f === 'trade') r.trade = t.value;
-  if (t.dataset.f === 'amount') r.amount = toCents(t.value) || 0;
-  if (t.dataset.f === 'pct') r.pct = Number(t.value) || 0;
-  if (t.dataset.f === 'qty') { r.qty = Math.max(0, Number(String(t.value).replace(',', '.')) || 0); r.amount = Math.round(r.qty * r.unit); }
-  bb.dirty = true; bbRow(i); bbTotals();
-});
-document.addEventListener('change', (e) => {
-  if (!bb || !e.target.closest('#bb')) return;
-  if (e.target.name === 'bbmode') { bb.each = e.target.value === 'each'; bb.dirty = true; bbRender(); }
-  if (e.target.dataset.f === 'amount') { const r = bb.rows[Number(e.target.closest('tr').dataset.i)]; e.target.value = r.amount ? money2(r.amount) : ''; }
-});
-document.addEventListener('keydown', (e) => {
-  if (!bb || e.key !== 'Enter' || !e.target.closest('#bb tr[data-i]')) return;
-  e.preventDefault();
-  const i = Number(e.target.closest('tr').dataset.i), f = e.target.dataset.f;
-  const next = $(`#bb tr[data-i="${i + 1}"] input[data-f="${f}"]`);
-  if (next) next.focus(); else { $('#bb [data-bb=add]').click(); }
-});
-document.addEventListener('click', async (e) => {
-  if (!bb || !e.target.closest('#bb')) return;
-  const t = e.target;
-  const sr = t.closest('[data-selrow]');
-  if (sr) { const i = Number(sr.dataset.selrow); bb.sel.has(i) ? bb.sel.delete(i) : bb.sel.add(i); return bbRender(); }
-  const del = t.closest('[data-del]');
-  if (del) {
-    const i = Number(del.dataset.del), r = bb.rows[i];
-    if (r.paid) return toast(`${r.trade} has payments recorded, so it can't be removed`, 'bad');
-    if ((r.trade || r.amount) && !confirm(`Remove ${r.trade || 'this line'} from the bid?`)) return;
-    if (r.id) (r.kind === 'product' ? bb.removedItems : bb.removed).push(r.id);
-    bb.rows.splice(i, 1); bb.sel.clear(); bb.dirty = true; return bbRender();
-  }
-  const at = t.closest('[data-attach]');
-  if (at) {
-    const i = Number(at.dataset.attach), r = bb.rows[i];
-    if (!r.trade.trim()) return toast('Enter the subcontractor or scope first', 'bad');
-    if (!r.id || bb.dirty) { const ok = await run(async () => { await bbSave(true); return true; }); if (!ok) return; }
-    bbAttachId = bb.rows[i] && bb.rows[i].id;
-    if (bbAttachId) $('#bbFile').click();
-    return;
-  }
-  const ed = t.closest('[data-edit]');
-  if (ed) {
-    const i = Number(ed.dataset.edit), r = bb.rows[i];
-    if (!r.trade.trim()) return toast('Enter the subcontractor or scope first', 'bad');
-    if (!r.id || bb.dirty) { const ok = await run(async () => { await bbSave(true); return true; }); if (!ok) return; }
-    const id = bb.rows[i] && bb.rows[i].id; if (id) bidEdit(id);
-    return;
-  }
-  const b = t.closest('[data-bb]'); if (!b) return;
-  const k = b.dataset.bb;
-  if (k === 'add') {
-    const last = bb.rows[bb.rows.length - 1];
-    bb.rows.push({ id: null, trade: '', name: '', amount: 0, pct: last ? last.pct : 15, files: 0, paid: 0 }); bb.dirty = true; bbRender();
-    return $(`#bb tr[data-i="${bb.rows.length - 1}"] input[data-f=trade]`).focus();
-  }
-  if (k === 'products') return bbProductPicker();
-  if (k === 'dup') {
-    const idx = [...bb.sel].sort((a, c) => a - c);
-    const copies = idx.map((i) => ({ ...bb.rows[i], id: null, name: '', files: 0, paid: 0 }));
-    bb.rows.splice(idx[idx.length - 1] + 1, 0, ...copies); bb.sel.clear(); bb.dirty = true; return bbRender();
-  }
-  if (k === 'remove') {
-    const idx = [...bb.sel].sort((a, c) => c - a);
-    const paid = idx.map((i) => bb.rows[i]).filter((r) => r.paid);
-    if (paid.length) return toast(`${paid[0].trade} has payments recorded, so it can't be removed`, 'bad');
-    if (!confirm(`Remove ${idx.length} line${idx.length === 1 ? '' : 's'} from the bid?`)) return;
-    for (const i of idx) { const r = bb.rows[i]; if (r.id) (r.kind === 'product' ? bb.removedItems : bb.removed).push(r.id); bb.rows.splice(i, 1); }
-    bb.sel.clear(); bb.dirty = true; return bbRender();
-  }
-  if (k === 'save') { b.disabled = true; await run(() => bbSave(false)); if ($('#bb [data-bb=save]')) $('#bb [data-bb=save]').disabled = false; return; }
-  if (k === 'send') {
-    if (bb.dirty) { const ok = await run(async () => { await bbSave(true); return true; }); if (!ok) return; }
-    return sendJob();
-  }
-  if (k === 'close') return bbLeave(bbClose);
-  if (k === 'new') return bbLeave(() => bidPicker('new'));
-  if (k === 'open') return bbLeave(() => bidPicker());
-});
-
-// ---------- print: total only (normal) or detailed by trade (password required) ----------
-function detailLines(j) {
-  const lines = [...j.crews].sort((a, b) => a.id - b.id).filter((c) => c.quote_cents).map((c) => ({ name: `${c.trade}${c.note ? ' — ' + c.note : ''}`, cents: c.quote_cents }));
-  for (const x of (j.bid_items || [])) lines.push({ name: `${x.name} (${Number(x.qty)})`, cents: x.quote_cents });
-  if (j.gc_own_cents) lines.push({ name: j.gc_own_note || 'General conditions / supervision', cents: j.gc_own_cents });
-  const diff = j.quoted_cents - lines.reduce((a, l) => a + l.cents, 0);
-  if (diff) lines.push({ name: 'Other / adjustment', cents: diff });
-  return lines;
-}
-const detailRows = (j) => detailLines(j).map((l) => `<tr><td style="padding-left:18px">${esc(l.name)}</td><td></td><td></td><td class="num">${usd(l.cents)}</td></tr>`).join('');
-function printChoice() {
-  const j = cur;
-  if (!gcOn() || !j.crews.some((c) => c.quote_cents)) return printTicket(false);
-  const f = openModal(`<h2>Print</h2>
-    <button type="button" class="primary" data-pr="total" style="width:100%;padding:14px;font-size:16px;margin-bottom:8px">🖨 Customer copy: quoted price only</button>
-    <button type="button" class="dk" data-pr="detail" style="width:100%;padding:14px;font-size:16px">🔒 Detailed: each trade's price</button>
-    <div id="prPw" hidden style="margin-top:12px">
-      <div class="muted" style="font-size:13.5px">Shows each subcontractor's price (with your markup) on the printout. Enter your password to confirm.</div>
-      <label>Your password</label><input type="password" name="pw" autocomplete="current-password">
-      <div id="prErr" style="color:#ff8a8a;min-height:18px"></div>
-      <div class="actions"><button type="button" class="dk" data-pr="cancel">Cancel</button><button class="primary" data-pr="go">Print detailed</button></div>
-    </div>`);
-  f.onclick = async (e) => {
-    const b = e.target.closest('[data-pr]'); if (!b) return;
-    const k = b.dataset.pr;
-    if (k === 'total') { closeModal(); return printTicket(false); }
-    if (k === 'cancel') return closeModal();
-    if (k === 'detail') { $('#prPw').hidden = false; f.pw.focus(); return; }
-    if (k === 'go') {
-      if (!f.pw.value) { $('#prErr').textContent = 'Enter your password'; return; }
-      b.disabled = true;
-      try { await api(`/api/jobs/${j.id}/detail-print`, { password: f.pw.value }); }
-      catch (err) { $('#prErr').textContent = err.message; f.pw.value = ''; f.pw.focus(); b.disabled = false; return; }
-      f.pw.value = ''; closeModal(); printTicket(true); refreshTicket().catch(() => {});
-    }
-  };
-  f.onsubmit = (e) => { e.preventDefault(); if (!$('#prPw').hidden) f.querySelector('[data-pr=go]').click(); return false; };
-}
-
-$('#gcBoardBtn').onclick = () => bidPicker();
-$('#bbFile').onchange = () => bbAttach($('#bbFile'));
-
-// ---------- plans, photos & Claude estimates ----------
-const fileUrl = (f) => `/api/jobs/${f.job_id}/files/${f.id}`;
-const kb = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
-function fileRow(f) {
-  const by = `${shortDate(f.created_at)}${f.created_by_name ? ' · ' + esc(f.created_by_name) : ''}`;
-  if (f.kind === 'answer') {
-    const n = (f.estimate && f.estimate.thread || []).length;
-    return `<div class="frow est"><span class="ficon">💬</span><div class="fname"><b>${esc(f.name)}</b><small>${n} question${n === 1 ? '' : 's'} about ${esc((f.estimate && f.estimate.source_name) || 'a file')} · ${by}</small></div>
-      <div class="fact"><button data-fview="${f.id}">Open</button><button class="xbtn" data-fdel="${f.id}" title="Remove">×</button></div></div>`;
-  }
-  if (f.kind === 'estimate') {
-    const n = (f.estimate && f.estimate.materials || []).length;
-    return `<div class="frow est"><span class="ficon">✨</span><div class="fname"><b>${esc(f.name)}</b><small>${n} material${n === 1 ? '' : 's'} · ${by}</small></div>
-      <div class="fact"><button data-fview="${f.id}">Open</button><button class="xbtn" data-fdel="${f.id}" title="Remove">×</button></div></div>`;
-  }
-  return `<div class="frow">${f.kind === 'photo' ? `<a href="${fileUrl(f)}" target="_blank" rel="noopener"><img class="fthumb" src="${fileUrl(f)}" alt="" loading="lazy"></a>` : '<span class="ficon">📄</span>'}
-    <div class="fname"><b>${esc(f.name)}</b><small>${crewTag(f)}${f.kind === 'pdf' ? 'PDF' : 'Photo'} · ${kb(f.size_bytes)} · ${by}</small></div>
-    <div class="fact"><a href="${fileUrl(f)}" target="_blank" rel="noopener">Open</a>${aiOn() ? `<button class="estb" data-fest="${f.id}" title="Ask Claude about this file">✨ Ask Claude</button>` : ''}
-      <button class="xbtn" data-fdel="${f.id}" title="Remove">×</button></div></div>`;
-}
-async function uploadFile(file, kind, crewId) {
-  let body = file, type = file.type, name = file.name || (kind === 'pdf' ? 'Plans.pdf' : 'Photo.jpg');
-  if (kind === 'photo') {
-    // Big enough to read a blueprint, small enough to store and send to Claude.
-    const dataUrl = await resizeImage(file, 2000);
-    body = await (await fetch(dataUrl)).blob(); type = 'image/jpeg'; name = name.replace(/\.[^.]+$/, '') + '.jpg';
-  } else {
-    if (!(file.type === 'application/pdf' || /\.pdf$/i.test(name))) throw new Error(`${name} is not a PDF`);
-    type = 'application/pdf';
-  }
-  if (body.size > 20 * 1024 * 1024) throw new Error(`${name} is larger than 20 MB`);
-  const res = await fetch(`/api/jobs/${cur.id}/files?name=${encodeURIComponent(name)}${crewId ? '&crew_id=' + crewId : ''}`, { method: 'POST', headers: { 'Content-Type': type }, body, credentials: 'same-origin' });
-  const d = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(d.error || `Upload failed (${res.status})`);
-  return d;
-}
-async function uploadPicked(input, kind, crewId) {
-  const list = [...input.files]; input.value = '';
-  if (!list.length || !cur) return [];
-  const out = [];
-  for (const [i, f] of list.entries()) {
-    toast(`Uploading ${list.length > 1 ? `${i + 1} of ${list.length}` : f.name}…`);
-    try { out.push(await uploadFile(f, kind, crewId)); } catch (e) { toast(e.message, 'bad'); }
-  }
-  if (out.length) { toast(`${out.length} file${out.length === 1 ? '' : 's'} attached`); await refreshTicket(); }
-  return out;
-}
-let afterUpload = null;
-$('#pdfBtn').onclick = () => { afterUpload = null; $('#pdfFile').click(); };
-$('#photoBtn').onclick = () => { afterUpload = null; $('#photoFile').click(); };
-$('#pdfFile').onchange = () => run(async () => { const r = await uploadPicked($('#pdfFile'), 'pdf'); if (afterUpload && r[0]) afterUpload(r[0].id); });
-$('#photoFile').onchange = () => run(async () => { const r = await uploadPicked($('#photoFile'), 'photo'); if (afterUpload && r[0]) afterUpload(r[0].id); });
-$('#aiBtn').onclick = () => claudeDialog();
-
-const aiOn = () => !!(me && me.features && me.features.ai_estimates);
-const ASK_IDEAS = ['Make a materials list', 'What is the square footage of each room?', 'List the electrical outlets, switches and fixtures',
-  'Check the plans for anything missing or unclear', 'Write a scope of work I can use in the quote', 'What will the dirt work and concrete need?'];
-// The Ask Claude window: pick a plan or photo, tell Claude what you want.
-function claudeDialog(fileId, text) {
-  if (!aiOn()) { toast('Claude is not turned on for this business', 'bad'); return; }
-  const src = files.filter((f) => f.kind === 'pdf' || f.kind === 'photo');
-  const f = openModal(`<h2>✨ Ask Claude</h2>
-    <p class="muted" style="margin:0">Pick a blueprint, plan or photo and tell Claude what you want. The answer is saved on this job, and you can ask follow-up questions.</p>
-    <label>Plan, blueprint or photo</label>
-    ${src.length ? `<select name="fid">${src.map((x) => `<option value="${x.id}" ${x.id === fileId ? 'selected' : ''}>${x.kind === 'pdf' ? '📄' : '📷'} ${esc(x.name)}</option>`).join('')}</select>`
-      : '<div class="muted">No plans or photos on this job yet. Attach one first:</div>'}
-    <div class="presets"><button type="button" class="dk" id="eNewPdf">📄 Attach a PDF</button><button type="button" class="dk" id="eNewPhoto">📷 Take / pick a photo</button></div>
-    <label>What do you want Claude to do with it?</label>
-    <textarea name="q" rows="4" maxlength="2000" placeholder="e.g. How many sheets of drywall for the addition? Walls are 9 ft.">${esc(text || '')}</textarea>
-    <div class="presets" id="ideas">${ASK_IDEAS.map((x) => `<button type="button" class="dk" data-idea="${esc(x)}">${esc(x)}</button>`).join('')}</div>
-    <div class="actions" style="flex-wrap:wrap">
-      <button type="button" class="dk" onclick="closeModal()">Cancel</button>
-      <button type="button" class="dk" id="eList" ${src.length ? '' : 'disabled'} title="A list of materials with quantities that you can add to the job ticket">📋 Materials list for the ticket</button>
-      <button class="primary" id="eAsk" ${src.length ? '' : 'disabled'}>✨ Ask Claude</button></div>`);
-  const pickNew = (input) => { const q = f.q.value; afterUpload = (id) => claudeDialog(id, q); closeModal(); $(input).click(); };
-  $('#eNewPdf').onclick = () => pickNew('#pdfFile');
-  $('#eNewPhoto').onclick = () => pickNew('#photoFile');
-  $('#ideas').onclick = (e) => { const b = e.target.closest('[data-idea]'); if (b) { f.q.value = b.dataset.idea; f.q.focus(); } };
-  $('#eAsk').onclick = () => {
-    if (!f.q.value.trim()) { f.q.focus(); toast('Type what you want Claude to do', 'bad'); return; }
-    if (/^make a materials list$/i.test(f.q.value.trim())) return runEstimate(Number(f.fid.value), '');
-    runAsk(Number(f.fid.value), f.q.value);
-  };
-  $('#eList').onclick = () => runEstimate(Number(f.fid.value), f.q.value);
-}
-const estimateDialog = (fid) => claudeDialog(fid);
-function working(src, what) {
-  openModal(`<h2>✨ Claude is reading ${esc(src ? src.name : 'the file')}</h2>
-    <p><span class="spin"></span>${what} This usually takes 30 seconds to 2 minutes for a set of plans.</p>
-    <p class="muted">You can leave this open. The answer is saved to the job when it's done.</p>`);
-}
-function failed(e, retry) {
-  openModal(`<h2>Claude didn't finish</h2><p>${esc(e.message)}</p>
-    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Close</button><button class="primary" id="eRetry">Try again</button></div>`);
-  $('#eRetry').onclick = retry;
-}
-async function runEstimate(fid, notes) {
-  working(files.find((x) => x.id === fid), 'Working out the materials…');
-  try {
-    const r = await api(`/api/jobs/${cur.id}/files/${fid}/estimate`, { notes });
-    await refreshTicket();
-    showEstimate(files.find((x) => x.id === r.id) || { id: r.id, name: r.name, estimate: r.estimate, job_id: cur.id });
-  } catch (e) { failed(e, () => claudeDialog(fid, notes)); }
-}
-async function runAsk(fid, question, answerId) {
-  working(files.find((x) => x.id === fid), 'Working on your request…');
-  try {
-    const r = await api(`/api/jobs/${cur.id}/files/${fid}/ask`, { question, answer_id: answerId || undefined });
-    await refreshTicket();
-    showAnswer(files.find((x) => x.id === r.id) || { id: r.id, kind: 'answer', name: 'Claude', source_file_id: fid, estimate: r });
-  } catch (e) { failed(e, () => (answerId ? showAnswer(files.find((x) => x.id === answerId), question) : claudeDialog(fid, question))); }
-}
-// Shows Claude's answers (simple formatting: headings, bold, lists, tables).
-function mdLite(t) {
-  const lines = String(t || '').split('\n'); let html = '', list = null, table = null;
-  const inline = (x) => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
-  const close = () => {
-    if (list) { html += `</${list}>`; list = null; }
-    if (table) { html += '<table class="mdt">' + table.map((r, i) => `<tr>${r.map((c) => `<${i ? 'td' : 'th'}>${inline(c)}</${i ? 'td' : 'th'}>`).join('')}</tr>`).join('') + '</table>'; table = null; }
-  };
-  for (const raw of lines) {
-    const l = raw.trimEnd(); let m;
-    if (/^\s*\|/.test(l)) {
-      if (list) { html += `</${list}>`; list = null; }
-      const cells = l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
-      if (cells.every((c) => /^:?-{2,}:?$/.test(c))) continue;
-      (table = table || []).push(cells); continue;
-    }
-    if ((m = /^\s*[-*•]\s+(.*)/.exec(l))) { if (table) close(); if (list !== 'ul') { close(); html += '<ul>'; list = 'ul'; } html += `<li>${inline(m[1])}</li>`; continue; }
-    if ((m = /^\s*\d+[.)]\s+(.*)/.exec(l))) { if (table) close(); if (list !== 'ol') { close(); html += '<ol>'; list = 'ol'; } html += `<li>${inline(m[1])}</li>`; continue; }
-    close();
-    if ((m = /^#{1,6}\s+(.*)/.exec(l))) html += `<h4>${inline(m[1])}</h4>`;
-    else if (/^-{3,}$/.test(l.trim())) html += '<hr>';
-    else if (l.trim()) html += `<p>${inline(l)}</p>`;
-  }
-  close();
-  return html;
-}
-function showAnswer(f, draft) {
-  if (!f || !f.estimate) return;
-  const th = f.estimate.thread || [];
-  const fid = f.source_file_id;
-  const srcOk = files.some((x) => x.id === fid);
-  const dlg = openModal(`<h2>💬 ${esc(f.name)}</h2>
-    <p class="muted" style="margin:0 0 8px">About ${esc(f.estimate.source_name || 'a file')}${srcOk ? '' : ' (that file was removed, so no more follow-ups)'}</p>
-    <div class="chat">${th.map((t) => `<div class="q"><b>${esc(t.by || 'You')}:</b> ${esc(t.q)}</div><div class="a">${mdLite(t.a)}</div>`).join('')}</div>
-    ${srcOk && aiOn() ? `<label>Ask a follow-up</label><textarea name="q" rows="2" maxlength="2000" placeholder="e.g. Now do the same for the garage">${esc(draft || '')}</textarea>` : ''}
-    <p class="muted" style="font-size:12.5px">Answers by Claude. Check measurements and quantities before ordering or quoting.</p>
-    <div class="actions" style="flex-wrap:wrap"><button type="button" class="dk" onclick="closeModal()">Close</button>
-      ${srcOk && aiOn() ? `<button type="button" class="dk" id="aList">📋 Materials list for the ticket</button><button class="primary" id="aAsk">Ask follow-up</button>` : ''}</div>`);
-  dlg.classList.add('wide');
-  const chat = dlg.querySelector('.chat'); chat.scrollTop = chat.scrollHeight;
-  if (!(srcOk && aiOn())) return;
-  $('#aAsk').onclick = () => { if (!dlg.q.value.trim()) { dlg.q.focus(); return; } runAsk(fid, dlg.q.value, f.id); };
-  // A materials list from this conversation: uses what was asked as the instructions.
-  $('#aList').onclick = () => runEstimate(fid, [...th.map((t) => t.q), dlg.q.value].filter(Boolean).join('. ').slice(0, 1000));
-}
-// Words in a name, for matching Claude's material names to your products.
-const words = (s) => String(s || '').toLowerCase().replace(/(\d)\s*x\s*(\d)/g, '$1x$2').split(/[^a-z0-9/".x]+/).filter((w) => w.length > 1 || /\d/.test(w));
-function bestProducts(name) {
-  const w = new Set(words(name));
-  if (!w.size) return [];
-  return products.filter((p) => !p.is_rental).map((p) => {
-    if (p.name.toLowerCase() === String(name).toLowerCase()) return { p, s: 1 };
-    const pw = words(p.name); const hit = pw.filter((x) => w.has(x)).length;
-    return { p, s: hit / Math.max(w.size, pw.length) };
-  }).filter((x) => x.s > 0.2).sort((a, b) => b.s - a.s).slice(0, 5);
-}
-function showEstimate(f) {
-  if (!f || !f.estimate) return;
-  const e = f.estimate, locked = cur.is_closed;
-  const rows = e.materials.map((m, i) => {
-    const best = bestProducts(m.name);
-    const pick = best[0] && best[0].s >= 0.6 ? 'p' + best[0].p.id : 'charge';
-    return { m, i, best, pick, on: pick !== 'charge' };
-  });
-  const dlg = openModal(`<h2>✨ ${esc(f.name)}</h2>
-    ${e.summary ? `<p style="margin:4px 0 10px">${esc(e.summary)}</p>` : ''}
-    ${e.notes ? `<p class="muted" style="margin:0 0 8px">Asked for: ${esc(e.notes)}</p>` : ''}
-    <div style="overflow-x:auto"><table class="est"><thead><tr><th>${locked ? '' : '<input type="checkbox" id="eAll" title="Select all">'}</th><th>Material</th><th>Qty</th><th>Add to job as</th><th>Price</th><th class="num">Amount</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr data-i="${r.i}">
-      <td>${locked ? '' : `<input type="checkbox" class="on" ${r.on ? 'checked' : ''}>`}</td>
-      <td><b>${esc(r.m.name)}</b><small>${esc([r.m.category, r.m.notes].filter(Boolean).join(' · '))}</small></td>
-      <td><input class="q" inputmode="decimal" value="${r.m.qty}"> <small>${esc(r.m.unit)}</small></td>
-      <td><select class="as">${r.best.map((b) => `<option value="p${b.p.id}" ${r.pick === 'p' + b.p.id ? 'selected' : ''}>${esc(b.p.name)} · ${usd(b.p.price_cents)}</option>`).join('')}
-        <option value="charge" ${r.pick === 'charge' ? 'selected' : ''}>Extra charge (enter price)</option></select></td>
-      <td><input class="pr" inputmode="decimal" placeholder="0.00"></td><td class="num amt"></td></tr>`).join('')}
-    </tbody></table></div>
-    ${e.assumptions && e.assumptions.length ? `<h3 style="margin:14px 0 0;font-size:14px">Assumptions</h3><ul class="estlist">${e.assumptions.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-    ${e.questions && e.questions.length ? `<h3 style="margin:14px 0 0;font-size:14px">To confirm</h3><ul class="estlist">${e.questions.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-    <p class="muted" style="font-size:12.5px">Estimated by Claude${e.model ? ` (${esc(e.model)})` : ''} from ${esc(e.source_name || 'the attached file')}. Check quantities before ordering. Quantities are rounded up to whole units when added.</p>
-    <div class="summary"><div><span>Selected</span><b id="eSel">$0.00</b></div></div>
-    <div class="actions"><button type="button" class="dk" onclick="closeModal()">Close</button>${locked ? '' : '<button class="primary" id="eAdd">Add selected to job</button>'}</div>`);
-  dlg.classList.add('wide');
-  const prodOf = (v) => products.find((p) => 'p' + p.id === v);
-  const lineOf = (tr) => {
-    const v = tr.querySelector('.as').value, p = prodOf(v);
-    const qty = Math.ceil(Number(String(tr.querySelector('.q').value).replace(/,/g, '')) || 0);
-    const pr = tr.querySelector('.pr');
-    pr.disabled = !!p; if (p) pr.value = (p.price_cents / 100).toFixed(2);
-    const price = p ? p.price_cents : toCents(pr.value);
-    return { tr, p, qty, price, on: tr.querySelector('.on') ? tr.querySelector('.on').checked : false };
-  };
-  const recalc = () => {
-    let sel = 0;
-    $$('table.est tbody tr', dlg).forEach((tr) => {
-      const l = lineOf(tr);
-      tr.querySelector('.amt').textContent = l.price != null && l.qty ? usd(l.price * l.qty) : '';
-      if (l.on && l.price != null) sel += l.price * l.qty;
+    notify(req.user.business_id, { type: 'columns' });
+    res.json({ id });
+  }));
+  app.post('/api/job-columns/:id/move', ...J, wrap(async (req, res) => {
+    needManager(req.user);
+    await withTx(async (db) => {
+      const cols = await columns(db, req.user.business_id);
+      const i = cols.findIndex((c) => c.id === Number(req.params.id));
+      if (i < 0) fail(404, 'Column not found');
+      const j = i + (Number(req.body.direction) < 0 ? -1 : 1);
+      if (j < 0 || j >= cols.length) return;
+      if (i === cols.length - 1 || j === cols.length - 1) fail(400, 'The last column is where finished jobs close; it stays last');
+      [cols[i], cols[j]] = [cols[j], cols[i]];
+      for (const [k, c] of cols.entries()) await db.query('UPDATE job_columns SET position=$1 WHERE id=$2', [k + 1, c.id]);
     });
-    $('#eSel').textContent = usd(sel);
-  };
-  dlg.oninput = recalc; dlg.onchange = (ev) => {
-    if (ev.target.id === 'eAll') $$('.on', dlg).forEach((c) => (c.checked = ev.target.checked));
-    if (ev.target.classList.contains('pr') && ev.target.value) { const c = ev.target.closest('tr').querySelector('.on'); if (c) c.checked = true; }
-    recalc();
-  };
-  recalc();
-  if (locked) return;
-  $('#eAdd').onclick = () => run(async () => {
-    const lines = $$('table.est tbody tr', dlg).map(lineOf).filter((l) => l.on);
-    if (!lines.length) throw new Error('Check the materials you want to add');
-    const bad = lines.find((l) => !l.qty || (!l.p && !l.price));
-    if (bad) { bad.tr.querySelector(bad.qty ? '.pr' : '.q').focus(); throw new Error(`Enter a ${bad.qty ? 'price' : 'quantity'} for ${e.materials[bad.tr.dataset.i].name}`); }
-    let n = 0;
-    for (const l of lines) {
-      const m = e.materials[l.tr.dataset.i];
-      if (l.p) await api(`/api/jobs/${cur.id}/items`, { kind: 'item', product_id: l.p.id, qty: l.qty });
-      else await api(`/api/jobs/${cur.id}/items`, { kind: 'charge', name: `${m.name}${m.unit ? ` (${m.unit})` : ''}`.slice(0, 120), unit_cents: l.price, qty: l.qty, taxable: true });
-      n++;
+    notify(req.user.business_id, { type: 'columns' });
+    res.json({ ok: true });
+  }));
+  app.delete('/api/job-columns/:id', ...J, wrap(async (req, res) => {
+    needManager(req.user);
+    await withTx(async (db) => {
+      const cols = await columns(db, req.user.business_id);
+      const i = cols.findIndex((c) => c.id === Number(req.params.id));
+      if (i < 0) fail(404, 'Column not found');
+      if (cols.length <= 2) fail(400, 'A board needs at least two columns');
+      if (i === cols.length - 1) fail(400, 'The last column is where finished jobs close; it cannot be removed');
+      const n = await db.query('SELECT count(*)::int AS n FROM jobs WHERE column_id=$1', [cols[i].id]);
+      if (n.rows[0].n) fail(400, `Move the ${n.rows[0].n} job(s) out of "${cols[i].name}" first`);
+      await db.query('DELETE FROM job_columns WHERE id=$1', [cols[i].id]);
+    });
+    notify(req.user.business_id, { type: 'columns' });
+    res.json({ ok: true });
+  }));
+
+  // ---------- jobs ----------
+  async function jobFields(db, req, current) {
+    const b = req.body;
+    const f = {
+      name: text(b.name, 'Job name', { max: 120 }),
+      description: text(b.description, 'Description', { required: false, max: 1000 }) || null,
+      customer_name: text(b.customer_name, 'Customer name', { required: false, max: 120 }) || null,
+      customer_phone: text(b.customer_phone, 'Customer phone', { required: false, max: 40 }) || null,
+      job_address: text(b.job_address, 'Job site address', { required: false, max: 300 }) || null,
+      po_number: text(b.po_number, 'PO #', { required: false, max: 60 }) || null,
+      crew: text(b.crew, 'Crew', { required: false, max: 60 }) || null,
+      priority: b.priority === 'high' ? 'high' : 'normal',
+      progress: Math.max(0, Math.min(100, parseInt(b.progress, 10) || 0)),
+      start_date: /^\d{4}-\d{2}-\d{2}$/.test(b.start_date || '') ? b.start_date : null,
+      quoted_cents: b.quoted_cents == null || b.quoted_cents === '' ? 0 : cents(b.quoted_cents, 'Quoted price'),
+      tax_exempt: !!b.tax_exempt,
+      customer_id: null,
+    };
+    if (b.customer_id) {
+      const c = await db.query('SELECT id, name, phone FROM customers WHERE id=$1 AND business_id=$2', [b.customer_id, req.user.business_id]);
+      if (!c.rows[0]) fail(404, 'Customer not found');
+      f.customer_id = c.rows[0].id;
+      f.customer_name = f.customer_name || c.rows[0].name;
+      f.customer_phone = f.customer_phone || c.rows[0].phone;
     }
-    closeModal(); toast(`Added ${n} line${n === 1 ? '' : 's'} to the job`);
-    products = await api('/api/products').catch(() => products);
-    await refreshTicket();
-  });
-}
-
-// ---------- send the quote / statement: WhatsApp, text, email ----------
-// The customer gets a private link to a page with the quote (or statement / invoice) they can view and print.
-async function sendJob(how) {
-  let s;
-  try { s = await api(`/api/jobs/${cur.id}/share`, {}); } catch (e) { toast(e.message, 'bad'); return; }
-  const Doc = s.doc.charAt(0).toUpperCase() + s.doc.slice(1);
-  const emailOk = !!(me.features && me.features.email_receipts);
-  const head = `<h2>📤 Send the ${esc(s.doc)}</h2>
-    <div class="summary"><div><span>${esc(Doc)} · job #${s.job.job_number} ${esc(s.job.name)}</span><b>${usd(s.job.total_cents)}</b></div>
-      ${s.kind !== 'quote' ? `<div><span>Balance due</span><b>${usd(s.job.balance_cents)}</b></div>` : ''}</div>`;
-  if (!how) {
-    const f = openModal(`${head}
-      <p class="muted" style="margin:10px 0 0">The customer gets a link to their ${esc(s.doc)}, which they can open on their phone and print.</p>
-      <div class="sendgrid"><button type="button" class="wa" data-how="wa">🟢 WhatsApp</button><button type="button" class="dk" data-how="sms">💬 Text</button>
-        <button type="button" class="dk" data-how="email">✉️ Email</button><button type="button" class="dk" data-how="print">🖨 Print</button></div>
-      <div class="presets" style="justify-content:center"><button type="button" class="dk" id="sOpen">👁 Preview what they'll see</button><button type="button" class="dk" id="sCopy">📋 Copy link</button></div>
-      <div class="actions"><button type="button" class="dk" onclick="closeModal()">Close</button></div>`);
-    f.onclick = (e) => { const b = e.target.closest('[data-how]'); if (!b) return; if (b.dataset.how === 'print') { closeModal(); return printChoice(); } sendJob(b.dataset.how); };
-    $('#sOpen').onclick = () => window.open(s.url, '_blank', 'noopener');
-    $('#sCopy').onclick = async () => { try { await navigator.clipboard.writeText(s.url); toast('Link copied'); } catch (e) { prompt('Copy this link:', s.url); } };
-    return;
+    // Location decides the sales tax rate on taxable items.
+    const locId = b.location_id || (current && current.location_id);
+    const l = await db.query(
+      `SELECT id, tax_rate FROM locations WHERE business_id=$1 AND ($2::int IS NULL OR id=$2) ORDER BY (id=$2) DESC NULLS LAST, id LIMIT 1`,
+      [req.user.business_id, locId ? Number(locId) : null]);
+    f.location_id = l.rows[0] ? l.rows[0].id : null;
+    f.tax_rate = l.rows[0] ? l.rows[0].tax_rate : 0;
+    return f;
   }
-  const back = `<button type="button" class="dk" id="sBack">‹ Back</button>`;
-  if (how === 'wa') {
-    const f = openModal(`${head}
-      <label>Customer's WhatsApp number</label><input name="to" type="tel" inputmode="tel" value="${esc(s.phone || '')}" placeholder="(512) 555-1234">
-      <div class="muted" style="font-size:13px;margin-top:4px">US numbers need no country code. Leave blank to pick a contact in WhatsApp. Opens in ${waMode() === 'app' ? 'the WhatsApp Desktop app' : 'your WhatsApp Web tab'} (change this on the checkout screen).</div>
-      <label>Message</label><textarea name="msg" rows="4">${esc(s.message)}</textarea>
-      <div class="err" id="sErr"></div>
-      <div class="actions">${back}<button class="primary" id="sGo">Open WhatsApp</button></div>`);
-    $('#sGo').onclick = () => {
-      const raw = f.to.value.trim(), num = waNumber(raw);
-      if (raw && (num.length < 8 || num.length > 15)) { $('#sErr').textContent = 'That phone number does not look right'; return; }
-      sendToWhatsApp(num, f.msg.value);
-      api(`/api/jobs/${cur.id}/sent`, { how: 'whatsapp', to: raw }).then(refreshTicket).catch(() => {});
-      closeModal();
-    };
-  } else if (how === 'sms') {
-    const f = openModal(`${head}
-      <label>Customer's cell number</label><input name="to" type="tel" inputmode="tel" value="${esc(s.phone || '')}" placeholder="(512) 555-1234">
-      <div class="muted" style="font-size:13px;margin-top:4px">Opens the Messages app on this device with the message ready; tap Send. Works on phones and tablets (on a Windows PC it needs Phone Link).</div>
-      <label>Message</label><textarea name="msg" rows="4">${esc(s.message)}</textarea>
-      <div class="err" id="sErr"></div>
-      <div class="actions">${back}<button class="primary" id="sGo">Open Messages</button></div>`);
-    $('#sGo').onclick = () => {
-      let num = f.to.value.replace(/[^\d+]/g, ''); const digits = num.replace(/\D/g, '');
-      if (digits.length === 10 && !num.startsWith('+')) num = '+1' + digits;
-      if (num && (digits.length < 10 || digits.length > 15)) { $('#sErr').textContent = 'That phone number does not look right'; return; }
-      launchLink(`sms:${num}?&body=${encodeURIComponent(f.msg.value)}`);
-      api(`/api/jobs/${cur.id}/sent`, { how: 'text', to: f.to.value.trim() }).then(refreshTicket).catch(() => {});
-      closeModal();
-    };
-  } else {
-    const f = openModal(`${head}
-      ${emailOk ? '' : '<div class="lockmsg">Email isn\'t set up on this server yet (RESEND_API_KEY in Render). WhatsApp and text still work.</div>'}
-      <label>Customer's email</label><input name="to" type="email" inputmode="email" value="${esc(s.email || '')}" placeholder="name@example.com">
-      <label>Add a note (optional)</label><textarea name="note" rows="3" maxlength="1000" placeholder="e.g. Thanks for meeting with us. This quote is good for 30 days."></textarea>
-      <div class="muted" style="font-size:13px;margin-top:4px">The ${esc(s.doc)} is emailed right away with a link to view and print it. Replies go to your business email.</div>
-      <div class="err" id="sErr"></div>
-      <div class="actions">${back}<button class="primary" id="sGo" ${emailOk ? '' : 'disabled'}>Send email</button></div>`);
-    $('#sGo').onclick = async () => {
-      const to = f.to.value.trim();
-      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(to)) { $('#sErr').textContent = 'That email address does not look right'; f.to.focus(); return; }
-      $('#sGo').disabled = true; $('#sGo').textContent = 'Sending…';
-      try {
-        const r = await api(`/api/jobs/${cur.id}/email`, { email: to, note: f.note.value });
-        closeModal(); toast(`${Doc} emailed to ${r.to}${r.saved_to_customer ? ' (saved to the customer)' : ''}`); await refreshTicket();
-      } catch (e) { $('#sErr').textContent = e.message; $('#sGo').disabled = false; $('#sGo').textContent = 'Send email'; }
-    };
-  }
-  $('#sBack').onclick = () => sendJob();
-}
 
-// ---------- printed statement / invoice ----------
-function printTicket(detail) {
-  const j = cur, b = me.business;
-  $('#printArea').innerHTML = `<div class="head"><div>${b.logo_url ? `<img src="${esc(b.logo_url)}" style="height:50px"><br>` : ''}<h1>${esc(b.name)}</h1>
-      ${j.location ? `<div>${esc(j.location.address || '')}</div><div>${esc(j.location.phone || '')}</div>` : ''}</div>
-    <div style="text-align:right"><h1>${j.is_closed ? 'Invoice' : (j.column_index <= 0 && !j.paid_cents ? 'Quote' : 'Job statement')} · Job #${j.job_number}</h1><div>${new Date().toLocaleDateString()}</div><div>Status: ${esc(j.column ? j.column.name : '')}</div></div></div>
-    <hr><div><b>${esc(j.name)}</b>${j.description ? ' — ' + esc(j.description) : ''}</div>
-    ${j.customer_name ? `<div>Customer: ${esc(j.customer_name)} ${esc(j.customer_phone || '')}</div>` : ''}
-    ${j.job_address ? `<div>Job site: ${esc(j.job_address)}</div>` : ''}${j.po_number ? `<div>PO #: ${esc(j.po_number)}</div>` : ''}
-    <table><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th></tr></thead><tbody>
-      <tr><td>${detail ? '<b>Quoted price</b>' : 'Quoted price'}</td><td></td><td></td><td class="num">${detail ? '' : usd(j.quoted_cents)}</td></tr>
-      ${detail ? detailRows(j) : ''}
-      ${j.items.map((it) => `<tr><td>${esc(it.name)}${it.taxable ? ' (T)' : ''}</td><td class="num">${it.qty}</td><td class="num">${usd(it.unit_cents)}</td><td class="num">${usd(it.qty * it.unit_cents)}</td></tr>`).join('')}
-    </tbody></table>
-    <div class="totals"><div><span>Subtotal</span><span>${usd(j.subtotal_cents)}</span></div>
-      <div><span>Sales tax${j.tax_exempt ? ' (exempt)' : ` ${Number(j.tax_rate)}%`}</span><span>${usd(j.tax_cents)}</span></div>
-      ${j.discount_cents ? `<div><span>Discount${j.discount_note ? ' (' + esc(j.discount_note) + ')' : ''}</span><span>−${usd(j.discount_cents)}</span></div>` : ''}
-      <div class="b"><span>Job total</span><span>${usd(j.total_cents)}</span></div></div>
-    ${j.payments.filter((p) => !p.voided).length ? `<table><thead><tr><th>Payments</th><th></th><th class="num">Amount</th></tr></thead><tbody>
-      ${j.payments.filter((p) => !p.voided).map((p) => `<tr><td>${new Date(p.created_at).toLocaleDateString()}</td><td>${METHOD[p.method]}${p.check_number ? ' #' + esc(p.check_number) : ''}${p.note ? ' — ' + esc(p.note) : ''}</td><td class="num">${usd(p.amount_cents)}</td></tr>`).join('')}</tbody></table>` : ''}
-    <div class="totals"><div><span>Paid</span><span>${usd(j.paid_cents)}</span></div><div class="b"><span>Balance due</span><span>${usd(j.balance_cents)}</span></div></div>
-    <p style="margin-top:30px">Thank you for your business.</p>`;
-  window.print();
-  // The detailed copy only lives on the page for this one print.
-  if (detail) { const clear = () => { $('#printArea').innerHTML = ''; window.removeEventListener('afterprint', clear); }; window.addEventListener('afterprint', clear); setTimeout(clear, 60000); }
-}
+  app.post('/api/jobs', ...J, wrap(async (req, res) => {
+    const out = await withTx(async (db) => {
+      const f = await jobFields(db, req);
+      const cols = await columns(db, req.user.business_id);
+      await db.query('SELECT pg_advisory_xact_lock(4243, $1)', [req.user.business_id]);
+      const n = await db.query('SELECT COALESCE(max(job_number), 1000) + 1 AS n FROM jobs WHERE business_id=$1', [req.user.business_id]);
+      const r = await db.query(
+        `INSERT INTO jobs (business_id, location_id, job_number, name, description, customer_id, customer_name, customer_phone,
+           job_address, po_number, column_id, priority, crew, start_date, progress, quoted_cents, tax_rate, tax_exempt, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id, job_number`,
+        [req.user.business_id, f.location_id, n.rows[0].n, f.name, f.description, f.customer_id, f.customer_name, f.customer_phone,
+          f.job_address, f.po_number, cols[0].id, f.priority, f.crew, f.start_date, f.progress, f.quoted_cents, f.tax_rate,
+          f.tax_exempt, req.user.id]);
+      await log(db, r.rows[0].id, req.user, `Job created in ${cols[0].name}` + (f.quoted_cents ? ` · quoted ${usd(f.quoted_cents)}` : ''));
+      return r.rows[0];
+    });
+    notify(req.user.business_id, { type: 'job', id: out.id });
+    res.json(out);
+  }));
 
-// ---------- live updates from other screens ----------
-let reloadTimer;
-function listen() {
-  const es = new EventSource('/api/jobs/events');
-  es.onmessage = (e) => {
-    const m = JSON.parse(e.data);
-    if (m.type === 'hello') return;
-    clearTimeout(reloadTimer);
-    reloadTimer = setTimeout(() => {
-      if (openId && m.type === 'job' && m.id === openId) {
-        if (m.deleted) { toast('This job was deleted', 'bad'); closeTicket(); } else refreshTicket().catch(() => {});
+  app.get('/api/jobs/:id', ...J, wrap(async (req, res) => {
+    const { job, cols } = await loadJob(pool, req.params.id, req.user.business_id);
+    const items = await pool.query('SELECT * FROM job_items WHERE job_id=$1 ORDER BY id', [job.id]);
+    const payments = await pool.query(
+      `SELECT p.*, u.name AS taken_by FROM job_payments p LEFT JOIN users u ON u.id = p.created_by WHERE p.job_id=$1 ORDER BY p.id`, [job.id]);
+    const history = await pool.query('SELECT * FROM job_history WHERE job_id=$1 ORDER BY id DESC LIMIT 300', [job.id]);
+    const loc = await pool.query('SELECT name, address, phone FROM locations WHERE id=$1', [job.location_id]);
+    const crews = await pool.query(
+      `SELECT c.*, k.name AS column_name, k.position AS column_position,
+              COALESCE((SELECT sum(amount_cents) FROM job_crew_changes x WHERE x.crew_id = c.id), 0)::int AS co_cents,
+              (SELECT count(*) FROM job_crew_changes x WHERE x.crew_id = c.id)::int AS co_count,
+              COALESCE((SELECT sum(amount_cents) FROM job_crew_payments p WHERE p.crew_id = c.id AND NOT p.voided), 0)::int AS sub_paid_cents,
+              (SELECT count(*) FROM job_files f WHERE f.crew_id = c.id)::int AS file_count
+         FROM job_crews c LEFT JOIN job_columns k ON k.id = c.column_id
+        WHERE c.job_id=$1 ORDER BY k.position NULLS LAST, c.id`, [job.id]);
+    const subPays = await pool.query(
+      `SELECT p.*, u.name AS taken_by FROM job_crew_payments p LEFT JOIN users u ON u.id = p.created_by WHERE p.job_id=$1 ORDER BY p.paid_on, p.id`, [job.id]);
+    const crewMats = await pool.query('SELECT id, crew_id, product_id, name, qty, unit, note FROM job_crew_materials WHERE job_id=$1 ORDER BY crew_id, position, id', [job.id]);
+    const subChanges = await pool.query(
+      `SELECT x.*, u.name AS taken_by FROM job_crew_changes x LEFT JOIN users u ON u.id = x.created_by WHERE x.job_id=$1 ORDER BY x.id`, [job.id]);
+    for (const c of crews.rows) {
+      c.contract_cents = c.amount_cents + c.co_cents;
+      c.sub_owed_cents = c.contract_cents - c.sub_paid_cents;
+      c.payments = subPays.rows.filter((p) => p.crew_id === c.id);
+      c.changes = subChanges.rows.filter((x) => x.crew_id === c.id);
+      c.parts = crewMats.rows.filter((x) => x.crew_id === c.id).map((x) => ({ ...x, qty: Number(x.qty) }));
+    }
+    res.json({ ...job, column: cols[job.column_index] || null, columns_count: cols.length, columns: cols.map((c) => ({ id: c.id, name: c.name, color: c.color })),
+      location: loc.rows[0] || null, items: items.rows, payments: payments.rows, history: history.rows, crews: crews.rows,
+      bid_items: (await pool.query('SELECT * FROM job_bid_items WHERE job_id=$1 ORDER BY id', [job.id])).rows });
+  }));
+
+  app.put('/api/jobs/:id', ...J, wrap(async (req, res) => {
+    await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      const f = await jobFields(db, req, job);
+      if (job.is_closed && f.quoted_cents !== job.quoted_cents) fail(400, 'This job is closed; the quoted price can no longer change');
+      if (f.quoted_cents !== job.quoted_cents && job.paid_cents > 0 && !isManager(req.user)) {
+        fail(403, 'Payments have been taken on this job; only an owner or manager can change the quoted price');
       }
-      if (!openId) loadBoard().catch(() => {});
-      else if (m.type === 'columns') loadBoard().catch(() => {});
-    }, 250);
-  };
-}
-function tick() { $('#clock').textContent = new Date().toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+      await db.query(
+        `UPDATE jobs SET name=$1, description=$2, customer_id=$3, customer_name=$4, customer_phone=$5, job_address=$6, po_number=$7,
+           priority=$8, crew=$9, start_date=$10, progress=$11, quoted_cents=$12, location_id=$13, tax_rate=$14, tax_exempt=$15,
+           updated_at=now() WHERE id=$16`,
+        [f.name, f.description, f.customer_id, f.customer_name, f.customer_phone, f.job_address, f.po_number, f.priority, f.crew,
+          f.start_date, f.progress, f.quoted_cents, f.location_id, f.tax_rate, f.tax_exempt, job.id]);
+      const changes = [];
+      if (f.quoted_cents !== job.quoted_cents) changes.push(`quoted price ${usd(job.quoted_cents)} → ${usd(f.quoted_cents)}`);
+      if (f.progress !== job.progress) changes.push(`progress ${f.progress}%`);
+      if ((f.crew || '') !== (job.crew || '')) changes.push(`crew ${f.crew || 'none'}`);
+      if (f.tax_exempt !== job.tax_exempt) changes.push(f.tax_exempt ? 'marked tax exempt' : 'tax exempt removed');
+      if (f.priority !== job.priority) changes.push(`priority ${f.priority}`);
+      await log(db, job.id, req.user, changes.length ? `Details changed: ${changes.join(', ')}` : 'Details updated');
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
 
-(async () => {
-  me = await api('/api/me'); backupNag(me);
-  if (!me.business) { location.href = '/admin#businesses'; return; }
-  applyBrand(me.business);
-  $('#bizName').textContent = me.business.name;
-  topButton(me);
-  if (!me.business.jobs_enabled) {
-    $('#board').innerHTML = '<div class="empty" style="padding:40px">The job board is not turned on for this business. The platform administrator can turn on the Jobs add-on.</div>';
-    $('#newJob').hidden = true; return;
+  app.delete('/api/jobs/:id', ...J, wrap(async (req, res) => {
+    needManager(req.user);
+    await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      const p = await db.query('SELECT count(*)::int AS n FROM job_payments WHERE job_id=$1', [job.id]);
+      if (p.rows[0].n) fail(400, 'This job has payments recorded, so it cannot be deleted. Move it to the last column instead.');
+      // Put inventory back.
+      const items = await db.query('SELECT * FROM job_items WHERE job_id=$1 AND stock_taken', [job.id]);
+      for (const it of items.rows) await db.query('UPDATE products SET stock_qty = stock_qty + $1 WHERE id=$2 AND track_stock', [it.qty, it.product_id]);
+      await db.query('DELETE FROM jobs WHERE id=$1', [job.id]);
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id), deleted: true });
+    res.json({ ok: true });
+  }));
+
+  // Moves a job one column left or right. Jobs can't skip columns.
+  async function moveJob(db, job, cols, direction, user, reason) {
+    const from = job.column_index < 0 ? 0 : job.column_index;
+    const to = from + (direction < 0 ? -1 : 1);
+    if (to < 0 || to >= cols.length) fail(400, direction < 0 ? 'This job is already in the first column' : 'This job is already in the last column');
+    const last = cols.length - 1;
+    if (direction < 0 && !isManager(user)) fail(403, 'Only an owner or manager can move a job back');
+    const why = direction < 0 ? text(reason, 'Reason for moving back', { required: false, max: 500 }) : null;
+    if (direction < 0 && (!why || why.length < 3)) fail(400, 'Write a note explaining why this job is moving back');
+    if (to === last) {
+      if (job.balance_cents > 0) fail(400, `${usd(job.balance_cents)} is still owed on this job. Take the payment or finish with a discount first.`);
+      if (job.balance_cents < 0) fail(400, `The customer has paid ${usd(-job.balance_cents)} more than the total. Void a payment or lower the discount first.`);
+    }
+    await db.query(
+      `UPDATE jobs SET column_id=$1, status_label=NULL, column_entered_at=now(), updated_at=now(),
+         closed_at = CASE WHEN $2 THEN now() ELSE NULL END, back_reason=$4, back_at=CASE WHEN $4::text IS NULL THEN NULL ELSE now() END,
+       back_by=$5 WHERE id=$3`, [cols[to].id, to === last, job.id, why, why ? user.name : null]);
+    await log(db, job.id, user, `Moved ${direction < 0 ? 'back ' : ''}from ${cols[from].name} to ${cols[to].name}` + (to === last ? ' (job closed)' : '')
+      + (why ? ` · Reason: ${why}` : ''));
   }
-  isMgr = ['admin', 'owner', 'manager'].includes(me.user.role);
-  rentalsOn = !!me.business.rentals_enabled;
-  $('#rentalBtn').hidden = !rentalsOn;
-  $('#aiBtn').hidden = !aiOn();
-  $('#gcBoardBtn').hidden = !gcOn();
-  $('#setupBtn').hidden = !isMgr; $('#manageLink').hidden = !isMgr;
-  tick(); setInterval(tick, 30000);
-  await loadBoard();
-  listen();
-  const m = /^#job-(\d+)$/.exec(location.hash);
-  if (m) openTicket(Number(m[1]));
-})().catch((e) => toast(e.message, 'bad'));
-</script>
-</body>
-</html>
+  app.post('/api/jobs/:id/move', ...J, wrap(async (req, res) => {
+    await withTx(async (db) => {
+      const { job, cols } = await loadJob(db, req.params.id, req.user.business_id, true);
+      let direction = Number(req.body.direction);
+      // Dragging to a column: only the next or previous column is allowed.
+      if (req.body.column_id) {
+        const target = cols.findIndex((c) => c.id === Number(req.body.column_id));
+        if (target < 0) fail(404, 'Column not found');
+        const diff = target - Math.max(0, job.column_index);
+        if (diff === 0) return;
+        if (Math.abs(diff) > 1) fail(400, `Jobs move one column at a time. Next for this job is "${cols[Math.max(0, job.column_index) + Math.sign(diff)].name}".`);
+        direction = diff;
+      }
+      if (direction !== 1 && direction !== -1) fail(400, 'Choose which way to move the job');
+      await moveJob(db, job, cols, direction, req.user, req.body.reason);
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
+
+  // A card button: marks the job with that status, and (if set up that way) moves it to the next column.
+  app.post('/api/jobs/:id/button', ...J, wrap(async (req, res) => {
+    let moved = false;
+    await withTx(async (db) => {
+      const { job, cols } = await loadJob(db, req.params.id, req.user.business_id, true);
+      const col = cols[Math.max(0, job.column_index)];
+      const btn = (col.buttons || [])[Number(req.body.index)];
+      if (!btn || !btn.enabled) fail(400, 'That button is not turned on for this column');
+      await db.query('UPDATE jobs SET status_label=$1, updated_at=now() WHERE id=$2', [btn.label, job.id]);
+      await log(db, job.id, req.user, `${btn.label} (in ${col.name})`);
+      if (btn.action === 'next' && job.column_index < cols.length - 1) {
+        await moveJob(db, job, cols, 1, req.user);
+        moved = true;
+      }
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true, moved });
+  }));
+
+  // ---------- job ticket: items, charges, equipment rental ----------
+  app.post('/api/jobs/:id/items', ...J, wrap(async (req, res) => {
+    const b = req.body;
+    const out = await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      notClosed(job);
+      const qty = Math.max(1, Math.min(9999, parseInt(b.qty, 10) || 1));
+      const kind = ['item', 'charge', 'rental'].includes(b.kind) ? b.kind : (b.code ? 'item' : fail(400, 'Choose what to add'));
+      if (kind === 'charge') {
+        const name = text(b.name, 'Description', { max: 120 });
+        const unit = cents(b.unit_cents, 'Amount');
+        if (unit <= 0) fail(400, 'Enter the amount');
+        const r = await db.query(
+          `INSERT INTO job_items (job_id, kind, name, qty, unit_cents, taxable, created_by) VALUES ($1,'charge',$2,$3,$4,$5,$6) RETURNING *`,
+          [job.id, name, qty, unit, !!b.taxable, req.user.id]);
+        await log(db, job.id, req.user, `Added charge: ${name}${qty > 1 ? ` × ${qty}` : ''} ${usd(unit * qty)}`);
+        return { item: r.rows[0] };
+      }
+      // Inventory item (by product, or by scanning/typing its barcode) or a rental product.
+      let p;
+      if (b.code) {
+        const r = await db.query(
+          `SELECT * FROM products WHERE business_id=$1 AND active AND barcode = ANY($2) LIMIT 1`,
+          [req.user.business_id, barcodeVariants(text(b.code, 'Code', { max: 100 }))]);
+        if (!r.rows[0]) return { found: false };
+        p = r.rows[0];
+      } else {
+        const r = await db.query('SELECT * FROM products WHERE id=$1 AND business_id=$2 AND active', [b.product_id, req.user.business_id]);
+        p = r.rows[0] || fail(404, 'Product not found');
+      }
+      // A rental product scanned or picked as an item: the screen asks for the rental period instead.
+      if (kind === 'item' && p.is_rental) return { found: true, rental: { id: p.id, name: p.name } };
+      if (kind === 'rental') {
+        if (!p.is_rental) fail(400, `${p.name} is not a rental item`);
+        const period = PERIODS[b.period] ? b.period : fail(400, 'Choose a rental period');
+        const count = period === 'half_day' ? 1 : Math.max(1, Math.min(365, parseInt(b.count, 10) || 1));
+        const rate = p['rate_' + period];
+        if (rate == null) fail(400, `${p.name} has no ${PERIODS[period].toLowerCase()} rate`);
+        const label = period === 'half_day' ? 'half day' : `${count} ${period}${count === 1 ? '' : 's'}`;
+        const name = `Equipment rental: ${p.name} · ${label}`;
+        const r = await db.query(
+          `INSERT INTO job_items (job_id, kind, product_id, barcode, name, qty, unit_cents, taxable, created_by)
+           VALUES ($1,'rental',$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+          [job.id, p.id, p.barcode, name, qty, rate * count, p.taxable, req.user.id]);
+        await log(db, job.id, req.user, `Added ${name}${qty > 1 ? ` × ${qty}` : ''} ${usd(rate * count * qty)}`);
+        return { item: r.rows[0] };
+      }
+      // Same product again: add to the quantity already on the job.
+      const ex = await db.query(`SELECT * FROM job_items WHERE job_id=$1 AND kind='item' AND product_id=$2 AND unit_cents=$3 LIMIT 1`,
+        [job.id, p.id, p.price_cents]);
+      let item;
+      if (ex.rows[0]) {
+        item = (await db.query('UPDATE job_items SET qty = qty + $1, stock_taken = $2 WHERE id=$3 RETURNING *',
+          [qty, p.track_stock || ex.rows[0].stock_taken, ex.rows[0].id])).rows[0];
+      } else {
+        item = (await db.query(
+          `INSERT INTO job_items (job_id, kind, product_id, barcode, name, qty, unit_cents, taxable, stock_taken, created_by)
+           VALUES ($1,'item',$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+          [job.id, p.id, p.barcode, p.name, qty, p.price_cents, p.taxable, p.track_stock, req.user.id])).rows[0];
+      }
+      if (p.track_stock) await db.query('UPDATE products SET stock_qty = stock_qty - $1 WHERE id=$2', [qty, p.id]);
+      await log(db, job.id, req.user, `Added ${p.name}${qty > 1 ? ` × ${qty}` : ''} ${usd(p.price_cents * qty)}`);
+      return { found: true, item };
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json(out);
+  }));
+
+  app.put('/api/jobs/:id/items/:itemId', ...J, wrap(async (req, res) => {
+    await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      notClosed(job);
+      const r = await db.query('SELECT * FROM job_items WHERE id=$1 AND job_id=$2', [req.params.itemId, job.id]);
+      const it = r.rows[0] || fail(404, 'Line not found');
+      if (it.crew_id) fail(400, 'This line comes from a crew. Change it under Crews.');
+      const qty = Math.max(1, Math.min(9999, parseInt(req.body.qty, 10) || 1));
+      if (qty === it.qty) return;
+      await db.query('UPDATE job_items SET qty=$1 WHERE id=$2', [qty, it.id]);
+      if (it.stock_taken && it.product_id) await db.query('UPDATE products SET stock_qty = stock_qty - $1 WHERE id=$2 AND track_stock', [qty - it.qty, it.product_id]);
+      await log(db, job.id, req.user, `Changed ${it.name} quantity ${it.qty} → ${qty}`);
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
+
+  app.delete('/api/jobs/:id/items/:itemId', ...J, wrap(async (req, res) => {
+    await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      notClosed(job);
+      const chk = await db.query('SELECT crew_id FROM job_items WHERE id=$1 AND job_id=$2', [req.params.itemId, job.id]);
+      if (chk.rows[0] && chk.rows[0].crew_id) fail(400, 'This line comes from a crew. Remove it or change it to "part of the quote" under Crews.');
+      const r = await db.query('DELETE FROM job_items WHERE id=$1 AND job_id=$2 RETURNING *', [req.params.itemId, job.id]);
+      const it = r.rows[0] || fail(404, 'Line not found');
+      if (it.stock_taken && it.product_id) await db.query('UPDATE products SET stock_qty = stock_qty + $1 WHERE id=$2 AND track_stock', [it.qty, it.product_id]);
+      await log(db, job.id, req.user, `Removed ${it.name}${it.qty > 1 ? ` × ${it.qty}` : ''} (${usd(it.qty * it.unit_cents)})`);
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
+
+  // ---------- payments (split pay; any number over the life of the job) ----------
+  app.post('/api/jobs/:id/payments', ...J, wrap(async (req, res) => {
+    const out = await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      notClosed(job);
+      const list = Array.isArray(req.body.payments) ? req.body.payments : [];
+      if (!list.length) fail(400, 'Add a payment');
+      if (list.length > 10) fail(400, 'Too many payments at once (10 max)');
+      const parts = list.map((p) => {
+        const method = METHODS.includes(p.method) ? p.method : fail(400, 'Choose how they paid');
+        const amount = cents(p.amount_cents, 'Payment amount');
+        if (amount <= 0) fail(400, 'Each payment must be more than $0.00');
+        let tendered = null, change = null;
+        if (method === 'cash') {
+          tendered = p.tendered_cents == null || p.tendered_cents === '' ? amount : cents(p.tendered_cents, 'Cash received');
+          if (tendered < amount) fail(400, 'Cash received is less than the cash payment');
+          change = tendered - amount;
+        }
+        const check = method === 'check' ? (text(p.check_number, 'Check number', { required: false, max: 40 }) || null) : null;
+        return { method, amount, tendered, change, check };
+      });
+      const sum = parts.reduce((a, p) => a + p.amount, 0);
+      if (sum > job.balance_cents) {
+        fail(400, job.balance_cents <= 0 ? 'Nothing is owed on this job right now'
+          : `That is ${usd(sum - job.balance_cents)} more than the ${usd(job.balance_cents)} owed`);
+      }
+      const note = text(req.body.note, 'Note', { required: false, max: 200 }) || null;
+      const batch = crypto.randomBytes(6).toString('hex');
+      for (const p of parts) {
+        await db.query(
+          `INSERT INTO job_payments (job_id, business_id, location_id, batch, method, amount_cents, tendered_cents, change_cents,
+             check_number, note, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [job.id, req.user.business_id, job.location_id, batch, p.method, p.amount, p.tendered, p.change, p.check, note, req.user.id]);
+      }
+      const desc = parts.map((p) => `${METHOD_NAMES[p.method]}${p.check ? ' #' + p.check : ''} ${usd(p.amount)}`).join(' + ');
+      await log(db, job.id, req.user, `Payment ${usd(sum)} (${desc}) · balance now ${usd(job.balance_cents - sum)}` + (note ? ` · ${note}` : ''));
+      return { paid_cents: sum, balance_cents: job.balance_cents - sum, change_cents: parts.reduce((a, p) => a + (p.change || 0), 0) };
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json(out);
+  }));
+
+  app.post('/api/jobs/:id/payments/:pid/void', ...J, wrap(async (req, res) => {
+    needManager(req.user);
+    await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      notClosed(job);
+      const r = await db.query(
+        'UPDATE job_payments SET voided=TRUE WHERE id=$1 AND job_id=$2 AND NOT voided AND deposit_id IS NULL RETURNING *',
+        [req.params.pid, job.id]);
+      const p = r.rows[0] || fail(400, 'Payment not found, already voided, or already in a bank deposit');
+      await log(db, job.id, req.user, `Voided payment ${METHOD_NAMES[p.method]} ${usd(p.amount_cents)}`);
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
+
+  // ---------- final discount (when the project came in smaller than quoted) ----------
+  app.put('/api/jobs/:id/discount', ...J, wrap(async (req, res) => {
+    needManager(req.user);
+    await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      notClosed(job);
+      const d = req.body.discount_cents == null || req.body.discount_cents === '' ? 0 : cents(req.body.discount_cents, 'Discount');
+      const before = job.subtotal_cents + job.tax_cents;
+      if (d > before) fail(400, `The discount can't be more than the job total of ${usd(before)}`);
+      const note = text(req.body.note, 'Reason', { required: false, max: 200 }) || null;
+      await db.query('UPDATE jobs SET discount_cents=$1, discount_note=$2, updated_at=now() WHERE id=$3', [d, note, job.id]);
+      await log(db, job.id, req.user, d ? `Discount ${usd(d)}${note ? ` (${note})` : ''} · total now ${usd(before - d)}` : 'Discount removed');
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
+
+  // ---------- crews on the job (per phase) ----------
+  async function crewFields(db, req, cols, current) {
+    const b = req.body;
+    const f = {
+      trade: text(b.trade, 'Trade', { max: 60 }),
+      name: text(b.name, 'Name', { required: false, max: 100 }) || null,
+      phone: text(b.phone, 'Phone', { required: false, max: 40 }) || null,
+      amount_cents: b.amount_cents == null || b.amount_cents === '' ? 0 : cents(b.amount_cents, 'Amount'),
+      billing: ['extra', 'costplus'].includes(b.billing) ? b.billing : 'included',
+      note: text(b.note, 'Note', { required: false, max: 300 }) || null,
+      quote_cents: b.quote_cents == null || b.quote_cents === '' ? (current ? current.quote_cents : 0) : cents(b.quote_cents, 'Charge to the customer'),
+      done: 'done' in b ? !!b.done : !!(current && current.done),
+      column_id: null,
+    };
+    const col = cols.find((c) => c.id === Number(b.column_id));
+    f.column_id = col ? col.id : (current ? current.column_id : null);
+    if (f.billing === 'extra' && !f.amount_cents) fail(400, 'Enter the amount to charge for this crew');
+    // Cost plus: cost + markup (percent or dollars) is what goes on the ticket.
+    f.markup_type = null; f.markup_percent = null; f.markup_cents = null;
+    if (f.billing === 'costplus') {
+      if (!f.amount_cents) fail(400, "Enter the crew's cost");
+      f.markup_type = b.markup_type === 'dollar' ? 'dollar' : 'percent';
+      if (f.markup_type === 'percent') {
+        const pct = Number(b.markup_percent);
+        if (!(pct >= 0 && pct <= 1000)) fail(400, 'Markup percent is not valid');
+        f.markup_percent = Math.round(pct * 1000) / 1000;
+      } else {
+        f.markup_cents = b.markup_cents == null || b.markup_cents === '' ? 0 : cents(b.markup_cents, 'Markup');
+      }
+    }
+    f.charge_cents = f.billing === 'extra' ? f.amount_cents
+      : f.billing === 'costplus' ? f.amount_cents + (f.markup_type === 'percent' ? Math.round((f.amount_cents * f.markup_percent) / 100 + 1e-9) : f.markup_cents)
+      : 0;
+    return f;
+  }
+  const markupText = (c) => (c.markup_type === 'dollar' ? usd(c.markup_cents || 0) : `${Number(c.markup_percent || 0)}%`);
+  // Up-charge and cost-plus crews have one "charge" line on the ticket; a crew that's part of the quote has none.
+  async function syncCrewLine(db, crew, userId) {
+    const label = (`Crew: ${crew.trade}${crew.name ? ' — ' + crew.name : ''}` +
+      (crew.billing === 'costplus' ? ` (cost ${usd(crew.amount_cents)} + ${markupText(crew)})` : '')).slice(0, 120);
+    if (crew.billing !== 'included' && crew.charge_cents > 0) {
+      const u = await db.query('UPDATE job_items SET name=$1, unit_cents=$2, qty=1 WHERE crew_id=$3 RETURNING id', [label, crew.charge_cents, crew.id]);
+      if (!u.rowCount) {
+        await db.query(`INSERT INTO job_items (job_id, kind, name, qty, unit_cents, taxable, crew_id, created_by) VALUES ($1,'charge',$2,1,$3,FALSE,$4,$5)`,
+          [crew.job_id, label, crew.charge_cents, crew.id, userId]);
+      }
+    } else {
+      await db.query('DELETE FROM job_items WHERE crew_id=$1', [crew.id]);
+    }
+  }
+  const crewText = (c) => `${c.trade}${c.name ? ' (' + c.name + ')' : ''}` + (c.billing === 'costplus'
+    ? ` cost plus: ${usd(c.amount_cents)} + ${markupText(c)} = ${usd(c.charge_cents)}`
+    : (c.amount_cents ? ` ${usd(c.amount_cents)} ${c.billing === 'extra' ? 'up-charge' : 'part of quote'}` : ''));
+
+  app.post('/api/jobs/:id/crews', ...J, wrap(async (req, res) => {
+    const id = await withTx(async (db) => {
+      const { job, cols } = await loadJob(db, req.params.id, req.user.business_id, true);
+      notClosed(job);
+      const f = await crewFields(db, req, cols);
+      if (!f.column_id) f.column_id = job.column_id;
+      const n = await db.query('SELECT count(*)::int AS n FROM job_crews WHERE job_id=$1', [job.id]);
+      if (n.rows[0].n >= 100) fail(400, 'This job already has 100 crews');
+      const r = await db.query(
+        `INSERT INTO job_crews (job_id, column_id, trade, name, phone, amount_cents, billing, note, markup_type, markup_percent, markup_cents, charge_cents, created_by, quote_cents)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+        [job.id, f.column_id, f.trade, f.name, f.phone, f.amount_cents, f.billing, f.note, f.markup_type, f.markup_percent, f.markup_cents, f.charge_cents, req.user.id, f.quote_cents]);
+      await syncCrewLine(db, r.rows[0], req.user.id);
+      const col = cols.find((c) => c.id === f.column_id);
+      await log(db, job.id, req.user, `Crew added${col ? ' to ' + col.name : ''}: ${crewText(r.rows[0])}`);
+      return r.rows[0].id;
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ id });
+  }));
+  app.put('/api/jobs/:id/crews/:cid', ...J, wrap(async (req, res) => {
+    await withTx(async (db) => {
+      const { job, cols } = await loadJob(db, req.params.id, req.user.business_id, true);
+      notClosed(job);
+      const cur = (await db.query('SELECT * FROM job_crews WHERE id=$1 AND job_id=$2', [req.params.cid, job.id])).rows[0] || fail(404, 'Crew not found');
+      const sent = Object.keys(req.body);
+      // Only the fields sent change (e.g. just { done: true } from the Done button).
+      req.body = { ...cur, ...req.body };
+      const f = await crewFields(db, req, cols, cur);
+      if (f.amount_cents !== cur.amount_cents) {
+        const bal = await subBalance(db, cur);
+        if (f.amount_cents + (bal.contract - cur.amount_cents) < bal.paid) fail(400, `${usd(bal.paid)} has already been paid to this crew, so the amount can't go below that`);
+      }
+      const r = await db.query(
+        `UPDATE job_crews SET column_id=$1, trade=$2, name=$3, phone=$4, amount_cents=$5, billing=$6, note=$7, done=$8,
+           markup_type=$9, markup_percent=$10, markup_cents=$11, charge_cents=$12, quote_cents=$14 WHERE id=$13 RETURNING *`,
+        [f.column_id, f.trade, f.name, f.phone, f.amount_cents, f.billing, f.note, f.done, f.markup_type, f.markup_percent, f.markup_cents, f.charge_cents, cur.id, f.quote_cents]);
+      await syncCrewLine(db, r.rows[0], req.user.id);
+      const what = f.done !== cur.done && sent.length === 1 ? (f.done ? 'Crew finished' : 'Crew back on the job') : 'Crew changed';
+      await log(db, job.id, req.user, `${what}: ${crewText(r.rows[0])}`);
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
+  app.delete('/api/jobs/:id/crews/:cid', ...J, wrap(async (req, res) => {
+    await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      notClosed(job);
+      const paid = await db.query('SELECT count(*)::int AS n FROM job_crew_payments WHERE crew_id=$1 AND job_id=$2 AND NOT voided', [req.params.cid, job.id]);
+      if (paid.rows[0].n) fail(400, 'This crew has payments recorded. Void them first, or mark the crew Done instead.');
+      await db.query(`DELETE FROM job_items WHERE id IN (SELECT job_item_id FROM job_crew_changes WHERE crew_id=$1 AND job_id=$2)`, [req.params.cid, job.id]);
+      const r = await db.query('DELETE FROM job_crews WHERE id=$1 AND job_id=$2 RETURNING *', [req.params.cid, job.id]);
+      const c = r.rows[0] || fail(404, 'Crew not found');
+      await log(db, job.id, req.user, `Crew removed: ${crewText(c)}${c.billing !== 'included' && c.charge_cents ? ' (its charge was taken off the ticket)' : ''}`);
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
+
+  // ---------- General Contractor quote: subs' charges + the GC's own amount become the quoted price ----------
+  app.post('/api/jobs/:id/gc-quote', ...J, wrap(async (req, res) => {
+    const b = (await pool.query('SELECT gc_enabled FROM businesses WHERE id=$1', [req.user.business_id])).rows[0];
+    if (!b || !b.gc_enabled) fail(403, 'The General Contractor add-on is not turned on for this business');
+    await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      notClosed(job);
+      const own = req.body.own_cents == null || req.body.own_cents === '' ? 0 : cents(req.body.own_cents, 'Your own amount');
+      const ownNote = text(req.body.own_note, 'Note', { required: false, max: 200 }) || null;
+      const subs = await db.query('SELECT COALESCE(sum(quote_cents), 0)::int AS q FROM job_crews WHERE job_id=$1', [job.id]);
+      const quoted = subs.rows[0].q + own;
+      if (quoted !== job.quoted_cents && job.paid_cents > 0 && !isManager(req.user)) {
+        fail(403, 'Payments have been taken on this job; only an owner or manager can change the quoted price');
+      }
+      await db.query('UPDATE jobs SET quoted_cents=$1, gc_own_cents=$2, gc_own_note=$3, updated_at=now() WHERE id=$4', [quoted, own, ownNote, job.id]);
+      await log(db, job.id, req.user, `GC quote: subs ${usd(subs.rows[0].q)} + own ${usd(own)} = quoted price ${usd(quoted)}`
+        + (quoted !== job.quoted_cents ? ` (was ${usd(job.quoted_cents)})` : ''));
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
+
+  // Bid Builder: saves the whole bid at once. Each row is a sub (crew, part of the quote): amount = sub's price,
+  // markup % (its own, or one overall %) gives the customer price; the quoted price becomes the sum of the rows.
+  app.post('/api/jobs/:id/bid', ...J, wrap(async (req, res) => {
+    const biz = (await pool.query('SELECT gc_enabled FROM businesses WHERE id=$1', [req.user.business_id])).rows[0];
+    if (!biz || !biz.gc_enabled) fail(403, 'The General Contractor add-on is not turned on for this business');
+    const b = req.body || {};
+    const pct = (v, label) => { const n = Number(v ?? 0); if (!(n >= 0 && n <= 1000)) fail(400, `${label} is not valid`); return Math.round(n * 1000) / 1000; };
+    const each = b.markup_each !== false;
+    const all = pct(b.markup_all, 'Overall markup %');
+    const rows = Array.isArray(b.rows) ? b.rows : [];
+    if (rows.length > 100) fail(400, 'A bid can have up to 100 lines');
+    const removed = (Array.isArray(b.removed) ? b.removed : []).map(Number).filter(Boolean);
+    const removedItems = (Array.isArray(b.removed_items) ? b.removed_items : []).map(Number).filter(Boolean);
+    const out = await withTx(async (db) => {
+      const { job, cols } = await loadJob(db, req.params.id, req.user.business_id, true);
+      notClosed(job);
+      const phase = (cols.find((c) => /progress/i.test(c.name)) || cols[job.column_index] || cols[0]).id;
+      for (const id of removed) {
+        const c = (await db.query('SELECT * FROM job_crews WHERE id=$1 AND job_id=$2', [id, job.id])).rows[0];
+        if (!c) continue;
+        const paid = await db.query('SELECT count(*)::int AS n FROM job_crew_payments WHERE crew_id=$1 AND NOT voided', [id]);
+        if (paid.rows[0].n) fail(400, `${c.trade} has payments recorded, so it can't be removed from the bid`);
+        await db.query(`DELETE FROM job_items WHERE id IN (SELECT job_item_id FROM job_crew_changes WHERE crew_id=$1)`, [id]);
+        await db.query('DELETE FROM job_crews WHERE id=$1', [id]);
+        await log(db, job.id, req.user, `Bid: removed ${c.trade}${c.name ? ' (' + c.name + ')' : ''}`);
+      }
+      for (const id of removedItems) {
+        const x = (await db.query('DELETE FROM job_bid_items WHERE id=$1 AND job_id=$2 RETURNING name, qty', [id, job.id])).rows[0];
+        if (x) await log(db, job.id, req.user, `Bid: removed ${Number(x.qty)} × ${x.name}`);
+      }
+      let subs = 0, quoted = 0, added = 0, changed = 0;
+      for (const r of rows.filter((x) => x.kind === 'product')) {
+        const qty = Math.round(Number(r.qty) * 1000) / 1000;
+        if (!(qty > 0 && qty <= 1000000)) fail(400, `Quantity for ${r.name || 'a product'} is not valid`);
+        const p = each ? pct(r.markup_pct, `${r.name || 'Product'} markup %`) : all;
+        let cur = null, unit, name, productId;
+        if (r.id) {
+          cur = (await db.query('SELECT * FROM job_bid_items WHERE id=$1 AND job_id=$2', [r.id, job.id])).rows[0] || fail(404, 'A product line was not found on this job');
+          unit = cur.unit_cents; name = cur.name; productId = cur.product_id;
+        } else {
+          const pr = (await db.query('SELECT id, name, price_cents FROM products WHERE id=$1 AND business_id=$2 AND NOT is_rental', [r.product_id, req.user.business_id])).rows[0]
+            || fail(404, 'That product was not found');
+          unit = pr.price_cents; name = pr.name; productId = pr.id;
+        }
+        const amount = Math.round(qty * unit), q = Math.round(amount * (1 + p / 100));
+        subs += amount; quoted += q;
+        if (cur) {
+          if (Number(cur.qty) !== qty || Number(cur.markup_pct) !== p || cur.quote_cents !== q) {
+            await db.query('UPDATE job_bid_items SET qty=$1, markup_pct=$2, quote_cents=$3 WHERE id=$4', [qty, p, q, cur.id]); changed++;
+          }
+        } else {
+          await db.query(`INSERT INTO job_bid_items (job_id, product_id, name, qty, unit_cents, markup_pct, quote_cents, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [job.id, productId, name, qty, unit, p, q, req.user.id]); added++;
+        }
+      }
+      for (const r of rows.filter((x) => x.kind !== 'product')) {
+        const trade = text(r.trade, 'Subcontractor / scope', { max: 60 });
+        const amount = cents(r.amount_cents ?? 0, `${trade} amount`);
+        const p = each ? pct(r.markup_pct, `${trade} markup %`) : all;
+        const q = Math.round(amount * (1 + p / 100));
+        subs += amount; quoted += q;
+        if (r.id) {
+          const cur = (await db.query('SELECT * FROM job_crews WHERE id=$1 AND job_id=$2', [r.id, job.id])).rows[0] || fail(404, `${trade} was not found on this job`);
+          const bal = await subBalance(db, cur);
+          if (amount + (bal.contract - cur.amount_cents) < bal.paid) fail(400, `${usd(bal.paid)} has already been paid to ${trade}, so its amount can't go below that`);
+          if (cur.trade !== trade || cur.amount_cents !== amount || cur.quote_cents !== q || Number(cur.gc_markup_pct) !== p) {
+            await db.query('UPDATE job_crews SET trade=$1, amount_cents=$2, quote_cents=$3, gc_markup_pct=$4 WHERE id=$5', [trade, amount, q, p, cur.id]);
+            changed++;
+          }
+        } else {
+          await db.query(`INSERT INTO job_crews (job_id, column_id, trade, amount_cents, billing, quote_cents, gc_markup_pct, created_by)
+            VALUES ($1,$2,$3,$4,'included',$5,$6,$7)`, [job.id, phase, trade, amount, q, p, req.user.id]);
+          added++;
+        }
+      }
+      if (quoted !== job.quoted_cents && job.paid_cents > 0 && !isManager(req.user)) {
+        fail(403, 'Payments have been taken on this job; only an owner or manager can change the quoted price');
+      }
+      await db.query('UPDATE jobs SET quoted_cents=$1, gc_own_cents=0, gc_markup_each=$2, gc_markup_all=$3, updated_at=now() WHERE id=$4', [quoted, each, all, job.id]);
+      if (added || changed || removed.length || removedItems.length || quoted !== job.quoted_cents) {
+        await log(db, job.id, req.user, `Bid saved: ${rows.length} line${rows.length === 1 ? "" : "s"} · cost ${usd(subs)} + markup ${usd(quoted - subs)} = quoted price ${usd(quoted)}`
+          + (quoted !== job.quoted_cents ? ` (was ${usd(job.quoted_cents)})` : ''));
+      }
+      return { quoted_cents: quoted };
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json(out);
+  }));
+
+  // Detailed print (each trade's price, markup included) needs the user's password again, so it can't go out by accident.
+  const bcrypt = require('bcryptjs');
+  const pwTries = new Map();
+  app.post('/api/jobs/:id/detail-print', ...J, wrap(async (req, res) => {
+    const now = Date.now();
+    const rec = pwTries.get(req.user.id) || { n: 0, t: now };
+    if (now - rec.t > 15 * 60 * 1000) { rec.n = 0; rec.t = now; }
+    if (rec.n >= 5) fail(429, 'Too many wrong passwords. Try again in 15 minutes.');
+    const { job } = await loadJob(pool, req.params.id, req.user.business_id);
+    const u = (await pool.query('SELECT password_hash FROM users WHERE id=$1', [req.user.id])).rows[0];
+    if (!u || !(await bcrypt.compare(String(req.body.password || ''), u.password_hash))) {
+      rec.n++; pwTries.set(req.user.id, rec);
+      fail(400, 'Wrong password');
+    }
+    pwTries.delete(req.user.id);
+    await log(pool, job.id, req.user, 'Printed the detailed quote (each trade\'s price), password confirmed');
+    res.json({ ok: true });
+  }));
+
+  // ---------- subcontracts: payments made to a sub and change orders ----------
+  // A crew's amount is its bid (the contract). Change orders add to it (or credit it); payments to the sub come off.
+  // Owners/managers only. Allowed after the job is closed (subs are often paid after the customer).
+  const SUB_METHOD = { check: 'Check', cash: 'Cash', card: 'Card', transfer: 'Bank transfer', other: 'Other' };
+  async function crewOf(db, job, cid, lock) {
+    const r = await db.query(`SELECT * FROM job_crews WHERE id=$1 AND job_id=$2 ${lock ? 'FOR UPDATE' : ''}`, [cid, job.id]);
+    return r.rows[0] || fail(404, 'Crew not found');
+  }
+  async function subBalance(db, crew) {
+    const r = await db.query(`SELECT
+        COALESCE((SELECT sum(amount_cents) FROM job_crew_changes WHERE crew_id=$1), 0)::int AS co,
+        COALESCE((SELECT sum(amount_cents) FROM job_crew_payments WHERE crew_id=$1 AND NOT voided), 0)::int AS paid`, [crew.id]);
+    const contract = crew.amount_cents + r.rows[0].co;
+    return { contract, paid: r.rows[0].paid, owed: contract - r.rows[0].paid };
+  }
+  const who = (c) => `${c.trade}${c.name ? ' (' + c.name + ')' : ''}`;
+  const subRoute = (path, handler) => app.post(`/api/jobs/:id/crews/:cid${path}`, ...J, wrap(async (req, res) => {
+    if (!isManager(req.user)) fail(403, 'Only an owner or manager can record payments and change orders for subs');
+    const out = await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      const crew = await crewOf(db, job, req.params.cid, true);
+      return handler(db, req, job, crew);
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json(out || { ok: true });
+  }));
+
+  subRoute('/payments', async (db, req, job, crew) => {
+    const b = req.body;
+    const amount = cents(b.amount_cents, 'Payment amount');
+    if (!amount) fail(400, 'Enter the amount paid');
+    const method = SUB_METHOD[b.method] ? b.method : 'check';
+    const paidOn = /^\d{4}-\d{2}-\d{2}$/.test(b.paid_on || '') ? b.paid_on : null;
+    const bal = await subBalance(db, crew);
+    if (bal.contract > 0 && amount > bal.owed) {
+      fail(400, bal.owed > 0 ? `That's more than the ${usd(bal.owed)} still owed to ${who(crew)}. Record a change order first if the price went up.`
+        : `${who(crew)} is already paid in full. Record a change order first if the price went up.`);
+    }
+    const r = await db.query(
+      `INSERT INTO job_crew_payments (crew_id, job_id, amount_cents, method, check_number, paid_on, note, created_by)
+       VALUES ($1,$2,$3,$4,$5,COALESCE($6::date, CURRENT_DATE),$7,$8) RETURNING id`,
+      [crew.id, job.id, amount, method, text(b.check_number, 'Check number', { required: false, max: 30 }) || null, paidOn,
+        text(b.note, 'Note', { required: false, max: 200 }) || null, req.user.id]);
+    const after = bal.owed - amount;
+    await log(db, job.id, req.user, `Paid ${who(crew)} ${usd(amount)} by ${SUB_METHOD[method]}${b.check_number ? ' #' + b.check_number : ''}`
+      + (bal.contract > 0 ? ` · still owed ${usd(after)}` : ''));
+    return { id: r.rows[0].id };
+  });
+
+  subRoute('/payments/:pid/void', async (db, req, job, crew) => {
+    const reason = text(req.body.reason, 'Reason', { required: false, max: 200 });
+    if (!reason || reason.length < 3) fail(400, 'Write why this payment is being voided');
+    const r = await db.query(`UPDATE job_crew_payments SET voided=TRUE, void_reason=$1, voided_at=now()
+      WHERE id=$2 AND crew_id=$3 AND NOT voided RETURNING amount_cents`, [reason, req.params.pid, crew.id]);
+    if (!r.rows[0]) fail(404, 'Payment not found');
+    await log(db, job.id, req.user, `Voided payment of ${usd(r.rows[0].amount_cents)} to ${who(crew)} · Reason: ${reason}`);
+  });
+
+  subRoute('/changes', async (db, req, job, crew) => {
+    const b = req.body;
+    const amt = cents(b.amount_cents, 'Change order amount');
+    if (!amt) fail(400, 'Enter the change order amount');
+    const signed = b.credit ? -amt : amt;
+    const note = text(b.note, 'What the change order is for', { max: 300 });
+    if (note.length < 3) fail(400, 'Write what the change order is for');
+    const bal = await subBalance(db, crew);
+    if (bal.contract + signed < bal.paid) fail(400, `That credit would leave ${who(crew)}'s contract below the ${usd(bal.paid)} already paid`);
+    const bill = b.bill_customer ? cents(b.customer_cents, 'Amount to charge the customer') : 0;
+    if (b.bill_customer && !bill) fail(400, 'Enter the amount to charge the customer');
+    if (bill) notClosed(job);
+    const n = await db.query('SELECT COALESCE(max(number), 0)::int + 1 AS n FROM job_crew_changes WHERE crew_id=$1', [crew.id]);
+    const num = n.rows[0].n;
+    let itemId = null;
+    if (bill) {
+      const it = await db.query(`INSERT INTO job_items (job_id, kind, name, qty, unit_cents, taxable, created_by) VALUES ($1,'charge',$2,1,$3,FALSE,$4) RETURNING id`,
+        [job.id, `Change order: ${crew.trade}: ${note}`.slice(0, 120), bill, req.user.id]);
+      itemId = it.rows[0].id;
+    }
+    const r = await db.query(
+      `INSERT INTO job_crew_changes (crew_id, job_id, number, amount_cents, note, customer_cents, job_item_id, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, [crew.id, job.id, num, signed, note, bill, itemId, req.user.id]);
+    await log(db, job.id, req.user, `Change order #${num} for ${who(crew)}: ${signed < 0 ? '−' : '+'}${usd(Math.abs(signed))} (${note})`
+      + ` · contract now ${usd(bal.contract + signed)}` + (bill ? ` · ${usd(bill)} added to the customer's bill` : ''));
+    return { id: r.rows[0].id };
+  });
+
+  app.delete('/api/jobs/:id/crews/:cid/changes/:chid', ...J, wrap(async (req, res) => {
+    if (!isManager(req.user)) fail(403, 'Only an owner or manager can remove change orders');
+    await withTx(async (db) => {
+      const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
+      const crew = await crewOf(db, job, req.params.cid, true);
+      const x = (await db.query('SELECT * FROM job_crew_changes WHERE id=$1 AND crew_id=$2', [req.params.chid, crew.id])).rows[0] || fail(404, 'Change order not found');
+      if (x.job_item_id) {
+        const it = await db.query('SELECT id FROM job_items WHERE id=$1', [x.job_item_id]);
+        if (it.rows[0]) { notClosed(job); await db.query('DELETE FROM job_items WHERE id=$1', [x.job_item_id]); }
+      }
+      const bal = await subBalance(db, crew);
+      if (bal.contract - x.amount_cents < bal.paid) fail(400, `Removing it would leave ${who(crew)}'s contract below the ${usd(bal.paid)} already paid`);
+      await db.query('DELETE FROM job_crew_changes WHERE id=$1', [x.id]);
+      await log(db, job.id, req.user, `Removed change order #${x.number} for ${who(crew)} (${x.amount_cents < 0 ? '−' : '+'}${usd(Math.abs(x.amount_cents))}: ${x.note})`
+        + (x.job_item_id ? ' and its charge on the ticket' : ''));
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
+
+  // ---------- sending the quote / statement to the customer (WhatsApp, text, email) ----------
+  // Each job gets a private link (/j#<token>) the customer can open without logging in.
+  async function shareInfo(req, id) {
+    await pool.query('UPDATE jobs SET share_token=$1 WHERE id=$2 AND business_id=$3 AND share_token IS NULL', [token(16), id, req.user.business_id]);
+    const { job, cols } = await loadJob(pool, id, req.user.business_id);
+    const b = (await pool.query('SELECT name FROM businesses WHERE id=$1', [req.user.business_id])).rows[0];
+    let email = null, phone = job.customer_phone;
+    if (job.customer_id) {
+      const c = (await pool.query('SELECT email, phone FROM customers WHERE id=$1 AND business_id=$2', [job.customer_id, req.user.business_id])).rows[0];
+      if (c) { email = c.email; phone = phone || c.phone; }
+    }
+    const kind = docKind(job, cols);
+    return { job, kind, url: `${publicOrigin(req)}/j#${job.share_token}`, business_name: b.name, phone, email: email || job.statement_emailed_to };
+  }
+  // A job in the first column with nothing paid is a quote; after that it's a job statement (an invoice once it's closed).
+  const docKind = (job, cols) => (job.is_closed ? 'invoice' : (job.column_index <= 0 && !job.paid_cents ? 'quote' : 'statement'));
+  const DOC = { quote: 'quote', statement: 'job statement', invoice: 'final invoice' };
+
+  app.post('/api/jobs/:id/share', ...J, wrap(async (req, res) => {
+    const s = await shareInfo(req, req.params.id);
+    const j = s.job;
+    const owed = s.kind === 'statement' && j.balance_cents > 0 ? `, balance due ${usd(j.balance_cents)}` : '';
+    const message = `${s.business_name}: your ${DOC[s.kind]} for ${j.name} (job #${j.job_number}), total ${usd(j.total_cents)}${owed}. View it here: ${s.url}`;
+    res.json({ url: s.url, kind: s.kind, doc: DOC[s.kind], message, phone: s.phone, email: s.email,
+      job: { id: j.id, job_number: j.job_number, name: j.name, total_cents: j.total_cents, balance_cents: j.balance_cents, statement_emailed_to: j.statement_emailed_to } });
+  }));
+
+  // What the customer sees at /j#<token>: no login, and nothing internal (no history, no crews' costs, no notes about who did what).
+  async function publicJob(t) {
+    if (!/^[0-9a-f]{32}$/.test(String(t || ''))) fail(404, 'Not found');
+    const r = await pool.query('SELECT id, business_id FROM jobs WHERE share_token=$1', [t]);
+    if (!r.rows[0]) fail(404, 'Not found');
+    const { job, cols } = await loadJob(pool, r.rows[0].id, r.rows[0].business_id);
+    const b = (await pool.query('SELECT name, logo_url FROM businesses WHERE id=$1', [job.business_id])).rows[0];
+    const loc = (await pool.query('SELECT name, address, phone FROM locations WHERE id=$1', [job.location_id])).rows[0] || {};
+    const items = await pool.query('SELECT name, qty, unit_cents, taxable, kind FROM job_items WHERE job_id=$1 ORDER BY id', [job.id]);
+    const pays = await pool.query('SELECT method, amount_cents, check_number, created_at FROM job_payments WHERE job_id=$1 AND NOT voided ORDER BY id', [job.id]);
+    const kind = docKind(job, cols);
+    return { kind, doc: DOC[kind], business_name: b.name, logo_url: b.logo_url, location_name: loc.name, location_address: loc.address, location_phone: loc.phone,
+      job_number: job.job_number, name: job.name, description: job.description, customer_name: job.customer_name, job_address: job.job_address,
+      po_number: job.po_number, start_date: job.start_date, status: cols[job.column_index] ? cols[job.column_index].name : null, created_at: job.created_at,
+      quoted_cents: job.quoted_cents, extras_cents: job.extras_cents, tax_rate: job.tax_rate, tax_exempt: job.tax_exempt, tax_cents: job.tax_cents,
+      subtotal_cents: job.subtotal_cents, discount_cents: job.discount_cents, discount_note: job.discount_note, total_cents: job.total_cents,
+      paid_cents: job.paid_cents, balance_cents: job.balance_cents, closed_at: job.closed_at,
+      items: items.rows.map((i) => ({ name: i.name, qty: i.qty, unit_cents: i.unit_cents, taxable: i.taxable, kind: i.kind })),
+      payments: pays.rows.map((p) => ({ method: METHOD_NAMES[p.method] || p.method, amount_cents: p.amount_cents, check_number: p.check_number, date: p.created_at })) };
+  }
+  app.get('/api/public/job/:token', wrap(async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json(await publicJob(req.params.token));
+  }));
+
+  app.post('/api/jobs/:id/email', ...J, wrap(async (req, res) => {
+    const mail = require('./email');
+    if (!mail.configured()) fail(400, 'Email is not set up on this server yet (RESEND_API_KEY).');
+    const to = String(req.body.email || '').trim().toLowerCase();
+    if (!mail.EMAIL_RE.test(to) || to.length > 200) fail(400, 'That email address does not look right');
+    const s = await shareInfo(req, req.params.id);
+    if (s.job.statement_email_count >= 50) fail(429, 'This job has already been emailed 50 times.');
+    const p = await publicJob(s.job.share_token);
+    const bz = (await pool.query(
+      `SELECT b.receipt_reply_email, (SELECT email FROM users WHERE business_id=b.id AND role='owner' AND active ORDER BY id LIMIT 1) AS owner_email
+         FROM businesses b WHERE b.id=$1`, [req.user.business_id])).rows[0];
+    const { esc, money } = mail;
+    const Doc = p.doc.charAt(0).toUpperCase() + p.doc.slice(1);
+    const note = text(req.body.note, 'Message', { required: false, max: 1000 });
+    const row = (l, r, bold) => `<tr><td style="padding:3px 8px 3px 0;${bold ? 'font-weight:700;font-size:17px' : 'color:#555'}">${l}</td><td align="right" style="padding:3px 0;white-space:nowrap;${bold ? 'font-weight:700;font-size:17px' : ''}">${r}</td></tr>`;
+    const lines = [`<tr><td style="padding:6px 0;border-bottom:1px solid #eee">Quoted price</td><td align="right" style="padding:6px 0;border-bottom:1px solid #eee">${money(p.quoted_cents)}</td></tr>`]
+      .concat(p.items.slice(0, 150).map((it) => `<tr><td style="padding:6px 0;border-bottom:1px solid #eee">${esc(it.name)}${it.qty !== 1 ? `<div style="color:#777;font-size:13px">${it.qty} × ${money(it.unit_cents)}</div>` : ''}</td>
+        <td align="right" valign="top" style="padding:6px 0;border-bottom:1px solid #eee;white-space:nowrap">${money(it.qty * it.unit_cents)}</td></tr>`)).join('');
+    const html = `<!doctype html><html><body style="margin:0;background:#f2f2f0;font-family:Arial,Helvetica,sans-serif;color:#1d1d1b">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f0;padding:24px 10px"><tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#fff;border-radius:10px;padding:24px"><tr><td>
+  ${p.logo_url ? `<img src="${esc(p.logo_url)}" alt="" style="max-height:60px;max-width:200px;display:block;margin:0 auto 10px">` : ''}
+  <div style="text-align:center;font-size:20px;font-weight:700">${esc(p.business_name)}</div>
+  <div style="text-align:center;color:#666;font-size:14px;margin-top:4px">${esc(p.location_address || '')}${p.location_phone ? '<br>' + esc(p.location_phone) : ''}</div>
+  <div style="margin-top:18px;font-size:18px;font-weight:700">${Doc} · Job #${p.job_number}</div>
+  <div style="color:#555;font-size:14px;margin-top:4px"><b>${esc(p.name)}</b>${p.description ? ' — ' + esc(p.description) : ''}${p.customer_name ? '<br>For: ' + esc(p.customer_name) : ''}${p.job_address ? '<br>Job site: ' + esc(p.job_address) : ''}${p.po_number ? '<br>PO: ' + esc(p.po_number) : ''}</div>
+  ${note ? `<div style="margin-top:14px;padding:12px;background:#f6f6f3;border-radius:8px;white-space:pre-wrap">${esc(note)}</div>` : ''}
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;font-size:15px">${lines}</table>
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;font-size:15px">
+    ${row('Subtotal', money(p.subtotal_cents))}
+    ${row(p.tax_exempt ? 'Sales tax (exempt)' : `Sales tax (${Number(p.tax_rate)}%)`, money(p.tax_cents))}
+    ${p.discount_cents ? row('Discount' + (p.discount_note ? ` (${esc(p.discount_note)})` : ''), '−' + money(p.discount_cents)) : ''}
+    ${row('Total', money(p.total_cents), true)}
+    ${p.paid_cents ? row('Paid so far', money(p.paid_cents)) : ''}
+    ${p.kind !== 'quote' ? row('Balance due', money(p.balance_cents), true) : ''}
+  </table>
+  <div style="text-align:center;margin-top:22px"><a href="${esc(s.url)}" style="display:inline-block;background:#1f8f4e;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700">View or print your ${esc(p.doc)}</a></div>
+  <div style="text-align:center;margin-top:20px;color:#888;font-size:13px">Questions? Just reply to this email.</div>
+</td></tr></table>
+<div style="color:#999;font-size:12px;margin-top:12px">Sent for ${esc(p.business_name)} by ContractorPOS</div>
+</td></tr></table></body></html>`;
+    const textBody = [p.business_name, `${Doc} · Job #${p.job_number}: ${p.name}`, note ? '\n' + note + '\n' : '',
+      `Total: ${money(p.total_cents)}`, p.paid_cents ? `Paid so far: ${money(p.paid_cents)}` : '', p.kind !== 'quote' ? `Balance due: ${money(p.balance_cents)}` : '',
+      '', `View or print it here: ${s.url}`].filter((x) => x !== '').join('\n');
+    try {
+      await mail.sendMail({ fromName: p.business_name, to, subject: `Your ${p.doc} from ${p.business_name} - Job #${p.job_number} - ${money(p.total_cents)}`,
+        html, text: textBody, replyTo: bz.receipt_reply_email || bz.owner_email, idem: `job-${s.job.id}-${s.job.statement_email_count + 1}-${to}` });
+    } catch (e) { fail(502, e.message); }
+    await pool.query('UPDATE jobs SET statement_emailed_to=$1, statement_email_count=statement_email_count+1 WHERE id=$2', [to, s.job.id]);
+    let saved = false;
+    if (s.job.customer_id) {
+      const u = await pool.query(`UPDATE customers SET email=$1 WHERE id=$2 AND business_id=$3 AND (email IS NULL OR email='')`, [to, s.job.customer_id, req.user.business_id]);
+      saved = u.rowCount > 0;
+    }
+    await log(pool, s.job.id, req.user, `Emailed the ${p.doc} to ${to}`);
+    notify(req.user.business_id, { type: 'job', id: s.job.id });
+    res.json({ ok: true, to, saved_to_customer: saved });
+  }));
+  // Logs when a quote/statement was sent by WhatsApp or text (the browser opens the app; this just records it).
+  app.post('/api/jobs/:id/sent', ...J, wrap(async (req, res) => {
+    const how = { whatsapp: 'WhatsApp', text: 'text message' }[req.body.how] || fail(400, 'Unknown way of sending');
+    const s = await shareInfo(req, req.params.id);
+    await log(pool, s.job.id, req.user, `Sent the ${DOC[s.kind]} by ${how}${req.body.to ? ' to ' + text(req.body.to, 'To', { required: false, max: 60 }) : ''}`);
+    notify(req.user.business_id, { type: 'job', id: s.job.id });
+    res.json({ ok: true });
+  }));
+
+  // ---------- crew packet: send a crew the job site, notes, material list and chosen files (WhatsApp, text, email) ----------
+  // Each crew gets its own private link (/c#<token>). It shows only what was picked for that crew: no prices, no money.
+  async function crewPacketInfo(req, jobId, cid, fresh) {
+    const { job, cols } = await loadJob(pool, jobId, req.user.business_id);
+    const c = (await pool.query('SELECT * FROM job_crews WHERE id=$1 AND job_id=$2', [cid, job.id])).rows[0] || fail(404, 'Crew not found');
+    if (!c.packet_token || fresh) {
+      c.packet_token = token(16);
+      await pool.query('UPDATE job_crews SET packet_token=$1 WHERE id=$2', [c.packet_token, c.id]);
+    }
+    const b = (await pool.query('SELECT name FROM businesses WHERE id=$1', [req.user.business_id])).rows[0];
+    const url = `${publicOrigin(req)}/c#${c.packet_token}`;
+    const who = c.name || c.trade;
+    const message = `${b.name}: job info for ${who}: ${job.name} (job #${job.job_number})${job.job_address ? ', ' + job.job_address : ''}.`
+      + `${c.packet_important ? ' IMPORTANT notes inside.' : ''} Plans, notes and material list: ${url}`;
+    return { job, cols, crew: c, url, message, business_name: b.name };
+  }
+  app.put('/api/jobs/:id/crews/:cid/packet', ...J, wrap(async (req, res) => {
+    const { job } = await loadJob(pool, req.params.id, req.user.business_id);
+    const b = req.body || {};
+    const ids = (Array.isArray(b.file_ids) ? b.file_ids : []).map(Number).filter(Number.isInteger).slice(0, 100);
+    const ok = ids.length ? (await pool.query('SELECT id FROM job_files WHERE job_id=$1 AND id = ANY($2)', [job.id, ids])).rows.map((r) => r.id) : [];
+    const email = String(b.email || '').trim().toLowerCase();
+    if (email && (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email) || email.length > 200)) fail(400, 'That email address does not look right');
+    const phone = b.phone == null ? undefined : text(b.phone, 'Phone', { required: false, max: 40 }) || null;
+    const r = await pool.query(`UPDATE job_crews SET packet_note=$1, packet_important=$2, packet_files=$3, packet_materials=$4,
+        email=COALESCE(NULLIF($5,''), email), phone=CASE WHEN $6::boolean THEN $7 ELSE phone END WHERE id=$8 AND job_id=$9 RETURNING id`,
+      [text(b.note, 'Notes for the crew', { required: false, max: 4000 }) || null, !!b.important, ok, b.materials !== false, email,
+        phone !== undefined, phone === undefined ? null : phone, req.params.cid, job.id]);
+    if (!r.rows[0]) fail(404, 'Crew not found');
+    if (Array.isArray(b.parts)) {
+      if (b.parts.length > 300) fail(400, 'A parts list can have up to 300 lines');
+      const rows = b.parts.map((m, i) => {
+        const name = text(m.name, `Part on line ${i + 1}`, { max: 120 });
+        const qty = Math.round(Number(String(m.qty ?? 1).replace(',', '.')) * 1000) / 1000;
+        if (!(qty > 0 && qty <= 1000000)) fail(400, `Quantity for ${name} is not valid`);
+        return [Number(m.product_id) || null, name, qty, text(m.unit, 'Unit', { required: false, max: 20 }) || null, text(m.note, 'Note', { required: false, max: 200 }) || null, i];
+      });
+      const pids = rows.map((x) => x[0]).filter(Boolean);
+      const okP = pids.length ? new Set((await pool.query('SELECT id FROM products WHERE business_id=$1 AND id = ANY($2)', [req.user.business_id, pids])).rows.map((x) => x.id)) : new Set();
+      await withTx(async (db) => {
+        await db.query('DELETE FROM job_crew_materials WHERE crew_id=$1 AND job_id=$2', [req.params.cid, job.id]);
+        for (const x of rows) {
+          await db.query('INSERT INTO job_crew_materials (crew_id, job_id, product_id, name, qty, unit, note, position) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+            [req.params.cid, job.id, okP.has(x[0]) ? x[0] : null, x[1], x[2], x[3], x[4], x[5]]);
+        }
+      });
+    }
+    const s = await crewPacketInfo(req, job.id, req.params.cid, !!b.new_link);
+    if (b.new_link) await log(pool, job.id, req.user, `Made a new crew link for ${s.crew.trade} (the old link stopped working)`);
+    res.json({ url: s.url, message: s.message, phone: s.crew.phone, email: s.crew.email, files: ok.length });
+  }));
+  app.post('/api/jobs/:id/crews/:cid/packet/sent', ...J, wrap(async (req, res) => {
+    const how = { whatsapp: 'WhatsApp', text: 'text message' }[req.body.how] || fail(400, 'Unknown way of sending');
+    const s = await crewPacketInfo(req, req.params.id, req.params.cid);
+    await pool.query('UPDATE job_crews SET packet_sent_at=now() WHERE id=$1', [s.crew.id]);
+    await log(pool, s.job.id, req.user, `Sent the crew packet to ${s.crew.trade}${s.crew.name ? ' (' + s.crew.name + ')' : ''} by ${how}${req.body.to ? ' to ' + text(req.body.to, 'To', { required: false, max: 60 }) : ''}`);
+    notify(req.user.business_id, { type: 'job', id: s.job.id });
+    res.json({ ok: true });
+  }));
+  app.post('/api/jobs/:id/crews/:cid/packet/email', ...J, wrap(async (req, res) => {
+    const mail = require('./email');
+    if (!mail.configured()) fail(400, 'Email is not set up on this server yet (RESEND_API_KEY).');
+    const to = String(req.body.email || '').trim().toLowerCase();
+    if (!mail.EMAIL_RE.test(to) || to.length > 200) fail(400, 'That email address does not look right');
+    const s = await crewPacketInfo(req, req.params.id, req.params.cid);
+    const p = await publicCrew(s.crew.packet_token);
+    const { esc } = mail;
+    const note = text(req.body.note, 'Message', { required: false, max: 1000 });
+    const html = `<!doctype html><html><body style="margin:0;background:#f2f2f0;font-family:Arial,Helvetica,sans-serif;color:#1d1d1b">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f0;padding:24px 10px"><tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#fff;border-radius:10px;padding:24px"><tr><td>
+  <div style="font-size:20px;font-weight:700">${esc(p.business_name)}</div>
+  <div style="margin-top:12px;font-size:18px;font-weight:700">Job #${p.job_number} · ${esc(p.name)}</div>
+  <div style="color:#555;font-size:14px;margin-top:4px">For: <b>${esc(p.crew_trade)}${p.crew_name ? ' · ' + esc(p.crew_name) : ''}</b>${p.job_address ? '<br>Job site: ' + esc(p.job_address) : ''}${p.start_date ? '<br>Start: ' + esc(String(p.start_date).slice(0, 10)) : ''}</div>
+  ${note ? `<div style="margin-top:14px;padding:12px;background:#f6f6f3;border-radius:8px;white-space:pre-wrap">${esc(note)}</div>` : ''}
+  ${p.note ? `<div style="margin-top:14px;padding:12px;border-radius:8px;white-space:pre-wrap;${p.important ? 'background:#fdecea;border:2px solid #b3261e' : 'background:#f6f6f3'}">${p.important ? '<b style="color:#b3261e">⚠ IMPORTANT</b><br>' : ''}${esc(p.note)}</div>` : ''}
+  <div style="margin-top:14px;color:#555;font-size:14px">${p.files.length} file${p.files.length === 1 ? '' : 's'} (plans, pictures, PDFs)${p.parts.length ? `, a parts list with ${p.parts.length} line${p.parts.length === 1 ? '' : 's'}` : ''}${p.materials.length ? ` and the job material list (${p.materials.length})` : ''}.</div>
+  <div style="text-align:center;margin-top:22px"><a href="${esc(s.url)}" style="display:inline-block;background:#1f8f4e;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700">Open the job info</a></div>
+</td></tr></table>
+<div style="color:#999;font-size:12px;margin-top:12px">Sent for ${esc(p.business_name)} by ContractorPOS</div>
+</td></tr></table></body></html>`;
+    const textBody = [p.business_name, `Job #${p.job_number}: ${p.name}`, p.job_address ? 'Job site: ' + p.job_address : '', note,
+      p.note ? (p.important ? 'IMPORTANT: ' : 'Notes: ') + p.note : '',
+      p.parts.length ? 'Parts to bring:\n' + p.parts.map((m) => `- ${m.qty}${m.unit ? ' ' + m.unit : ''} ${m.name}${m.note ? ' (' + m.note + ')' : ''}`).join('\n') : '',
+      '', `Plans, notes and material list: ${s.url}`].filter((x) => x !== '').join('\n');
+    try {
+      await mail.sendMail({ fromName: p.business_name, to, subject: `${p.important ? '⚠ ' : ''}Job #${p.job_number} ${p.name}: info for ${p.crew_trade}`,
+        html, text: textBody, idem: `crew-${s.crew.id}-${Date.now()}-${to}` });
+    } catch (e) { fail(502, e.message); }
+    await pool.query('UPDATE job_crews SET packet_sent_at=now(), email=$1 WHERE id=$2', [to, s.crew.id]);
+    await log(pool, s.job.id, req.user, `Emailed the crew packet to ${s.crew.trade}${s.crew.name ? ' (' + s.crew.name + ')' : ''} at ${to}`);
+    notify(req.user.business_id, { type: 'job', id: s.job.id });
+    res.json({ ok: true, to });
+  }));
+
+  // What the crew sees at /c#<token>. No prices or money anywhere.
+  async function publicCrew(t) {
+    if (!/^[0-9a-f]{32}$/.test(String(t || ''))) fail(404, 'Not found');
+    const c = (await pool.query('SELECT c.*, j.business_id FROM job_crews c JOIN jobs j ON j.id = c.job_id WHERE c.packet_token=$1', [t])).rows[0] || fail(404, 'Not found');
+    const { job, cols } = await loadJob(pool, c.job_id, c.business_id);
+    const b = (await pool.query('SELECT name, logo_url FROM businesses WHERE id=$1', [c.business_id])).rows[0];
+    const loc = (await pool.query('SELECT name, address, phone FROM locations WHERE id=$1', [job.location_id])).rows[0] || {};
+    const files = c.packet_files.length ? (await pool.query(`SELECT id, kind, name, mime, estimate, created_at FROM job_files WHERE job_id=$1 AND id = ANY($2) ORDER BY id`, [job.id, c.packet_files])).rows : [];
+    let materials = [];
+    if (c.packet_materials) {
+      const it = await pool.query(`SELECT name, qty FROM job_items WHERE job_id=$1 AND kind IN ('item','rental') ORDER BY id`, [job.id]);
+      const bi = await pool.query('SELECT name, qty FROM job_bid_items WHERE job_id=$1 ORDER BY id', [job.id]);
+      materials = it.rows.concat(bi.rows).map((m) => ({ name: m.name, qty: Number(m.qty) }));
+    }
+    const parts = (await pool.query('SELECT name, qty, unit, note FROM job_crew_materials WHERE crew_id=$1 ORDER BY position, id', [c.id])).rows.map((m) => ({ ...m, qty: Number(m.qty) }));
+    const phase = cols.find((k) => k.id === c.column_id);
+    return { business_name: b.name, logo_url: b.logo_url, location_phone: loc.phone, job_number: job.job_number, name: job.name, description: job.description,
+      job_address: job.job_address, start_date: job.start_date, status: cols[job.column_index] ? cols[job.column_index].name : null,
+      customer_name: job.customer_name, crew_trade: c.trade, crew_name: c.name, crew_phase: phase ? phase.name : null, crew_scope: c.note,
+      note: c.packet_note, important: c.packet_important, materials, parts,
+      files: files.filter((f) => f.kind === 'pdf' || f.kind === 'photo').map((f) => ({ id: f.id, kind: f.kind, name: f.name })),
+      estimates: files.filter((f) => f.kind === 'estimate' && f.estimate).map((f) => ({ name: f.name, summary: f.estimate.summary || '', materials: (f.estimate.materials || []).map((m) => ({ name: m.name, qty: m.qty, unit: m.unit, notes: m.notes })) })),
+      answers: files.filter((f) => f.kind === 'answer' && f.estimate).map((f) => ({ name: f.name, thread: (f.estimate.thread || []).map((x) => ({ q: x.q, a: x.a })) })) };
+  }
+  app.get('/api/public/crew/:token', wrap(async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json(await publicCrew(req.params.token));
+  }));
+  app.get('/api/public/crew/:token/files/:fid', wrap(async (req, res) => {
+    const t = String(req.params.token || '');
+    if (!/^[0-9a-f]{32}$/.test(t)) fail(404, 'Not found');
+    const r = await pool.query(`SELECT f.name, f.mime, f.data FROM job_crews c JOIN job_files f ON f.job_id = c.job_id
+        WHERE c.packet_token=$1 AND f.id=$2 AND f.id = ANY(c.packet_files) AND f.data IS NOT NULL AND f.kind IN ('pdf','photo')`, [t, req.params.fid]);
+    const f = r.rows[0] || fail(404, 'File not found');
+    res.set({ 'Content-Type': f.mime, 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff',
+      'Content-Disposition': `${req.query.download ? 'attachment' : 'inline'}; filename="${encodeURIComponent(f.name)}"` });
+    res.send(f.data);
+  }));
+
+  // Used by jobfiles.js (attachments and Claude estimates).
+  return { notify, log, J };
+};
