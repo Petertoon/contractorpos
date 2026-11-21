@@ -185,6 +185,9 @@
   #tLines .crow .subl b.owe, #tLines .crow .subl b.paidup { background: #2a2e37; padding: 0 5px; border-radius: 4px; }
   .crow button.subb { background: #7c4a03; color: #ffedd5; }
   .crow button.sendb { background: #1d4f8a; color: #e0edff; }
+  .partsbox { border: 1px solid var(--jline); border-radius: 8px; padding: 8px 10px; }
+  .partsbox table.parts { width: 100%; border-collapse: collapse; } .partsbox table.parts td { padding: 2px 3px; }
+  .partsbox input { padding: 6px 8px; font-size: 14px; } .partsbox input.pq { width: 64px; text-align: right; } .partsbox input.pu { width: 70px; }
   .cplist { max-height: 260px; overflow: auto; border: 1px solid var(--jline); border-radius: 8px; padding: 6px 10px; }
   .cplist label.check { margin: 6px 0; font-weight: 500; }
   .subsum { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 6px 0 14px; }
@@ -1338,7 +1341,8 @@ function crewPacket(cid, how) {
   if (!cp || cp.cid !== cid) {
     const preset = (c.packet_files || []).length ? c.packet_files : files.filter((f) => f.crew_id === cid).map((f) => f.id);
     cp = { cid, note: c.packet_note || '', important: !!c.packet_important, materials: c.packet_materials !== false,
-      files: new Set(preset), known: new Set(files.map((f) => f.id)), phone: c.phone || '', email: c.email || '' };
+      files: new Set(preset), known: new Set(files.map((f) => f.id)), phone: c.phone || '', email: c.email || '',
+      parts: (c.parts || []).map((m) => ({ product_id: m.product_id, name: m.name, qty: m.qty, unit: m.unit || '', note: m.note || '' })) };
   }
   // files attached from this window (tagged to the crew) are ticked automatically
   for (const f of files) if (!cp.known.has(f.id)) { cp.known.add(f.id); if (f.crew_id === cid) cp.files.add(f.id); }
@@ -1350,9 +1354,22 @@ function crewPacket(cid, how) {
     <label>Notes for the crew</label>
     <textarea name="cpnote" rows="4" maxlength="4000" placeholder="e.g. Gate code 4512. Use the side entrance. Customer's dog is in the back yard. Rough-in inspection Thursday 9am.">${esc(cp.note)}</textarea>
     <label class="check" style="margin-top:6px"><input type="checkbox" name="cpimp" ${cp.important ? 'checked' : ''}> ⚠ Mark the notes as <b>important</b> (shown in red at the top)</label>
+    <label style="margin-top:12px">🧰 Parts for this crew to bring <span class="muted" style="font-weight:400">(not charged to the customer, no stock change)</span></label>
+    <div class="partsbox"><table class="parts"><tbody>${cp.parts.map((m, i) => `<tr data-pi="${i}">
+        <td><input data-pf="qty" class="pq" inputmode="decimal" value="${esc(m.qty)}" title="Quantity"></td>
+        <td><input data-pf="unit" class="pu" value="${esc(m.unit)}" placeholder="unit" maxlength="20"></td>
+        <td><input data-pf="name" value="${esc(m.name)}" placeholder="Part, e.g. 12/2 Romex 250ft" maxlength="120"></td>
+        <td><input data-pf="note" value="${esc(m.note)}" placeholder="note" maxlength="200"></td>
+        <td><button type="button" class="xbtn" data-pdel="${i}" title="Remove">×</button></td></tr>`).join('')
+        || '<tr><td class="muted" style="padding:6px 2px">No parts yet. Turnkey job? Add what the crew needs to bring.</td></tr>'}</tbody></table>
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><button type="button" class="dk" data-padd="1">＋ Add a line</button>
+        <button type="button" class="dk" data-pprod="1">📦 From products</button>
+        ${matCount ? `<button type="button" class="dk" data-pcopy="1">⇣ Copy the job's list (${matCount})</button>` : ''}</div>
+      <div id="pFind" hidden style="margin-top:8px"><input id="pFindQ" placeholder="Search products…" autocomplete="off"><div class="sublist" id="pFindList" style="max-height:200px;overflow:auto;margin-top:6px"></div></div>
+    </div>
     <label style="margin-top:12px">What to include</label>
     <div class="cplist">
-      <label class="check"><input type="checkbox" name="cpmat" ${cp.materials ? 'checked' : ''} ${matCount ? '' : 'disabled'}> 🧱 Material list from the ticket and bid (${matCount} item${matCount === 1 ? '' : 's'}, no prices)</label>
+      <label class="check"><input type="checkbox" name="cpmat" ${cp.materials ? 'checked' : ''} ${matCount ? '' : 'disabled'}> 🧱 Job material list from the ticket and bid (${matCount} item${matCount === 1 ? '' : 's'}, no prices)</label>
       ${fl.map((x) => `<label class="check"><input type="checkbox" data-cpf="${x.id}" ${cp.files.has(x.id) ? 'checked' : ''}> ${FILE_ICON[x.kind] || '📎'} ${esc(x.name)} ${crewTag(x)}<span class="muted" style="font-size:12px">${x.kind === 'estimate' ? 'material estimate' : x.kind === 'answer' ? 'Claude notes' : ''}</span></label>`).join('')
         || '<div class="muted">No files on this job yet. Attach plans, a material list or pictures below.</div>'}
     </div>
@@ -1369,14 +1386,45 @@ function crewPacket(cid, how) {
     cp.note = f.cpnote.value; cp.important = f.cpimp.checked; cp.materials = f.cpmat.checked;
     cp.phone = f.cpphone.value.trim(); cp.email = f.cpemail.value.trim();
     cp.files = new Set([...f.querySelectorAll('[data-cpf]')].filter((x) => x.checked).map((x) => Number(x.dataset.cpf)));
+    f.querySelectorAll('tr[data-pi]').forEach((tr) => {
+      const m = cp.parts[Number(tr.dataset.pi)]; if (!m) return;
+      for (const inp of tr.querySelectorAll('[data-pf]')) m[inp.dataset.pf] = inp.value;
+    });
   };
+  const partsFor = () => cp.parts.filter((m) => String(m.name).trim()).map((m) => ({ product_id: m.product_id || null, name: String(m.name).trim(), qty: m.qty === '' ? 1 : m.qty, unit: m.unit, note: m.note }));
   f.oninput = f.onchange = sync;
   const save = async (extra) => {
     sync();
-    return api(`/api/jobs/${cur.id}/crews/${cid}/packet`, { note: cp.note, important: cp.important, materials: cp.materials, file_ids: [...cp.files],
-      phone: cp.phone, email: cp.email, ...extra }, 'PUT');
+    const r = await api(`/api/jobs/${cur.id}/crews/${cid}/packet`, { note: cp.note, important: cp.important, materials: cp.materials, file_ids: [...cp.files],
+      phone: cp.phone, email: cp.email, parts: partsFor(), ...extra }, 'PUT');
+    const cc = cur.crews.find((x) => x.id === cid); if (cc) cc.parts = partsFor();
+    return r;
   };
+  let pTimer = null;
+  const pDraw = () => { const pList = cp.pList || []; $('#pFindList').innerHTML = pList.map((p) => `<div data-ppick="${p.id}" style="cursor:pointer"><span><b>${esc(p.name)}</b><small>${esc(p.category || '')}${p.track_stock ? ` · ${p.stock_qty} in stock` : ''}</small></span><span class="amt">＋</span></div>`).join('') || '<div class="muted" style="background:none">No products found.</div>'; };
+  const pLoad = async () => { cp.pList = (await api('/api/products?q=' + encodeURIComponent($('#pFindQ').value.trim()))).filter((p) => !p.is_rental).slice(0, 40); pDraw(); };
+  f.addEventListener('input', (e) => { if (e.target.id === 'pFindQ') { clearTimeout(pTimer); pTimer = setTimeout(() => pLoad().catch(() => {}), 200); } });
+  const focusLast = () => { const rows = f.querySelectorAll('tr[data-pi]'); const last = rows[rows.length - 1]; if (last) last.querySelector('[data-pf=name]').focus(); };
   f.onclick = async (e) => {
+    if (e.target.closest('[data-padd]')) { sync(); cp.parts.push({ product_id: null, name: '', qty: 1, unit: '', note: '' }); crewPacket(cid); return focusLast(); }
+    const pd = e.target.closest('[data-pdel]'); if (pd) { sync(); cp.parts.splice(Number(pd.dataset.pdel), 1); return crewPacket(cid); }
+    if (e.target.closest('[data-pcopy]')) {
+      sync();
+      const have = new Set(cp.parts.map((m) => String(m.name).toLowerCase()));
+      const src = cur.items.filter((i) => i.kind === 'item' || i.kind === 'rental').map((i) => ({ product_id: i.product_id || null, name: i.name, qty: Number(i.qty) }))
+        .concat((cur.bid_items || []).map((x) => ({ product_id: x.product_id, name: x.name, qty: Number(x.qty) })));
+      let n = 0; for (const m of src) if (!have.has(m.name.toLowerCase())) { cp.parts.push({ ...m, unit: '', note: '' }); n++; }
+      cp.materials = false; crewPacket(cid); return toast(n ? `${n} line${n === 1 ? '' : 's'} copied. Change quantities or add extras.` : 'Those parts are already on the list');
+    }
+    if (e.target.closest('[data-pprod]')) { $('#pFind').hidden = !$('#pFind').hidden; if (!$('#pFind').hidden) { $('#pFindQ').focus(); pLoad().catch((x) => toast(x.message, 'bad')); } return; }
+    const pk = e.target.closest('[data-ppick]');
+    if (pk) {
+      sync(); const p = (cp.pList || []).find((x) => x.id === Number(pk.dataset.ppick)); if (!p) return;
+      const have = cp.parts.find((m) => m.product_id === p.id);
+      if (have) have.qty = Math.round((Number(have.qty) + 1) * 1000) / 1000; else cp.parts.push({ product_id: p.id, name: p.name, qty: 1, unit: '', note: '' });
+      const q = $('#pFindQ').value; crewPacket(cid); $('#pFind').hidden = false; $('#pFindQ').value = q; pDraw();
+      return toast(`${p.name} ${have ? '× ' + have.qty : 'added'}`);
+    }
     const up = e.target.closest('[data-cpup]');
     if (up) { sync(); return $(up.dataset.cpup === 'pdf' ? '#subPdfFile' : '#subPhotoFile').click(); }
     const b = e.target.closest('[data-cphow]'); if (!b) return;
