@@ -1,4 +1,4 @@
-[HANDOVER (52).md](https://github.com/user-attachments/files/35212891/HANDOVER.52.md)
+[HANDOVER (53).md](https://github.com/user-attachments/files/35212969/HANDOVER.53.md)
 # ContractorPOS — Build Handover
 
 Last updated: 2026-11-20 · Current version: **ContractorPOS v1.22**
@@ -420,3 +420,4 @@ Same rules, numbers and wording as MultiPOS v1.15 (SECURITY-HANDOVER.md). Code i
 - Code: `features.js` holds the plan table (`FEATURES`, `LIMITS`). `feats.needs(key)` blocks a route, `feats.check(req,key)` blocks part of a request, `feats.limit(req,what,count)` caps logins/registers/locations. Messages: "X is part of the Standard plan. Ask ContractorPOS to upgrade your plan." / "…is part of the GC add-on. Ask ContractorPOS to turn it on."
 - `/api/me` returns `can` (each feature true/false, `plan`, `plan_name`, `limits`). Screens hide what the plan doesn't include: Manage (Deposits menu, Cash & checks report, charge-account fields, Take payment / Print statement), checkout (PO/job/pickup chips, fee chip, Quote chip, Charge and Gift card buttons), job board (⚙ Workflow setup, column ⚙, crew billing choices, 💵 Sub). Manage → Settings shows owners a **Your plan** box listing what's included.
 - To add a future tool to a plan: add a key to `FEATURES` in features.js with its lowest plan, gate the route with `feats.needs('key')`, hide its button with `me.can.key`.
+- **v1.23.1:** the Bid Builder window now follows the business's look. Ranch keeps the parchment/green/burgundy design; Dark gives it charcoal panels, gold headings and lime buttons/totals, with the barn-and-hills footer recolored. Rules are `html[data-theme=dark] #bb …` in jobs.html inside `@media screen`, so printouts stay black on white.
