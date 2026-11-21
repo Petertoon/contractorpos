@@ -560,7 +560,7 @@ function renderBoard() {
     const nb = (c.buttons || []).filter((b) => b.enabled).length;
     return `<section class="col" data-col="${c.id}" style="${colVars(c)}">
       <div class="colhead"><div><b>${i + 1}. ${esc(c.name.toUpperCase())}</b><small>${list.length} Job${list.length === 1 ? '' : 's'} • ${nb} Button${nb === 1 ? '' : 's'}</small></div>
-        ${isMgr ? `<button class="gear" data-gear="${c.id}" title="Column settings">⚙</button>` : ''}</div>
+        ${isMgr && canF('workflow') ? `<button class="gear" data-gear="${c.id}" title="Column settings">⚙</button>` : ''}</div>
       <div class="cards">${list.map((j) => card(j, c, i)).join('') || '<div class="empty">No jobs</div>'}</div></section>`;
   }).join('');
 }
@@ -1133,7 +1133,7 @@ function crewPanel(j) {
       <div class="amt">${c.billing === 'costplus'
         ? `${usd(c.charge_cents)}<small class="cp">COST PLUS</small><small class="cpd">cost ${usd(c.amount_cents)} + ${c.markup_type === 'dollar' ? usd(c.markup_cents || 0) : Number(c.markup_percent || 0) + '%'}</small>`
         : `${c.amount_cents ? usd(c.amount_cents) : '<span class="muted">—</span>'}<small class="${c.billing === 'extra' ? 'ext' : 'inc'}">${c.billing === 'extra' ? 'UP-CHARGE' : 'PART OF QUOTE'}</small>`}</div>
-      <span class="cbtns"><button class="sendb" data-crewsend="${c.id}" title="Send this crew the job site, notes, plans, pictures and material list">📤 Send</button><button class="subb" data-sub="${c.id}" title="Bid, change orders, payments to this sub and their files">💵 Sub</button>
+      <span class="cbtns"><button class="sendb" data-crewsend="${c.id}" title="Send this crew the job site, notes, plans, pictures and material list">📤 Send</button>${gcOn() ? `<button class="subb" data-sub="${c.id}" title="Bid, change orders, payments to this sub and their files">💵 Sub</button>` : ''}
       ${locked ? '' : `<button class="${c.done ? '' : 'ok'}" data-crewdone="${c.id}" title="${c.done ? 'Put back on the job' : 'Mark finished'}">${c.done ? '↺' : '✓ Done'}</button>
         <button data-crewedit="${c.id}">Edit</button><button class="xbtn" data-crewdel="${c.id}" title="Remove">×</button>`}</span></div>`;
   const inc = j.crews.filter((c) => c.billing === 'included').reduce((a, c) => a + c.amount_cents, 0);
@@ -1161,8 +1161,8 @@ function crewDialog(c, phaseId) {
     <label id="amtLabel">Amount for this crew</label><input name="amt" inputmode="decimal" value="${c.amount_cents ? dollars(c.amount_cents) : ''}" placeholder="0.00" style="max-width:200px">
     <div class="billopt">
       <label><input type="radio" name="billing" value="included" ${c.billing !== 'extra' ? 'checked' : ''}><span>Part of the quote<small>Already in the quoted price; the job total doesn't change. Shows what this crew costs out of the quote.</small></span></label>
-      <label><input type="radio" name="billing" value="extra" ${c.billing === 'extra' ? 'checked' : ''}><span>Up-charge<small>Added to the job ticket as a charge, so the total and balance owed go up.</small></span></label>
-      <label><input type="radio" name="billing" value="costplus" ${c.billing === 'costplus' ? 'checked' : ''}><span>Cost plus<small>The amount above is the crew's cost. Add a markup (percent or dollars); cost + markup goes on the ticket as a charge.</small></span></label>
+${canF('crew_billing') || c.billing === 'extra' || c.billing === 'costplus' ? `      <label><input type="radio" name="billing" value="extra" ${c.billing === 'extra' ? 'checked' : ''}><span>Up-charge<small>Added to the job ticket as a charge, so the total and balance owed go up.</small></span></label>
+      <label><input type="radio" name="billing" value="costplus" ${c.billing === 'costplus' ? 'checked' : ''}><span>Cost plus<small>The amount above is the crew's cost. Add a markup (percent or dollars); cost + markup goes on the ticket as a charge.</small></span></label>` : ''}
     </div>
     <div class="cpbox" id="cpBox" hidden>
       <input name="mk" inputmode="decimal" placeholder="Markup" value="${c.billing === 'costplus' ? (c.markup_type === 'dollar' ? dollars(c.markup_cents || 0) : Number(c.markup_percent || 0)) : ''}">
@@ -1209,7 +1209,7 @@ const todayISO = () => { const d = new Date(); return new Date(d - d.getTimezone
 const crewTag = (f) => { const c = f.crew_id && cur && cur.crews.find((x) => x.id === f.crew_id); return c ? `<span class="ftag">👷 ${esc(c.trade)}</span>` : ''; };
 const hasSub = (c) => c.amount_cents || c.quote_cents || c.co_count || c.payments.length;
 function subLine(c) {
-  if (!hasSub(c)) return '';
+  if (!gcOn() || !hasSub(c)) return '';
   const parts = [`Bid ${usd(c.amount_cents)}`];
   if (c.quote_cents) parts.push(`Quoted ${usd(c.quote_cents)}`);
   if (c.co_count) parts.push(`${c.co_count} change order${c.co_count === 1 ? '' : 's'} ${c.co_cents < 0 ? '−' : '+'}${usd(Math.abs(c.co_cents))}`);
@@ -1220,6 +1220,7 @@ function subLine(c) {
   return `<span class="subl">${parts.join(' · ')}</span>`;
 }
 function subTotalsHtml(j) {
+  if (!gcOn()) return '';
   const list = j.crews.filter(hasSub);
   if (!list.length) return '';
   const sum = (k) => list.reduce((a, c) => a + c[k], 0);
@@ -1471,6 +1472,7 @@ function crewPacket(cid, how) {
 // One screen: a row per sub (scope, their amount, your markup %), totals, and New Bid / Open / Save / Print.
 // Company, phone, what's included and the sub's bid PDF/pictures are behind ✎ on each row.
 const gcOn = () => !!(me && me.business && me.business.gc_enabled);
+const canF = (k) => !me || !me.can || me.can[k] !== false;
 let gcIdx = null; // crew being edited from the Bid Builder (for re-showing it after a file upload)
 let bb = null;
 const bbPct = (c) => (c.gc_markup_pct != null ? Number(c.gc_markup_pct) : (c.amount_cents && c.quote_cents ? Math.round((c.quote_cents - c.amount_cents) / c.amount_cents * 10000) / 100 : 15));
@@ -2192,7 +2194,7 @@ function tick() { $('#clock').textContent = new Date().toLocaleString([], { week
   $('#rentalBtn').hidden = !rentalsOn;
   $('#aiBtn').hidden = !aiOn();
   $('#gcBoardBtn').hidden = !gcOn();
-  $('#setupBtn').hidden = !isMgr; $('#manageLink').hidden = !isMgr;
+  $('#setupBtn').hidden = !isMgr || !canF('workflow'); $('#manageLink').hidden = !isMgr;
   tick(); setInterval(tick, 30000);
   await loadBoard();
   listen();
