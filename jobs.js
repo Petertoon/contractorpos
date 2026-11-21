@@ -254,6 +254,16 @@ module.exports = function setupJobs(app, deps) {
     const out = await withTx(async (db) => {
       const f = await jobFields(db, req);
       const cols = await columns(db, req.user.business_id);
+      // "Start in": owners/managers can put a rush job straight into a later phase (not the closing column).
+      let start = 0;
+      if (req.body.start_column_id && Number(req.body.start_column_id) !== cols[0].id) {
+        needManager(req.user);
+        start = cols.findIndex((c) => c.id === Number(req.body.start_column_id));
+        if (start < 0) fail(404, 'Column not found');
+        if (start === cols.length - 1) fail(400, `A new job can't start in ${cols[start].name}. That column is for finished, paid jobs.`);
+      }
+      const skipNote = start ? text(req.body.skip_note, 'Why it skips ahead', { required: false, max: 500 }) : null;
+      if (start && (!skipNote || skipNote.length < 3)) fail(400, `Write a note explaining why this job skips ${cols.slice(0, start).map((c) => c.name).join(', ')}`);
       await db.query('SELECT pg_advisory_xact_lock(4243, $1)', [req.user.business_id]);
       const n = await db.query('SELECT COALESCE(max(job_number), 1000) + 1 AS n FROM jobs WHERE business_id=$1', [req.user.business_id]);
       const r = await db.query(
@@ -261,9 +271,10 @@ module.exports = function setupJobs(app, deps) {
            job_address, po_number, column_id, priority, crew, start_date, progress, quoted_cents, tax_rate, tax_exempt, created_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id, job_number`,
         [req.user.business_id, f.location_id, n.rows[0].n, f.name, f.description, f.customer_id, f.customer_name, f.customer_phone,
-          f.job_address, f.po_number, cols[0].id, f.priority, f.crew, f.start_date, f.progress, f.quoted_cents, f.tax_rate,
+          f.job_address, f.po_number, cols[start].id, f.priority, f.crew, f.start_date, f.progress, f.quoted_cents, f.tax_rate,
           f.tax_exempt, req.user.id]);
-      await log(db, r.rows[0].id, req.user, `Job created in ${cols[0].name}` + (f.quoted_cents ? ` · quoted ${usd(f.quoted_cents)}` : ''));
+      await log(db, r.rows[0].id, req.user, `Job created in ${cols[start].name}` + (start ? ` (started ahead, skipped ${cols.slice(0, start).map((c) => c.name).join(', ')} · Note: ${skipNote})` : '')
+        + (f.quoted_cents ? ` · quoted ${usd(f.quoted_cents)}` : ''));
       return r.rows[0];
     });
     notify(req.user.business_id, { type: 'job', id: out.id });
@@ -297,7 +308,9 @@ module.exports = function setupJobs(app, deps) {
       c.changes = subChanges.rows.filter((x) => x.crew_id === c.id);
       c.parts = crewMats.rows.filter((x) => x.crew_id === c.id).map((x) => ({ ...x, qty: Number(x.qty) }));
     }
-    res.json({ ...job, column: cols[job.column_index] || null, columns_count: cols.length, columns: cols.map((c) => ({ id: c.id, name: c.name, color: c.color })),
+    const sched = await pool.query(`SELECT e.id, to_char(e.day,'YYYY-MM-DD') AS day, e.status, e.note, c.name AS crew_name, c.kind
+        FROM sched_entries e JOIN sched_crews c ON c.id = e.crew_id WHERE e.job_id=$1 ORDER BY e.day, c.position, c.id`, [job.id]);
+    res.json({ ...job, schedule: sched.rows, column: cols[job.column_index] || null, columns_count: cols.length, columns: cols.map((c) => ({ id: c.id, name: c.name, color: c.color })),
       location: loc.rows[0] || null, items: items.rows, payments: payments.rows, history: history.rows, crews: crews.rows,
       bid_items: (await pool.query('SELECT * FROM job_bid_items WHERE job_id=$1 ORDER BY id', [job.id])).rows });
   }));
@@ -348,9 +361,20 @@ module.exports = function setupJobs(app, deps) {
     const from = job.column_index < 0 ? 0 : job.column_index;
     const to = from + (direction < 0 ? -1 : 1);
     if (to < 0 || to >= cols.length) fail(400, direction < 0 ? 'This job is already in the first column' : 'This job is already in the last column');
+    return moveJobTo(db, job, cols, to, user, reason);
+  }
+  // Moves a job to any column (one step, or a jump with ⏩ Move to…). Back needs a manager and a reason.
+  async function moveJobTo(db, job, cols, to, user, reason) {
+    const from = job.column_index < 0 ? 0 : job.column_index;
+    if (to === from) fail(400, `This job is already in ${cols[to].name}`);
+    const direction = to < from ? -1 : 1;
+    const jump = Math.abs(to - from) > 1;
     const last = cols.length - 1;
     if (direction < 0 && !isManager(user)) fail(403, 'Only an owner or manager can move a job back');
     const why = direction < 0 ? text(reason, 'Reason for moving back', { required: false, max: 500 }) : null;
+    const note = direction > 0 ? text(reason, 'Note', { required: false, max: 500 }) : null;
+    // Skipping phases needs a note saying why (like moving back). One step ahead doesn't.
+    if (jump && direction > 0 && (!note || note.length < 3)) fail(400, `Write a note explaining why this job skips ${cols.slice(from + 1, to).map((c) => c.name).join(', ')}`);
     if (direction < 0 && (!why || why.length < 3)) fail(400, 'Write a note explaining why this job is moving back');
     if (to === last) {
       if (job.balance_cents > 0) fail(400, `${usd(job.balance_cents)} is still owed on this job. Take the payment or finish with a discount first.`);
@@ -360,9 +384,22 @@ module.exports = function setupJobs(app, deps) {
       `UPDATE jobs SET column_id=$1, status_label=NULL, column_entered_at=now(), updated_at=now(),
          closed_at = CASE WHEN $2 THEN now() ELSE NULL END, back_reason=$4, back_at=CASE WHEN $4::text IS NULL THEN NULL ELSE now() END,
        back_by=$5 WHERE id=$3`, [cols[to].id, to === last, job.id, why, why ? user.name : null]);
+    const skipped = jump && direction > 0 ? cols.slice(from + 1, to).map((c) => c.name) : [];
     await log(db, job.id, user, `Moved ${direction < 0 ? 'back ' : ''}from ${cols[from].name} to ${cols[to].name}` + (to === last ? ' (job closed)' : '')
-      + (why ? ` · Reason: ${why}` : ''));
+      + (skipped.length ? ` · skipped ${skipped.join(', ')}` : '') + (why ? ` · Reason: ${why}` : '') + (note ? ` · Note: ${note}` : ''));
   }
+  // ⏩ Move to…: put a job straight into any column (owners and managers).
+  app.post('/api/jobs/:id/jump', ...J, wrap(async (req, res) => {
+    needManager(req.user);
+    await withTx(async (db) => {
+      const { job, cols } = await loadJob(db, req.params.id, req.user.business_id, true);
+      const to = cols.findIndex((c) => c.id === Number(req.body.column_id));
+      if (to < 0) fail(404, 'Column not found');
+      await moveJobTo(db, job, cols, to, req.user, req.body.reason);
+    });
+    notify(req.user.business_id, { type: 'job', id: Number(req.params.id) });
+    res.json({ ok: true });
+  }));
   app.post('/api/jobs/:id/move', ...J, wrap(async (req, res) => {
     await withTx(async (db) => {
       const { job, cols } = await loadJob(db, req.params.id, req.user.business_id, true);
