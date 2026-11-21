@@ -29,7 +29,22 @@
   .counts { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 14px 0; }
   .counts span { border: 1px solid var(--c, var(--jline)); color: var(--jink); border-radius: 7px; padding: 3px 9px; font-size: 13px; font-weight: 700; background: #1b1e24; }
 
+  .jumplist { display: grid; gap: 6px; margin: 8px 0 4px; }
+  .jumpto { display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px 12px; border-radius: 8px; border: 2px solid var(--jline); background: transparent; color: inherit; font-weight: 700; }
+  .jumpto i { width: 14px; height: 14px; border-radius: 4px; background: var(--c); flex: none; }
+  .jumpto span { flex: 1; } .jumpto small { font-weight: 600; opacity: .7; }
+  .jumpto:hover:not(:disabled) { border-color: var(--c); }
+  .jumpto.sel { border-color: var(--c); box-shadow: inset 0 0 0 2px var(--c); }
+  .jumpto.here { opacity: .5; cursor: default; }
   /* board */
+  /* A second sideways scrollbar above the columns, kept in step with the one at the bottom of the board. */
+  #topScroll { overflow-x: auto; overflow-y: hidden; height: 18px; margin-top: 6px; }
+  #topScroll > div { height: 1px; }
+  #topScroll::-webkit-scrollbar, #board::-webkit-scrollbar { height: 14px; }
+  #topScroll::-webkit-scrollbar-thumb, #board::-webkit-scrollbar-thumb { background: #4a505c; border-radius: 7px; border: 3px solid transparent; background-clip: padding-box; }
+  #topScroll::-webkit-scrollbar-thumb:hover, #board::-webkit-scrollbar-thumb:hover { background-color: #7cc04a; }
+  html[data-theme=ranch] #topScroll::-webkit-scrollbar-thumb, html[data-theme=ranch] #board::-webkit-scrollbar-thumb { background-color: #b49a6c; }
+  html[data-theme=ranch] #topScroll::-webkit-scrollbar-thumb:hover, html[data-theme=ranch] #board::-webkit-scrollbar-thumb:hover { background-color: #2f5a2a; }
   #board { display: flex; gap: 10px; padding: 10px 14px 18px; overflow-x: auto; align-items: flex-start; min-height: calc(100vh - 110px); }
   .col { flex: 1 1 0; min-width: 250px; background: var(--colbg, var(--jpanel)); color: var(--cardtx, var(--jink)); border-radius: 10px; display: flex; flex-direction: column; max-height: calc(100vh - 125px); }
   .col.drop { outline: 2px dashed #8fd16a; }
@@ -455,6 +470,7 @@
   <button class="link" onclick="logout()">Log out</button>
 </header>
 <div class="counts" id="counts"></div>
+<div id="topScroll" aria-hidden="true" hidden><div></div></div>
 <main id="board"></main>
 
 <div class="ticket" id="ticket" hidden>
@@ -514,6 +530,41 @@ function openModal(html) {
 function closeModal() { $('#m').classList.remove('open'); $('#mBody').innerHTML = ''; if (typeof gcIdx !== 'undefined') gcIdx = null; if (typeof cp !== 'undefined') cp = null; }
 $('#m').addEventListener('mousedown', (e) => { if (e.target.id === 'm') closeModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if ($('#m').classList.contains('open')) closeModal(); else if (bb) bbLeave(bbClose); else if (openId) closeTicket(); } });
+// ⏩ Move to…: put a job in any phase. Going back still needs a reason; skipping ahead can have a note.
+function jumpDialog(j) {
+  const ci = cols.findIndex((c) => c.id === j.column_id);
+  let pick = null;
+  return new Promise((resolve) => {
+    const f = openModal(`<h2>⏩ Move to…</h2>
+      <p class="muted" style="margin-top:0">#${j.job_number} ${esc(j.name)} is in <b>${esc(cols[ci] ? cols[ci].name : '')}</b>. Pick where it goes:</p>
+      <div class="jumplist">${cols.map((c, i) => `<button type="button" class="jumpto${i === ci ? ' here' : ''}" data-to="${i}" style="--c:${c.color}" ${i === ci ? 'disabled' : ''}>
+        <i></i><span>${i + 1}. ${esc(c.name)}</span><small>${i === ci ? 'here now' : i < ci ? '↩ back' : i - ci > 1 ? `⏩ skips ${i - ci - 1}` : 'next'}</small></button>`).join('')}</div>
+      <label id="jmpLbl">Note (optional)</label>
+      <textarea name="reason" rows="2" maxlength="500" placeholder="e.g. Emergency service call, customer approved by phone"></textarea>
+      <div class="err" id="jmpErr" style="color:#ff8a8a;min-height:18px"></div>
+      <div class="actions"><button type="button" class="dk" id="jmpCancel">Cancel</button><button class="primary" id="jmpGo" disabled>Move</button></div>`);
+    f.onclick = async (e) => {
+      const b = e.target.closest('[data-to]');
+      if (b) {
+        pick = Number(b.dataset.to);
+        $$('.jumpto', f).forEach((x) => x.classList.toggle('sel', x === b));
+        const back = pick < ci;
+        const skips = pick - ci > 1;
+        $('#jmpLbl').textContent = back ? 'Why is this job moving back? (required)' : skips ? `Why does it skip ${cols.slice(ci + 1, pick).map((c) => c.name).join(', ')}? (required)` : 'Note (optional)';
+        $('#jmpGo').disabled = false; $('#jmpGo').textContent = `Move to ${cols[pick].name}`; $('#jmpErr').textContent = '';
+        return;
+      }
+      if (e.target.id === 'jmpCancel') { closeModal(); resolve(false); return; }
+      if (e.target.id !== 'jmpGo' || pick == null) return;
+      const reason = f.reason.value.trim();
+      if (pick < ci && reason.length < 3) { $('#jmpErr').textContent = 'Write a note explaining why it is moving back.'; f.reason.focus(); return; }
+      if (pick - ci > 1 && reason.length < 3) { $('#jmpErr').textContent = 'Write a note explaining why it skips those phases.'; f.reason.focus(); return; }
+      e.target.disabled = true;
+      try { await api(`/api/jobs/${j.id}/jump`, { column_id: cols[pick].id, reason }); closeModal(); toast(`Moved to ${cols[pick].name}`); resolve(true); }
+      catch (err) { $('#jmpErr').textContent = err.message; e.target.disabled = false; }
+    };
+  });
+}
 // Moving a job back needs a note saying why. Resolves true when the job moved.
 function moveBackDialog(j) {
   const ci = cols.findIndex((c) => c.id === j.column_id);
@@ -609,6 +660,22 @@ function renderBoard() {
         ${isMgr && canF('workflow') ? `<button class="gear" data-gear="${c.id}" title="Column settings">⚙</button>` : ''}</div>
       <div class="cards">${list.map((j) => card(j, c, i)).join('') || '<div class="empty">No jobs</div>'}</div></section>`;
   }).join('');
+  syncTopScroll();
+}
+// Top scrollbar: same width as the board's content; moving either one moves the other.
+function syncTopScroll() {
+  const b = $('#board'), t = $('#topScroll');
+  t.firstElementChild.style.width = b.scrollWidth + 'px';
+  t.hidden = b.scrollWidth <= b.clientWidth + 1;
+  t.scrollLeft = b.scrollLeft;
+}
+{
+  let busy = false;
+  const follow = (from, to) => () => { if (busy) return; busy = true; to.scrollLeft = from.scrollLeft; requestAnimationFrame(() => { busy = false; }); };
+  $('#topScroll').addEventListener('scroll', follow($('#topScroll'), $('#board')));
+  $('#board').addEventListener('scroll', follow($('#board'), $('#topScroll')));
+  window.addEventListener('resize', () => syncTopScroll());
+  if (window.ResizeObserver) new ResizeObserver(() => syncTopScroll()).observe($('#board'));
 }
 $('#board').addEventListener('click', async (e) => {
   const g = e.target.closest('[data-gear]');
@@ -658,6 +725,9 @@ $('#allClosed').addEventListener('change', () => run(loadBoard));
 // ---------- new job / edit details ----------
 function jobForm(j = {}) {
   return `<h2>${j.id ? `Edit job #${j.job_number}` : 'New job'}</h2>
+    ${!j.id && isMgr && cols.length > 2 ? `<label>Start in</label><select name="start_column_id" id="startCol">${cols.slice(0, -1).map((c, i) => `<option value="${c.id}">${i + 1}. ${esc(c.name)}${i === 0 ? ' (normal)' : ''}</option>`).join('')}</select>
+      <div class="muted" id="startNote" style="font-size:12.5px;margin-top:3px">Rush job? Pick a later phase to skip ahead.</div>
+      <div id="skipBox" hidden><label>Why does it skip ahead? (required)</label><textarea name="skip_note" rows="2" maxlength="500" placeholder="e.g. Emergency service call, customer approved by phone"></textarea></div>` : ''}
     <label>Job name</label><input name="name" required maxlength="120" value="${esc(j.name || '')}" placeholder="e.g. Miller Remodel">
     <label>Description</label><textarea name="description" rows="2" maxlength="1000" placeholder="e.g. Kitchen & Bath">${esc(j.description || '')}</textarea>
     <label>Customer</label>
@@ -701,10 +771,17 @@ function wireCustomerFind(f) {
 $('#newJob').onclick = () => {
   const f = openModal(jobForm());
   wireCustomerFind(f);
+  if ($('#startCol')) $('#startCol').onchange = (e) => {
+    const i = cols.findIndex((c) => c.id === Number(e.target.value));
+    $('#startNote').textContent = i > 0 ? `⏩ Skips ${cols.slice(0, i).map((c) => c.name).join(', ')}. Your note goes in the job history.` : 'Rush job? Pick a later phase to skip ahead.';
+    $('#skipBox').hidden = i <= 0; f.skip_note.required = i > 0;
+  };
   $('#saveJob').onclick = () => run(async () => {
     if (!f.reportValidity()) return;
-    const r = await api('/api/jobs', readJobForm(f));
-    closeModal(); toast(`Job #${r.job_number} created`); await loadBoard();
+    const body = readJobForm(f);
+    const r = await api('/api/jobs', body);
+    const sc = cols.find((c) => c.id === Number(body.start_column_id));
+    closeModal(); toast(`Job #${r.job_number} created${sc && sc.id !== cols[0].id ? ' in ' + sc.name : ''}`); await loadBoard();
   });
 };
 function editDetails() {
@@ -771,6 +848,7 @@ function renderTicket() {
     <div class="spacer" style="flex:1"></div>
     ${i > 0 && isMgr ? '<button class="dk" id="tPrev">‹ Move back</button>' : ''}
     ${i < j.columns_count - 1 ? `<button class="dk" id="tNext">Move to next ›</button>` : ''}
+    ${isMgr && j.columns_count > 2 ? '<button class="dk" id="tJump" title="Put this job in any phase">⏩ Move to…</button>' : ''}
     ${gcOn() && !locked ? '<button class="dk gcbtn" id="tGC">🏗 Bid Builder</button>' : ''}
     <button class="dk" id="tCrews">👷 Crews (${j.crews.length})</button>
     <button class="dk" onclick="editDetails()">Edit details</button>
@@ -783,6 +861,7 @@ function renderTicket() {
     if (e.target.id === 'tCrews') { crewOpen = !crewOpen; renderTicket(); if (crewOpen) $('#crewBox').scrollIntoView({ block: 'nearest' }); return; }
     if (e.target.id === 'tNext') return run(async () => { await api(`/api/jobs/${j.id}/move`, { direction: 1 }); toast('Moved'); await refreshTicket(); });
     if (e.target.id === 'tPrev') return moveBackDialog(j).then((ok) => ok && refreshTicket());
+    if (e.target.id === 'tJump') return jumpDialog(j).then((ok) => ok && refreshTicket());
   };
   // Center: the job's lines, starting with the quoted price.
   $('#tLines').innerHTML = `${crewPanel(j)}<h3>Job ticket</h3>
