@@ -40,6 +40,8 @@
   button.rentson { background: #fff3e0; color: #8a4b00; }
   button.jobson { background: #e3ecff; color: #1d3f9a; }
   button.aion { background: #efe7ff; color: #4b2aa8; }
+  select.planpick { width: auto; padding: 6px 8px; font-weight: 700; }
+  select.plan-basic { background: #eef2ff; color: #3730a3; } select.plan-standard { background: #e6f4ea; color: #1b5e33; } select.plan-advanced { background: #fff4d6; color: #7a4b00; }
   button.gcon { background: #ffedd5; color: #9a3412; }
   .stat.refund b { color: #c0392b; }
   .badge { background: #e74c3c; color: #fff; border-radius: 99px; padding: 1px 7px; font-size: 12px; margin-left: 4px; }
@@ -112,13 +114,15 @@ const TABS = [
   { id: 'refunds', label: 'Refunds owed', show: () => !!(me.business && me.business.rentals_enabled) },
   { id: 'customers', label: 'Customers', show: () => !!me.business },
   { id: 'reports', label: 'Reports', show: () => !!me.business },
-  { id: 'deposits', label: 'Deposits', show: () => !!me.business },
+  { id: 'deposits', label: 'Deposits', show: () => !!me.business && can('deposits') },
   { id: 'quickbooks', label: 'QuickBooks', show: () => !!(me.business && me.business.qbo_enabled && role === 'owner') },
   { id: 'locations', label: 'Locations', show: () => !!me.business },
   { id: 'employees', label: 'Employees', show: () => !!me.business },
   { id: 'sales', label: 'Sales', show: () => !!me.business },
   { id: 'settings', label: 'Settings', show: () => true },
 ];
+// Plan levels: me.can says what this business's plan and add-ons include (features.js). Hidden, never deleted.
+const can = (k) => !me.can || me.can[k] !== false;
 const PRODUCT_FORM = [
   { name: 'name', label: 'Product name', required: true },
   { name: 'photo', label: 'Photo', type: 'photo' },
@@ -227,25 +231,33 @@ async function saveLoop(title, fields, values, fn, submitLabel) {
 async function showBusinesses() {
   const list = await api('/api/admin/businesses');
   $('#view').innerHTML = `<div class="bar"><h2>Businesses</h2><button class="primary" id="addBiz">+ New business</button></div>
-    <div class="tablewrap"><table class="list"><thead><tr><th>Business</th><th>Owner login</th><th class="num">Locations</th><th class="num">Users</th><th>Status</th><th>Add-ons</th><th></th></tr></thead><tbody>
+    <div class="tablewrap"><table class="list"><thead><tr><th>Business</th><th>Owner login</th><th class="num">Locations</th><th class="num">Users</th><th>Status</th><th>Plan</th><th>Add-ons</th><th></th></tr></thead><tbody>
     ${list.map((b) => `<tr class="${b.active ? '' : 'off'}"><td><b>${esc(b.name)}</b></td><td>${esc(b.owner_email || '')}</td><td class="num">${b.location_count}</td><td class="num">${b.user_count}</td>
       <td>${b.active ? '<span class="pill">Active</span>' : '<span class="pill off">Off</span>'}</td>
+      <td><select data-plan="${b.id}" class="planpick plan-${esc(b.plan || 'advanced')}" title="What this business's screens include">
+        ${['basic', 'standard', 'advanced'].map((p) => `<option value="${p}" ${(b.plan || 'advanced') === p ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)}</option>`).join('')}</select></td>
       <td style="white-space:nowrap"><button class="${b.rentals_enabled ? 'rentson' : 'ghost'}" data-rentals="${b.id}" data-on="${b.rentals_enabled}" title="Rentals add-on">🔑 Rentals ${b.rentals_enabled ? 'on' : 'off'}</button>
         <button class="${b.qbo_enabled ? 'qboon' : 'ghost'}" data-qbo="${b.id}" data-on="${b.qbo_enabled}" title="QuickBooks add-on">QuickBooks ${b.qbo_enabled ? 'on' : 'off'}</button>
         <button class="${b.ai_enabled ? 'aion' : 'ghost'}" data-ai="${b.id}" data-on="${b.ai_enabled}" title="Claude add-on: ask about plans and photos, materials estimates. ${b.claude_month} request(s) this month">✨ Claude ${b.ai_enabled ? 'on' : 'off'}${b.claude_month ? ` · ${b.claude_month} this month` : ''}</button>
         <button class="${b.gc_enabled ? 'gcon' : 'ghost'}" data-gc="${b.id}" data-on="${b.gc_enabled}" title="General Contractor add-on: build the quote sub by sub">🏗 GC ${b.gc_enabled ? 'on' : 'off'}</button></td>
       <td style="white-space:nowrap"><button class="primary" data-enter="${b.id}" title="${b.in_setup ? 'Setup days: opens without a code (logged)' : 'Needs a one-time code from the owner'}">${b.in_setup ? 'Open' : '🔒 Open'}</button> <button data-toggle="${b.id}" data-active="${b.active}">${b.active ? 'Turn off' : 'Turn on'}</button></td></tr>`).join('')
-      || '<tr><td colspan="7" class="muted">No businesses yet. Create the first one.</td></tr>'}
+      || '<tr><td colspan="8" class="muted">No businesses yet. Create the first one.</td></tr>'}
     </tbody></table></div>`;
   $('#addBiz').onclick = async () => {
     if (await saveLoop('New business', [
       { name: 'name', label: 'Business name', required: true },
+      { name: 'plan', label: 'Plan', type: 'select', options: [{ value: 'basic', label: 'Basic' }, { value: 'standard', label: 'Standard' }, { value: 'advanced', label: 'Advanced' }] },
       { name: 'location_name', label: 'First location name', required: true },
       { name: 'tax_rate', label: 'Sales tax rate (%)', type: 'number', required: true },
       { name: 'owner_name', label: 'Owner name', required: true },
       { name: 'owner_email', label: 'Owner login email', type: 'email', required: true },
       { name: 'owner_password', label: 'Owner password (8+ characters)', type: 'password', required: true },
-    ], { location_name: 'Main Location', tax_rate: 8.25 }, (v) => api('/api/admin/businesses', v), 'Create business')) showBusinesses();
+    ], { location_name: 'Main Location', tax_rate: 8.25, plan: 'basic' }, (v) => api('/api/admin/businesses', v), 'Create business')) showBusinesses();
+  };
+  $('#view').onchange = async (e) => {
+    const pp = e.target.closest('[data-plan]'); if (!pp) return;
+    try { await api('/api/admin/businesses/' + pp.dataset.plan, { plan: pp.value }, 'PUT'); toast(`Plan changed to ${pp.options[pp.selectedIndex].text}. Nothing was deleted.`); showBusinesses(); }
+    catch (x) { toast(x.message, 'bad'); }
   };
   $('#view').onclick = async (e) => {
     const en = e.target.closest('[data-enter]'), tg = e.target.closest('[data-toggle]'), rt = e.target.closest('[data-rentals]');
@@ -453,6 +465,7 @@ function setPendingBadge(n) {
 }
 
 // ---------- customers & charge accounts ----------
+const custForm = () => CUSTOMER_FORM.filter((f) => can('charge_accounts') || !['charge_account', 'credit_limit_cents'].includes(f.name));
 const CUSTOMER_FORM = [
   { name: 'name', label: 'Name', required: true },
   { name: 'company', label: 'Company' },
@@ -482,12 +495,12 @@ async function showCustomers() {
       || '<tr><td colspan="6" class="muted">No customers yet.</td></tr>'}</tbody></table></div>`;
   let t; $('#cq').oninput = () => { clearTimeout(t); t = setTimeout(() => { custQuery = $('#cq').value; showCustomers().then(() => { const q = $('#cq'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }); }, 300); };
   $('#cAcct').onchange = () => { custAccountsOnly = $('#cAcct').checked; showCustomers(); };
-  $('#addCust').onclick = async () => { if (await saveLoop('Add customer', CUSTOMER_FORM, { active: true }, (v) => api('/api/customers', v))) showCustomers(); };
+  $('#addCust').onclick = async () => { if (await saveLoop('Add customer', custForm(), { active: true }, (v) => api('/api/customers', v))) showCustomers(); };
   $('#view').onclick = async (e) => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.edit) {
       const c = list.find((x) => String(x.id) === b.dataset.edit);
-      if (await saveLoop('Edit ' + c.name, CUSTOMER_FORM, c, (v) => api('/api/customers/' + c.id, v, 'PUT'))) showCustomers();
+      if (await saveLoop('Edit ' + c.name, custForm(), c, (v) => api('/api/customers/' + c.id, v, 'PUT'))) showCustomers();
     }
     if (b.dataset.open) showCustomer(b.dataset.open);
   };
@@ -496,7 +509,7 @@ async function showCustomer(id) {
   const c = await api('/api/customers/' + id);
   const kinds = { charge: 'Charge', payment: 'Payment' };
   $('#view').innerHTML = `<div class="bar"><button class="ghost" id="back">← Customers</button><h2>${esc(c.name)}${c.company ? ' · ' + esc(c.company) : ''}</h2>
-      <span class="custbtns"><button class="primary" id="takePay">Take payment</button><button id="stmt">Print statement</button><button id="editC">Edit</button></span></div>
+      <span class="custbtns">${can('charge_accounts') ? '<button class="primary" id="takePay">Take payment</button><button id="stmt">Print statement</button>' : ''}<button id="editC">Edit</button></span></div>
     <div class="cards">
       <div class="stat"><div>Phone</div><b style="font-size:18px">${esc(c.phone || '—')}</b></div>
       <div class="stat"><div>Address</div><div style="color:var(--ink)">${esc(c.address || '—')}</div></div>
@@ -517,7 +530,7 @@ async function showCustomer(id) {
       ${c.quotes.map((q) => `<tr><td>${q.id}</td><td>${new Date(q.created_at).toLocaleDateString()}</td><td>${esc(q.po_number || '')}</td><td>${esc(q.status)}</td>
         <td class="num">${money(q.total_cents)}</td><td><button data-quote="${q.id}">Print</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
   $('#back').onclick = () => showCustomers();
-  $('#editC').onclick = async () => { if (await saveLoop('Edit ' + c.name, CUSTOMER_FORM, c, (v) => api('/api/customers/' + c.id, v, 'PUT'))) showCustomer(id); };
+  $('#editC').onclick = async () => { if (await saveLoop('Edit ' + c.name, custForm(), c, (v) => api('/api/customers/' + c.id, v, 'PUT'))) showCustomer(id); };
   // Take payment and Print statement need a charge account; offer to turn it on for this customer first.
   const needAccount = async () => {
     if (c.charge_account) return true;
@@ -526,8 +539,8 @@ async function showCustomer(id) {
     try { await api('/api/customers/' + c.id, { ...c, charge_account: true }, 'PUT'); c.charge_account = true; toast('Charge account turned on'); return true; }
     catch (e) { toast(e.message, 'bad'); return false; }
   };
-  $('#stmt').onclick = async () => { if (!(await needAccount())) return; window.open('/statement?id=' + c.id, '_blank', 'width=820,height=900'); showCustomer(id); };
-  {
+  if ($('#stmt')) $('#stmt').onclick = async () => { if (!(await needAccount())) return; window.open('/statement?id=' + c.id, '_blank', 'width=820,height=900'); showCustomer(id); };
+  if ($('#takePay')) {
     $('#takePay').onclick = async () => {
       if (!(await needAccount())) { return; }
       if (await saveLoop('Payment on account · ' + c.name, [
@@ -609,7 +622,7 @@ async function showReports() {
           || '<tr><td colspan="6" class="muted">No checks in this period.</td></tr>'}</tbody></table></div>`;
   }
   $('#view').innerHTML = `<div class="bar"><h2>Reports</h2>
-      <button class="${rep.kind === 'tax' ? 'primary' : 'ghost'}" data-kind="tax">Sales tax</button><button class="${rep.kind === 'money' ? 'primary' : 'ghost'}" data-kind="money">Cash & checks</button></div>
+      <button class="${rep.kind === 'tax' ? 'primary' : 'ghost'}" data-kind="tax">Sales tax</button>${can('deposits') ? `<button class="${rep.kind === 'money' ? 'primary' : 'ghost'}" data-kind="money">Cash & checks</button>` : ''}</div>
     <div class="bar filters">
       ${presets.map(([k, l]) => `<button class="${rep.preset === k ? 'primary' : 'ghost'}" data-preset="${k}">${l}</button>`).join('')}
       <input type="date" id="rFrom" value="${rep.from}"> to <input type="date" id="rTo" value="${rep.to}">
@@ -1001,6 +1014,17 @@ async function showSettings() {
       <label>Words (shown when there's no picture, and when hovering)</label><input id="tbLabel" maxlength="40" placeholder="e.g. Lokaal">
       <div style="margin:12px 0 4px" class="muted">Preview:</div><div id="tbPrev" style="min-height:40px;display:flex;align-items:center"></div>
       <div style="display:flex;gap:8px;margin-top:12px"><button class="primary" id="tbSave">Save</button><button class="ghost" id="tbClear">Remove the button</button></div></div>` : ''}
+    ${me.can && me.user.role !== 'admin' ? `<div class="settings" id="planBox"><h2 style="margin-top:0">Your plan: ${esc(me.can.plan_name)}</h2>
+      <div class="muted" style="margin-bottom:6px">Every plan has the job board, job tickets, customers, products, the register, receipts and invoices.</div>
+      <ul style="margin:6px 0 0 18px;padding:0;line-height:1.7">
+        ${[['Custom board columns, buttons and colors', 'workflow'], ['Crew billing: up-charge and cost plus', 'crew_billing'], ['Charge accounts and statements', 'charge_accounts'],
+          ['Gift cards', 'gift_cards'], ['Quotes at the register', 'register_quotes'], ['PO #, job site, pickup/delivery and fuel on sales', 'sale_extras'],
+          ['Cash & checks and bank deposits', 'deposits'], ['Several registers', 'multi_register'], ['Several locations', 'multi_location']]
+          .map(([t, k]) => `<li>${me.can[k] ? '✅' : '➖'} ${t}${me.can[k] ? '' : ` <span class="muted">(${k === 'multi_location' ? 'Advanced' : 'Standard'})</span>`}</li>`).join('')}
+        <li>👤 Logins: ${me.can.limits.users ? 'up to ' + me.can.limits.users : 'unlimited'}</li>
+      </ul>
+      <div class="muted" style="margin-top:8px">Add-ons: ${[['🔑 Rentals', 'rentals'], ['QuickBooks', 'qbo'], ['✨ Claude', 'ai'], ['🏗 GC (Bid Builder + sub tracking)', 'gc']].map(([t, k]) => `${t} ${me.can[k] ? 'on' : 'off'}`).join(' · ')}</div>
+      <div class="muted" style="margin-top:6px">To change your plan or add-ons, contact ContractorPOS support.</div></div>` : ''}
     <div class="settings" id="loginBox"><h2 style="margin-top:0">My login &amp; backup email</h2>
       <label>Login email</label><input value="${esc(me.user.email)}" disabled>
       <label>Backup email${['owner', 'admin'].includes(me.user.role) ? ' (required)' : ' (optional)'}</label>
