@@ -6,6 +6,7 @@
 <link rel="stylesheet" href="/style.css">
 <style>
   main { padding: 16px; max-width: 1100px; margin: 0 auto; }
+  main:has(select[data-plan]) { max-width: 1320px; }
   .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
   .bar h2 { margin: 0; flex: 1; }
   .custbtns { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -43,6 +44,8 @@
   select.planpick { width: auto; padding: 6px 8px; font-weight: 700; }
   select.plan-basic { background: #eef2ff; color: #3730a3; } select.plan-standard { background: #e6f4ea; color: #1b5e33; } select.plan-advanced { background: #fff4d6; color: #7a4b00; }
   button.gcon { background: #ffedd5; color: #9a3412; }
+  button.calon { background: #dbeafe; color: #1e3a8a; }
+  .addons { display: flex; flex-wrap: wrap; gap: 4px; min-width: 250px; max-width: 330px; } .addons button { white-space: nowrap; padding: 6px 10px; font-size: 14px; }
   .stat.refund b { color: #c0392b; }
   .badge { background: #e74c3c; color: #fff; border-radius: 99px; padding: 1px 7px; font-size: 12px; margin-left: 4px; }
   .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
@@ -70,6 +73,7 @@
     html[data-theme=dark] button.jobson { background: #1b2a48; color: #9cc8ff; }
     html[data-theme=dark] button.aion { background: #2b2040; color: #d6b4ff; }
     html[data-theme=dark] button.gcon { background: #3a2412; color: #fdba74; }
+    html[data-theme=dark] button.calon { background: #182a3f; color: #9cc8ff; }
   }
 </style>
 </head>
@@ -236,10 +240,11 @@ async function showBusinesses() {
       <td>${b.active ? '<span class="pill">Active</span>' : '<span class="pill off">Off</span>'}</td>
       <td><select data-plan="${b.id}" class="planpick plan-${esc(b.plan || 'advanced')}" title="What this business's screens include">
         ${['basic', 'standard', 'advanced'].map((p) => `<option value="${p}" ${(b.plan || 'advanced') === p ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)}</option>`).join('')}</select></td>
-      <td style="white-space:nowrap"><button class="${b.rentals_enabled ? 'rentson' : 'ghost'}" data-rentals="${b.id}" data-on="${b.rentals_enabled}" title="Rentals add-on">🔑 Rentals ${b.rentals_enabled ? 'on' : 'off'}</button>
+      <td><div class="addons"><button class="${b.rentals_enabled ? 'rentson' : 'ghost'}" data-rentals="${b.id}" data-on="${b.rentals_enabled}" title="Rentals add-on">🔑 Rentals ${b.rentals_enabled ? 'on' : 'off'}</button>
         <button class="${b.qbo_enabled ? 'qboon' : 'ghost'}" data-qbo="${b.id}" data-on="${b.qbo_enabled}" title="QuickBooks add-on">QuickBooks ${b.qbo_enabled ? 'on' : 'off'}</button>
         <button class="${b.ai_enabled ? 'aion' : 'ghost'}" data-ai="${b.id}" data-on="${b.ai_enabled}" title="Claude add-on: ask about plans and photos, materials estimates. ${b.claude_month} request(s) this month">✨ Claude ${b.ai_enabled ? 'on' : 'off'}${b.claude_month ? ` · ${b.claude_month} this month` : ''}</button>
-        <button class="${b.gc_enabled ? 'gcon' : 'ghost'}" data-gc="${b.id}" data-on="${b.gc_enabled}" title="General Contractor add-on: build the quote sub by sub">🏗 GC ${b.gc_enabled ? 'on' : 'off'}</button></td>
+        <button class="${b.gc_enabled ? 'gcon' : 'ghost'}" data-gc="${b.id}" data-on="${b.gc_enabled}" title="General Contractor add-on: build the quote sub by sub">🏗 GC ${b.gc_enabled ? 'on' : 'off'}</button>
+        <button class="${b.calendar_enabled ? 'calon' : 'ghost'}" data-cal="${b.id}" data-on="${b.calendar_enabled}" title="Crew Calendar add-on: schedule crews by day, phone links for crews">📅 Calendar ${b.calendar_enabled ? 'on' : 'off'}</button></div></td>
       <td style="white-space:nowrap"><button class="primary" data-enter="${b.id}" title="${b.in_setup ? 'Setup days: opens without a code (logged)' : 'Needs a one-time code from the owner'}">${b.in_setup ? 'Open' : '🔒 Open'}</button> <button data-toggle="${b.id}" data-active="${b.active}">${b.active ? 'Turn off' : 'Turn on'}</button></td></tr>`).join('')
       || '<tr><td colspan="8" class="muted">No businesses yet. Create the first one.</td></tr>'}
     </tbody></table></div>`;
@@ -264,6 +269,8 @@ async function showBusinesses() {
     const qb = e.target.closest('[data-qbo]'), jb = e.target.closest('[data-jobs]'), ab = e.target.closest('[data-ai]');
     const gb = e.target.closest('[data-gc]');
     if (gb) { await api('/api/admin/businesses/' + gb.dataset.gc, { gc_enabled: gb.dataset.on !== 'true' }, 'PUT'); showBusinesses(); return; }
+    const cb = e.target.closest('[data-cal]');
+    if (cb) { await api('/api/admin/businesses/' + cb.dataset.cal, { calendar_enabled: cb.dataset.on !== 'true' }, 'PUT'); showBusinesses(); return; }
     if (ab) {
       const on = ab.dataset.on !== 'true';
       await api('/api/admin/businesses/' + ab.dataset.ai, { ai_enabled: on }, 'PUT'); showBusinesses(); return;
@@ -1023,7 +1030,7 @@ async function showSettings() {
           .map(([t, k]) => `<li>${me.can[k] ? '✅' : '➖'} ${t}${me.can[k] ? '' : ` <span class="muted">(${k === 'multi_location' ? 'Advanced' : 'Standard'})</span>`}</li>`).join('')}
         <li>👤 Logins: ${me.can.limits.users ? 'up to ' + me.can.limits.users : 'unlimited'}</li>
       </ul>
-      <div class="muted" style="margin-top:8px">Add-ons: ${[['🔑 Rentals', 'rentals'], ['QuickBooks', 'qbo'], ['✨ Claude', 'ai'], ['🏗 GC (Bid Builder + sub tracking)', 'gc']].map(([t, k]) => `${t} ${me.can[k] ? 'on' : 'off'}`).join(' · ')}</div>
+      <div class="muted" style="margin-top:8px">Add-ons: ${[['🔑 Rentals', 'rentals'], ['QuickBooks', 'qbo'], ['✨ Claude', 'ai'], ['🏗 GC (Bid Builder + sub tracking)', 'gc'], ['📅 Crew Calendar', 'calendar']].map(([t, k]) => `${t} ${me.can[k] ? 'on' : 'off'}`).join(' · ')}</div>
       <div class="muted" style="margin-top:6px">To change your plan or add-ons, contact ContractorPOS support.</div></div>` : ''}
     <div class="settings" id="loginBox"><h2 style="margin-top:0">My login &amp; backup email</h2>
       <label>Login email</label><input value="${esc(me.user.email)}" disabled>
@@ -1081,7 +1088,7 @@ function route() {
   const tabs = TABS.filter((t) => t.show());
   let id = location.hash.slice(1).split('?')[0];
   if (!tabs.some((t) => t.id === id)) id = tabs[0].id;
-  $('#nav').innerHTML = (me.business && me.business.jobs_enabled ? '<a href="/jobs">Job board</a>' : '') +
+  $('#nav').innerHTML = (me.business && me.business.jobs_enabled ? '<a href="/jobs">Job board</a>' + (me.business.calendar_enabled ? '<a href="/schedule">Crew calendar</a>' : '') : '') +
     (me.business ? '<a href="/checkout">Checkout</a>' : '') +
     tabs.map((t) => `<a href="#${t.id}" class="${t.id === id ? 'active' : ''}">${t.label}</a>`).join('');
   $('#view').onclick = null;
