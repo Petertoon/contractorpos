@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><meta name="referrer" content="no-referrer">
+<title>My schedule</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f2f2f0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1d1d1b; padding: 14px 10px 40px; }
+  .doc { max-width: 620px; margin: 0 auto; }
+  .head { background: #fff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 2px 14px rgba(0,0,0,.06); display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .head img { max-height: 44px; max-width: 160px; display: block; margin-bottom: 4px; }
+  .head b { font-size: 18px; display: block; } .head small { color: #666; font-size: 14px; }
+  .head h1 { margin: 0; font-size: 22px; text-align: right; } .head .upd { color: #666; font-size: 13px; text-align: right; }
+  .day { background: #fff; border-radius: 12px; margin-top: 12px; padding: 12px 14px; box-shadow: 0 1px 6px rgba(0,0,0,.05); }
+  .day.today { box-shadow: 0 0 0 3px #2f5a2a; }
+  .day.past { opacity: .6; }
+  .day h2 { margin: 0 0 8px; font-size: 17px; display: flex; justify-content: space-between; gap: 8px; }
+  .day h2 span { font-size: 13px; font-weight: 800; color: #fff; background: #2f5a2a; border-radius: 99px; padding: 2px 10px; align-self: center; }
+  .e { border-left: 6px solid; border-radius: 8px; padding: 10px 12px; margin-top: 8px; background: #fafaf8; font-size: 16px; line-height: 1.45; }
+  .e .st { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+  .e .what { font-size: 18px; font-weight: 800; }
+  .e a.map { display: inline-block; margin-top: 6px; background: #1f6feb; color: #fff; text-decoration: none; border-radius: 8px; padding: 8px 12px; font-weight: 700; font-size: 15px; }
+  .e .note { margin-top: 6px; white-space: pre-wrap; background: #fff8e1; border-radius: 6px; padding: 8px 10px; }
+  .scheduled { border-color: #3b7dd8; } .scheduled .st { color: #1d4f8a; }
+  .working { border-color: #2f9a4f; } .working .st { color: #1c6b37; }
+  .tentative { border-color: #e08a52; } .tentative .st { color: #8a4313; }
+  .problem { border-color: #c62828; background: #fdecea; } .problem .st { color: #b3261e; }
+  .off { border-color: #e0a800; background: #fff6d6; } .off .st { color: #7a5a00; }
+  .none { color: #888; font-size: 15px; }
+  .foot { text-align: center; color: #888; font-size: 13px; margin-top: 22px; }
+  .err { max-width: 520px; margin: 15vh auto; background: #fff; border-radius: 12px; padding: 26px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="doc" id="doc"><div class="err">Loading…</div></div>
+<script>
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const D = (s) => new Date(s + 'T00:00:00Z');
+const fmt = (s) => D(s).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric' });
+const addDays = (s, n) => { const d = D(s); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+async function load() {
+  const t = location.hash.slice(1);
+  const r = await fetch('/api/public/schedule/' + encodeURIComponent(t), { cache: 'no-store' });
+  const p = await r.json().catch(() => ({}));
+  if (!r.ok) { document.getElementById('doc').innerHTML = `<div class="err"><b>Schedule not available</b><p>${esc(p.error || 'This link is not valid.')}</p></div>`; return; }
+  document.title = `${p.crew_name} · schedule`;
+  const by = new Map();
+  for (const e of p.days) { if (!by.has(e.day)) by.set(e.day, []); by.get(e.day).push(e); }
+  if (!by.has(p.today)) by.set(p.today, []);
+  const days = [...by.keys()].sort();
+  const html = days.map((d) => {
+    const list = by.get(d);
+    const cls = d === p.today ? 'today' : (d < p.today ? 'past' : '');
+    const tag = d === p.today ? '<span>TODAY</span>' : (d === addDays(p.today, 1) ? '<span style="background:#555">TOMORROW</span>' : '');
+    return `<div class="day ${cls}"><h2>${fmt(d)}${tag}</h2>${list.length ? list.map((e) => {
+      const what = e.job ? `#${e.job.number} ${esc(e.job.name)}` : esc(e.label || '');
+      const addr = e.job && e.job.address ? `<div>${esc(e.job.address)}</div><a class="map" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e.job.address)}" target="_blank" rel="noopener">📍 Map / directions</a>` : '';
+      return `<div class="e ${e.status}"><div class="st">${e.everyone ? 'Everyone · ' : ''}${esc(e.status_name)}</div>
+        <div class="what">${e.status === 'problem' ? '⚠ ' : ''}${what}</div>${e.job && e.job.customer ? `<div>${esc(e.job.customer)}</div>` : ''}${addr}
+        ${e.note ? `<div class="note">${esc(e.note)}</div>` : ''}</div>`;
+    }).join('') : '<div class="none">Nothing on the schedule.</div>'}</div>`;
+  }).join('');
+  document.getElementById('doc').innerHTML = `<div class="head"><div>${p.logo_url ? `<img src="${esc(p.logo_url)}" alt="">` : ''}<b>${esc(p.business_name)}</b><small>Crew schedule</small></div>
+    <div><h1>${esc(p.crew_name)}</h1><div class="upd">Updated ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</div></div></div>
+    ${html}<div class="foot">This page always shows the latest schedule. Pull down or reopen the link to refresh.</div>`;
+}
+load().catch(() => { document.getElementById('doc').innerHTML = '<div class="err">Could not load the schedule. Check your signal and try again.</div>'; });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load().catch(() => {}); });
+setInterval(() => { if (!document.hidden) load().catch(() => {}); }, 5 * 60 * 1000);
+</script>
+</body>
+</html>
