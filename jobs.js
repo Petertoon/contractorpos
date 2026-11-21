@@ -19,7 +19,7 @@ const PERIODS = { half_day: 'Half day', day: 'Day', week: 'Week', month: 'Month'
 const usd = (c) => (c < 0 ? '-' : '') + '$' + (Math.abs(c) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
 module.exports = function setupJobs(app, deps) {
-  const { pool, wrap, fail, text, cents, requireLogin, requireBusiness, requireRole, barcodeVariants, publicOrigin, token } = deps;
+  const { pool, wrap, fail, text, cents, requireLogin, requireBusiness, requireRole, barcodeVariants, publicOrigin, token, feats } = deps;
   const biz = [requireLogin, requireBusiness];
   const isManager = (u) => ['admin', 'owner', 'manager'].includes(u.role);
   const needManager = (u) => { if (!isManager(u)) fail(403, 'Only an owner or manager can do this'); };
@@ -150,7 +150,7 @@ module.exports = function setupJobs(app, deps) {
   }));
 
   // ---------- workflow setup (columns and their buttons) ----------
-  app.put('/api/job-columns/:id', ...J, wrap(async (req, res) => {
+  app.put('/api/job-columns/:id', ...J, feats.needs('workflow'), wrap(async (req, res) => {
     needManager(req.user);
     const c = await pool.query('SELECT * FROM job_columns WHERE id=$1 AND business_id=$2', [req.params.id, req.user.business_id]);
     if (!c.rows[0]) fail(404, 'Column not found');
@@ -162,7 +162,7 @@ module.exports = function setupJobs(app, deps) {
     notify(req.user.business_id, { type: 'columns' });
     res.json({ ok: true });
   }));
-  app.post('/api/job-columns', ...J, wrap(async (req, res) => {
+  app.post('/api/job-columns', ...J, feats.needs('workflow'), wrap(async (req, res) => {
     needManager(req.user);
     const id = await withTx(async (db) => {
       const cols = await columns(db, req.user.business_id);
@@ -184,7 +184,7 @@ module.exports = function setupJobs(app, deps) {
     notify(req.user.business_id, { type: 'columns' });
     res.json({ id });
   }));
-  app.post('/api/job-columns/:id/move', ...J, wrap(async (req, res) => {
+  app.post('/api/job-columns/:id/move', ...J, feats.needs('workflow'), wrap(async (req, res) => {
     needManager(req.user);
     await withTx(async (db) => {
       const cols = await columns(db, req.user.business_id);
@@ -199,7 +199,7 @@ module.exports = function setupJobs(app, deps) {
     notify(req.user.business_id, { type: 'columns' });
     res.json({ ok: true });
   }));
-  app.delete('/api/job-columns/:id', ...J, wrap(async (req, res) => {
+  app.delete('/api/job-columns/:id', ...J, feats.needs('workflow'), wrap(async (req, res) => {
     needManager(req.user);
     await withTx(async (db) => {
       const cols = await columns(db, req.user.business_id);
@@ -592,6 +592,7 @@ module.exports = function setupJobs(app, deps) {
     };
     const col = cols.find((c) => c.id === Number(b.column_id));
     f.column_id = col ? col.id : (current ? current.column_id : null);
+    if (f.billing !== 'included' && (!current || current.billing !== f.billing)) await feats.check(req, 'crew_billing');
     if (f.billing === 'extra' && !f.amount_cents) fail(400, 'Enter the amount to charge for this crew');
     // Cost plus: cost + markup (percent or dollars) is what goes on the ticket.
     f.markup_type = null; f.markup_percent = null; f.markup_cents = null;
@@ -835,7 +836,7 @@ module.exports = function setupJobs(app, deps) {
     return { contract, paid: r.rows[0].paid, owed: contract - r.rows[0].paid };
   }
   const who = (c) => `${c.trade}${c.name ? ' (' + c.name + ')' : ''}`;
-  const subRoute = (path, handler) => app.post(`/api/jobs/:id/crews/:cid${path}`, ...J, wrap(async (req, res) => {
+  const subRoute = (path, handler) => app.post(`/api/jobs/:id/crews/:cid${path}`, ...J, feats.needs('subs'), wrap(async (req, res) => {
     if (!isManager(req.user)) fail(403, 'Only an owner or manager can record payments and change orders for subs');
     const out = await withTx(async (db) => {
       const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
@@ -905,7 +906,7 @@ module.exports = function setupJobs(app, deps) {
     return { id: r.rows[0].id };
   });
 
-  app.delete('/api/jobs/:id/crews/:cid/changes/:chid', ...J, wrap(async (req, res) => {
+  app.delete('/api/jobs/:id/crews/:cid/changes/:chid', ...J, feats.needs('subs'), wrap(async (req, res) => {
     if (!isManager(req.user)) fail(403, 'Only an owner or manager can remove change orders');
     await withTx(async (db) => {
       const { job } = await loadJob(db, req.params.id, req.user.business_id, true);
