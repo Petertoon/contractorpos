@@ -1042,6 +1042,119 @@ module.exports = function setupJobs(app, deps) {
     res.json({ ok: true });
   }));
 
+  // ---------- crew packet: send a crew the job site, notes, material list and chosen files (WhatsApp, text, email) ----------
+  // Each crew gets its own private link (/c#<token>). It shows only what was picked for that crew: no prices, no money.
+  async function crewPacketInfo(req, jobId, cid, fresh) {
+    const { job, cols } = await loadJob(pool, jobId, req.user.business_id);
+    const c = (await pool.query('SELECT * FROM job_crews WHERE id=$1 AND job_id=$2', [cid, job.id])).rows[0] || fail(404, 'Crew not found');
+    if (!c.packet_token || fresh) {
+      c.packet_token = token(16);
+      await pool.query('UPDATE job_crews SET packet_token=$1 WHERE id=$2', [c.packet_token, c.id]);
+    }
+    const b = (await pool.query('SELECT name FROM businesses WHERE id=$1', [req.user.business_id])).rows[0];
+    const url = `${publicOrigin(req)}/c#${c.packet_token}`;
+    const who = c.name || c.trade;
+    const message = `${b.name}: job info for ${who}: ${job.name} (job #${job.job_number})${job.job_address ? ', ' + job.job_address : ''}.`
+      + `${c.packet_important ? ' IMPORTANT notes inside.' : ''} Plans, notes and material list: ${url}`;
+    return { job, cols, crew: c, url, message, business_name: b.name };
+  }
+  app.put('/api/jobs/:id/crews/:cid/packet', ...J, wrap(async (req, res) => {
+    const { job } = await loadJob(pool, req.params.id, req.user.business_id);
+    const b = req.body || {};
+    const ids = (Array.isArray(b.file_ids) ? b.file_ids : []).map(Number).filter(Number.isInteger).slice(0, 100);
+    const ok = ids.length ? (await pool.query('SELECT id FROM job_files WHERE job_id=$1 AND id = ANY($2)', [job.id, ids])).rows.map((r) => r.id) : [];
+    const email = String(b.email || '').trim().toLowerCase();
+    if (email && (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email) || email.length > 200)) fail(400, 'That email address does not look right');
+    const phone = b.phone == null ? undefined : text(b.phone, 'Phone', { required: false, max: 40 }) || null;
+    const r = await pool.query(`UPDATE job_crews SET packet_note=$1, packet_important=$2, packet_files=$3, packet_materials=$4,
+        email=COALESCE(NULLIF($5,''), email), phone=CASE WHEN $6::boolean THEN $7 ELSE phone END WHERE id=$8 AND job_id=$9 RETURNING id`,
+      [text(b.note, 'Notes for the crew', { required: false, max: 4000 }) || null, !!b.important, ok, b.materials !== false, email,
+        phone !== undefined, phone === undefined ? null : phone, req.params.cid, job.id]);
+    if (!r.rows[0]) fail(404, 'Crew not found');
+    const s = await crewPacketInfo(req, job.id, req.params.cid, !!b.new_link);
+    if (b.new_link) await log(pool, job.id, req.user, `Made a new crew link for ${s.crew.trade} (the old link stopped working)`);
+    res.json({ url: s.url, message: s.message, phone: s.crew.phone, email: s.crew.email, files: ok.length });
+  }));
+  app.post('/api/jobs/:id/crews/:cid/packet/sent', ...J, wrap(async (req, res) => {
+    const how = { whatsapp: 'WhatsApp', text: 'text message' }[req.body.how] || fail(400, 'Unknown way of sending');
+    const s = await crewPacketInfo(req, req.params.id, req.params.cid);
+    await pool.query('UPDATE job_crews SET packet_sent_at=now() WHERE id=$1', [s.crew.id]);
+    await log(pool, s.job.id, req.user, `Sent the crew packet to ${s.crew.trade}${s.crew.name ? ' (' + s.crew.name + ')' : ''} by ${how}${req.body.to ? ' to ' + text(req.body.to, 'To', { required: false, max: 60 }) : ''}`);
+    notify(req.user.business_id, { type: 'job', id: s.job.id });
+    res.json({ ok: true });
+  }));
+  app.post('/api/jobs/:id/crews/:cid/packet/email', ...J, wrap(async (req, res) => {
+    const mail = require('./email');
+    if (!mail.configured()) fail(400, 'Email is not set up on this server yet (RESEND_API_KEY).');
+    const to = String(req.body.email || '').trim().toLowerCase();
+    if (!mail.EMAIL_RE.test(to) || to.length > 200) fail(400, 'That email address does not look right');
+    const s = await crewPacketInfo(req, req.params.id, req.params.cid);
+    const p = await publicCrew(s.crew.packet_token);
+    const { esc } = mail;
+    const note = text(req.body.note, 'Message', { required: false, max: 1000 });
+    const html = `<!doctype html><html><body style="margin:0;background:#f2f2f0;font-family:Arial,Helvetica,sans-serif;color:#1d1d1b">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f0;padding:24px 10px"><tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#fff;border-radius:10px;padding:24px"><tr><td>
+  <div style="font-size:20px;font-weight:700">${esc(p.business_name)}</div>
+  <div style="margin-top:12px;font-size:18px;font-weight:700">Job #${p.job_number} · ${esc(p.name)}</div>
+  <div style="color:#555;font-size:14px;margin-top:4px">For: <b>${esc(p.crew_trade)}${p.crew_name ? ' · ' + esc(p.crew_name) : ''}</b>${p.job_address ? '<br>Job site: ' + esc(p.job_address) : ''}${p.start_date ? '<br>Start: ' + esc(String(p.start_date).slice(0, 10)) : ''}</div>
+  ${note ? `<div style="margin-top:14px;padding:12px;background:#f6f6f3;border-radius:8px;white-space:pre-wrap">${esc(note)}</div>` : ''}
+  ${p.note ? `<div style="margin-top:14px;padding:12px;border-radius:8px;white-space:pre-wrap;${p.important ? 'background:#fdecea;border:2px solid #b3261e' : 'background:#f6f6f3'}">${p.important ? '<b style="color:#b3261e">⚠ IMPORTANT</b><br>' : ''}${esc(p.note)}</div>` : ''}
+  <div style="margin-top:14px;color:#555;font-size:14px">${p.files.length} file${p.files.length === 1 ? '' : 's'} (plans, pictures, PDFs)${p.materials.length ? ` and a material list with ${p.materials.length} item${p.materials.length === 1 ? '' : 's'}` : ''}.</div>
+  <div style="text-align:center;margin-top:22px"><a href="${esc(s.url)}" style="display:inline-block;background:#1f8f4e;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700">Open the job info</a></div>
+</td></tr></table>
+<div style="color:#999;font-size:12px;margin-top:12px">Sent for ${esc(p.business_name)} by ContractorPOS</div>
+</td></tr></table></body></html>`;
+    const textBody = [p.business_name, `Job #${p.job_number}: ${p.name}`, p.job_address ? 'Job site: ' + p.job_address : '', note,
+      p.note ? (p.important ? 'IMPORTANT: ' : 'Notes: ') + p.note : '', '', `Plans, notes and material list: ${s.url}`].filter((x) => x !== '').join('\n');
+    try {
+      await mail.sendMail({ fromName: p.business_name, to, subject: `${p.important ? '⚠ ' : ''}Job #${p.job_number} ${p.name}: info for ${p.crew_trade}`,
+        html, text: textBody, idem: `crew-${s.crew.id}-${Date.now()}-${to}` });
+    } catch (e) { fail(502, e.message); }
+    await pool.query('UPDATE job_crews SET packet_sent_at=now(), email=$1 WHERE id=$2', [to, s.crew.id]);
+    await log(pool, s.job.id, req.user, `Emailed the crew packet to ${s.crew.trade}${s.crew.name ? ' (' + s.crew.name + ')' : ''} at ${to}`);
+    notify(req.user.business_id, { type: 'job', id: s.job.id });
+    res.json({ ok: true, to });
+  }));
+
+  // What the crew sees at /c#<token>. No prices or money anywhere.
+  async function publicCrew(t) {
+    if (!/^[0-9a-f]{32}$/.test(String(t || ''))) fail(404, 'Not found');
+    const c = (await pool.query('SELECT c.*, j.business_id FROM job_crews c JOIN jobs j ON j.id = c.job_id WHERE c.packet_token=$1', [t])).rows[0] || fail(404, 'Not found');
+    const { job, cols } = await loadJob(pool, c.job_id, c.business_id);
+    const b = (await pool.query('SELECT name, logo_url FROM businesses WHERE id=$1', [c.business_id])).rows[0];
+    const loc = (await pool.query('SELECT name, address, phone FROM locations WHERE id=$1', [job.location_id])).rows[0] || {};
+    const files = c.packet_files.length ? (await pool.query(`SELECT id, kind, name, mime, estimate, created_at FROM job_files WHERE job_id=$1 AND id = ANY($2) ORDER BY id`, [job.id, c.packet_files])).rows : [];
+    let materials = [];
+    if (c.packet_materials) {
+      const it = await pool.query(`SELECT name, qty FROM job_items WHERE job_id=$1 AND kind IN ('item','rental') ORDER BY id`, [job.id]);
+      const bi = await pool.query('SELECT name, qty FROM job_bid_items WHERE job_id=$1 ORDER BY id', [job.id]);
+      materials = it.rows.concat(bi.rows).map((m) => ({ name: m.name, qty: Number(m.qty) }));
+    }
+    const phase = cols.find((k) => k.id === c.column_id);
+    return { business_name: b.name, logo_url: b.logo_url, location_phone: loc.phone, job_number: job.job_number, name: job.name, description: job.description,
+      job_address: job.job_address, start_date: job.start_date, status: cols[job.column_index] ? cols[job.column_index].name : null,
+      customer_name: job.customer_name, crew_trade: c.trade, crew_name: c.name, crew_phase: phase ? phase.name : null, crew_scope: c.note,
+      note: c.packet_note, important: c.packet_important, materials,
+      files: files.filter((f) => f.kind === 'pdf' || f.kind === 'photo').map((f) => ({ id: f.id, kind: f.kind, name: f.name })),
+      estimates: files.filter((f) => f.kind === 'estimate' && f.estimate).map((f) => ({ name: f.name, summary: f.estimate.summary || '', materials: (f.estimate.materials || []).map((m) => ({ name: m.name, qty: m.qty, unit: m.unit, notes: m.notes })) })),
+      answers: files.filter((f) => f.kind === 'answer' && f.estimate).map((f) => ({ name: f.name, thread: (f.estimate.thread || []).map((x) => ({ q: x.q, a: x.a })) })) };
+  }
+  app.get('/api/public/crew/:token', wrap(async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json(await publicCrew(req.params.token));
+  }));
+  app.get('/api/public/crew/:token/files/:fid', wrap(async (req, res) => {
+    const t = String(req.params.token || '');
+    if (!/^[0-9a-f]{32}$/.test(t)) fail(404, 'Not found');
+    const r = await pool.query(`SELECT f.name, f.mime, f.data FROM job_crews c JOIN job_files f ON f.job_id = c.job_id
+        WHERE c.packet_token=$1 AND f.id=$2 AND f.id = ANY(c.packet_files) AND f.data IS NOT NULL AND f.kind IN ('pdf','photo')`, [t, req.params.fid]);
+    const f = r.rows[0] || fail(404, 'File not found');
+    res.set({ 'Content-Type': f.mime, 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff',
+      'Content-Disposition': `${req.query.download ? 'attachment' : 'inline'}; filename="${encodeURIComponent(f.name)}"` });
+    res.send(f.data);
+  }));
+
   // Used by jobfiles.js (attachments and Claude estimates).
   return { notify, log, J };
 };
