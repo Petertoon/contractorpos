@@ -496,6 +496,15 @@ async function start() {
   topButton(me);
   $('#userName').textContent = me.user.name;
   if (me.business.jobs_enabled) $('#jobsLink').hidden = false;
+  // Plan levels: hide what this business's plan doesn't include (the server refuses it too).
+  const can = (k) => !me.can || me.can[k] !== false;
+  if (!can('sale_extras')) ['#poChip', '#jobChip', '#fulChip', '.chip.fee'].forEach((q) => document.querySelectorAll(q).forEach((x) => { x.hidden = true; }));
+  if (!can('register_quotes')) document.querySelectorAll('.chip.quote').forEach((x) => { x.hidden = true; });
+  if (!can('charge_accounts')) document.querySelectorAll('[data-m="account"]').forEach((x) => { x.hidden = true; });
+  if (!can('gift_cards')) {
+    document.querySelectorAll('[data-m="gift_card"]').forEach((x) => { x.hidden = true; });
+    const g = document.querySelector('input[name=refMethod][value=gift_card]'); if (g) g.closest('label').hidden = true;
+  }
   if (me.user.role !== 'cashier') {
     $('#adminLink').hidden = false;
     const showCount = () => api('/api/pending/count').then((r) => {
