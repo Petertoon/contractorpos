@@ -184,6 +184,9 @@
   .crow .subl b.owe { color: #fca5a5; } .crow .subl b.paidup { color: #86efac; }
   #tLines .crow .subl b.owe, #tLines .crow .subl b.paidup { background: #2a2e37; padding: 0 5px; border-radius: 4px; }
   .crow button.subb { background: #7c4a03; color: #ffedd5; }
+  .crow button.sendb { background: #1d4f8a; color: #e0edff; }
+  .cplist { max-height: 260px; overflow: auto; border: 1px solid var(--jline); border-radius: 8px; padding: 6px 10px; }
+  .cplist label.check { margin: 6px 0; font-weight: 500; }
   .subsum { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 6px 0 14px; }
   .subsum div { background: #23272f; border-radius: 8px; padding: 8px 10px; }
   .subsum small { display: block; color: var(--jmuted); font-size: 12px; } .subsum b { font-size: 17px; font-variant-numeric: tabular-nums; }
@@ -358,6 +361,7 @@
   html[data-theme=ranch] .frow .fact .estb { background: #6d4fc4; color: #fff; }
   html[data-theme=ranch] .crow button.ok { background: #2f7a33; color: #fff; }
   html[data-theme=ranch] .crow button.subb { background: #b45309; color: #fff; }
+  html[data-theme=ranch] .crow button.sendb { background: #2f5a2a; color: #fff; }
   html[data-theme=ranch] .crewbox { background: #f7f0e1; border-color: #d8c9a8; }
   html[data-theme=ranch] #tLines .crewbox { background: rgba(120,90,40,.06); border-color: rgba(120,90,40,.22); }
   html[data-theme=ranch] #tLines .crow, html[data-theme=ranch] #tLines .frow { background: rgba(120,90,40,.08); }
@@ -458,7 +462,7 @@ function openModal(html) {
   if (f && window.innerWidth > 700) setTimeout(() => f.focus(), 30);
   return $('#mBody');
 }
-function closeModal() { $('#m').classList.remove('open'); $('#mBody').innerHTML = ''; if (typeof gcIdx !== 'undefined') gcIdx = null; }
+function closeModal() { $('#m').classList.remove('open'); $('#mBody').innerHTML = ''; if (typeof gcIdx !== 'undefined') gcIdx = null; if (typeof cp !== 'undefined') cp = null; }
 $('#m').addEventListener('mousedown', (e) => { if (e.target.id === 'm') closeModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if ($('#m').classList.contains('open')) closeModal(); else if (bb) bbLeave(bbClose); else if (openId) closeTicket(); } });
 // Moving a job back needs a note saying why. Resolves true when the job moved.
@@ -739,6 +743,8 @@ function renderTicket() {
     if (e.target.closest('[data-crewadd]')) return crewDialog(null, Number(e.target.closest('[data-crewadd]').dataset.crewadd) || null);
     const sb = e.target.closest('[data-sub]');
     if (sb) return subDialog(Number(sb.dataset.sub));
+    const cs = e.target.closest('[data-crewsend]');
+    if (cs) return crewPacket(Number(cs.dataset.crewsend));
     const ce = e.target.closest('[data-crewedit]');
     if (ce) return crewDialog(j.crews.find((x) => x.id === Number(ce.dataset.crewedit)));
     const cd = e.target.closest('[data-crewdone]');
@@ -1124,7 +1130,7 @@ function crewPanel(j) {
       <div class="amt">${c.billing === 'costplus'
         ? `${usd(c.charge_cents)}<small class="cp">COST PLUS</small><small class="cpd">cost ${usd(c.amount_cents)} + ${c.markup_type === 'dollar' ? usd(c.markup_cents || 0) : Number(c.markup_percent || 0) + '%'}</small>`
         : `${c.amount_cents ? usd(c.amount_cents) : '<span class="muted">—</span>'}<small class="${c.billing === 'extra' ? 'ext' : 'inc'}">${c.billing === 'extra' ? 'UP-CHARGE' : 'PART OF QUOTE'}</small>`}</div>
-      <span class="cbtns"><button class="subb" data-sub="${c.id}" title="Bid, change orders, payments to this sub and their files">💵 Sub</button>
+      <span class="cbtns"><button class="sendb" data-crewsend="${c.id}" title="Send this crew the job site, notes, plans, pictures and material list">📤 Send</button><button class="subb" data-sub="${c.id}" title="Bid, change orders, payments to this sub and their files">💵 Sub</button>
       ${locked ? '' : `<button class="${c.done ? '' : 'ok'}" data-crewdone="${c.id}" title="${c.done ? 'Put back on the job' : 'Mark finished'}">${c.done ? '↺' : '✓ Done'}</button>
         <button data-crewedit="${c.id}">Edit</button><button class="xbtn" data-crewdel="${c.id}" title="Remove">×</button>`}</span></div>`;
   const inc = j.crews.filter((c) => c.billing === 'included').reduce((a, c) => a + c.amount_cents, 0);
@@ -1227,7 +1233,7 @@ let subCrewId = null, subForm = null;
 function subDialog(cid, form) {
   const j = cur, c = j.crews.find((x) => x.id === cid);
   if (!c) return closeModal();
-  subCrewId = cid; subForm = form || null; gcIdx = null;
+  subCrewId = cid; subForm = form || null; gcIdx = null; cp = null;
   const myFiles = files.filter((f) => f.crew_id === c.id);
   const owe = c.sub_owed_cents;
   const payForm = `<div class="subform">
@@ -1318,11 +1324,100 @@ function subDialog(cid, form) {
 }
 const subUpload = (kind) => run(async () => {
   const r = await uploadPicked($(kind === 'pdf' ? '#subPdfFile' : '#subPhotoFile'), kind, subCrewId);
-  if ($('#m').classList.contains('open')) { if (gcIdx != null) bidEdit(gcIdx); else if (subCrewId) subDialog(subCrewId); }
+  if ($('#m').classList.contains('open')) { if (cp) crewPacket(cp.cid); else if (gcIdx != null) bidEdit(gcIdx); else if (subCrewId) subDialog(subCrewId); }
   return r;
 });
 $('#subPdfFile').onchange = () => subUpload('pdf');
 $('#subPhotoFile').onchange = () => subUpload('photo');
+
+// ---------- crew packet: send a crew the job site, notes, plans, pictures and material list ----------
+let cp = null; // { cid, note, important, materials, files:Set, known:Set, phone, email }
+const FILE_ICON = { pdf: '📄', photo: '📷', estimate: '📋', answer: '💬' };
+function crewPacket(cid, how) {
+  const c = cur.crews.find((x) => x.id === cid); if (!c) return;
+  if (!cp || cp.cid !== cid) {
+    const preset = (c.packet_files || []).length ? c.packet_files : files.filter((f) => f.crew_id === cid).map((f) => f.id);
+    cp = { cid, note: c.packet_note || '', important: !!c.packet_important, materials: c.packet_materials !== false,
+      files: new Set(preset), known: new Set(files.map((f) => f.id)), phone: c.phone || '', email: c.email || '' };
+  }
+  // files attached from this window (tagged to the crew) are ticked automatically
+  for (const f of files) if (!cp.known.has(f.id)) { cp.known.add(f.id); if (f.crew_id === cid) cp.files.add(f.id); }
+  subCrewId = cid; gcIdx = null;
+  const matCount = cur.items.filter((i) => i.kind === 'item' || i.kind === 'rental').length + (cur.bid_items || []).length;
+  const fl = [...files].sort((a, b) => (b.crew_id === cid) - (a.crew_id === cid) || a.id - b.id);
+  const f = openModal(`<h2 style="margin-bottom:2px">📤 Send to crew: ${esc(c.trade)}${c.name ? ' · ' + esc(c.name) : ''}</h2>
+    <div class="muted" style="margin-bottom:8px">Job #${cur.job_number} ${esc(cur.name)}${cur.job_address ? ' · ' + esc(cur.job_address) : ''}${c.packet_sent_at ? ` · last sent ${shortDate(c.packet_sent_at)}` : ''}</div>
+    <label>Notes for the crew</label>
+    <textarea name="cpnote" rows="4" maxlength="4000" placeholder="e.g. Gate code 4512. Use the side entrance. Customer's dog is in the back yard. Rough-in inspection Thursday 9am.">${esc(cp.note)}</textarea>
+    <label class="check" style="margin-top:6px"><input type="checkbox" name="cpimp" ${cp.important ? 'checked' : ''}> ⚠ Mark the notes as <b>important</b> (shown in red at the top)</label>
+    <label style="margin-top:12px">What to include</label>
+    <div class="cplist">
+      <label class="check"><input type="checkbox" name="cpmat" ${cp.materials ? 'checked' : ''} ${matCount ? '' : 'disabled'}> 🧱 Material list from the ticket and bid (${matCount} item${matCount === 1 ? '' : 's'}, no prices)</label>
+      ${fl.map((x) => `<label class="check"><input type="checkbox" data-cpf="${x.id}" ${cp.files.has(x.id) ? 'checked' : ''}> ${FILE_ICON[x.kind] || '📎'} ${esc(x.name)} ${crewTag(x)}<span class="muted" style="font-size:12px">${x.kind === 'estimate' ? 'material estimate' : x.kind === 'answer' ? 'Claude notes' : ''}</span></label>`).join('')
+        || '<div class="muted">No files on this job yet. Attach plans, a material list or pictures below.</div>'}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button type="button" class="dk" data-cpup="pdf">📄 Attach PDF</button><button type="button" class="dk" data-cpup="photo">📷 Add picture</button></div>
+    <div class="two" style="margin-top:6px"><div><label>Crew's cell (WhatsApp / text)</label><input name="cpphone" type="tel" inputmode="tel" value="${esc(cp.phone)}" placeholder="(806) 555-1234"></div>
+      <div><label>Crew's email</label><input name="cpemail" type="email" inputmode="email" value="${esc(cp.email)}" placeholder="name@example.com"></div></div>
+    <div class="err" id="cpErr"></div>
+    <div class="sendgrid"><button type="button" class="wa" data-cphow="wa">🟢 WhatsApp</button><button type="button" class="dk" data-cphow="sms">💬 Text</button>
+      <button type="button" class="dk" data-cphow="email">✉️ Email</button><button type="button" class="dk" data-cphow="open">👁 Preview</button></div>
+    <div class="presets" style="justify-content:center"><button type="button" class="dk" data-cphow="copy">📋 Copy link</button><button type="button" class="dk" data-cphow="newlink" title="The old link stops working">🔄 New link</button></div>
+    <div class="actions"><button type="button" class="dk" data-cphow="close">Close</button><button class="primary" data-cphow="save">Save</button></div>`);
+  f.classList.add('wide');
+  const sync = () => {
+    cp.note = f.cpnote.value; cp.important = f.cpimp.checked; cp.materials = f.cpmat.checked;
+    cp.phone = f.cpphone.value.trim(); cp.email = f.cpemail.value.trim();
+    cp.files = new Set([...f.querySelectorAll('[data-cpf]')].filter((x) => x.checked).map((x) => Number(x.dataset.cpf)));
+  };
+  f.oninput = f.onchange = sync;
+  const save = async (extra) => {
+    sync();
+    return api(`/api/jobs/${cur.id}/crews/${cid}/packet`, { note: cp.note, important: cp.important, materials: cp.materials, file_ids: [...cp.files],
+      phone: cp.phone, email: cp.email, ...extra }, 'PUT');
+  };
+  f.onclick = async (e) => {
+    const up = e.target.closest('[data-cpup]');
+    if (up) { sync(); return $(up.dataset.cpup === 'pdf' ? '#subPdfFile' : '#subPhotoFile').click(); }
+    const b = e.target.closest('[data-cphow]'); if (!b) return;
+    const k = b.dataset.cphow; $('#cpErr').textContent = '';
+    if (k === 'close') return closeModal();
+    if (k === 'sms' || k === 'wa') {
+      // open the app right away (inside the click) so the browser doesn't block it; save first
+      let s; try { s = await save(); } catch (x) { $('#cpErr').textContent = x.message; return; }
+      if (k === 'wa') {
+        const num = waNumber(cp.phone);
+        if (cp.phone && (num.length < 8 || num.length > 15)) { $('#cpErr').textContent = 'That phone number does not look right'; return; }
+        sendToWhatsApp(num, s.message);
+      } else {
+        let num = cp.phone.replace(/[^\d+]/g, ''); const digits = num.replace(/\D/g, '');
+        if (digits.length === 10 && !num.startsWith('+')) num = '+1' + digits;
+        if (num && (digits.length < 10 || digits.length > 15)) { $('#cpErr').textContent = 'That phone number does not look right'; return; }
+        launchLink(`sms:${num}?&body=${encodeURIComponent(s.message)}`);
+      }
+      api(`/api/jobs/${cur.id}/crews/${cid}/packet/sent`, { how: k === 'wa' ? 'whatsapp' : 'text', to: cp.phone }).then(refreshTicket).catch(() => {});
+      toast('Crew packet ready to send'); return closeModal();
+    }
+    b.disabled = true;
+    try {
+      if (k === 'save') { await save(); toast('Saved'); await refreshTicket(); return closeModal(); }
+      if (k === 'open' || k === 'copy') {
+        const s = await save();
+        if (k === 'open') window.open(s.url, '_blank', 'noopener');
+        else { try { await navigator.clipboard.writeText(s.url); toast('Link copied'); } catch (x) { prompt('Copy this link:', s.url); } }
+      }
+      if (k === 'newlink') { if (confirm('Make a new link for this crew? The old link stops working.')) { await save({ new_link: true }); toast('New link made'); } }
+      if (k === 'email') {
+        if (!(me.features && me.features.email_receipts)) throw new Error("Email isn't set up on this server yet (RESEND_API_KEY in Render). WhatsApp and text still work.");
+        if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(cp.email)) { f.cpemail.focus(); throw new Error("Enter the crew's email address"); }
+        await save();
+        const r = await api(`/api/jobs/${cur.id}/crews/${cid}/packet/email`, { email: cp.email });
+        toast(`Emailed to ${r.to}`); await refreshTicket(); return closeModal();
+      }
+    } catch (x) { $('#cpErr').textContent = x.message; }
+    b.disabled = false;
+  };
+}
 
 // ---------- General Contractor Bid Builder (add-on) ----------
 // One screen: a row per sub (scope, their amount, your markup %), totals, and New Bid / Open / Save / Print.
