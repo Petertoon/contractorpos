@@ -1,4 +1,4 @@
-[HANDOVER (51).md](https://github.com/user-attachments/files/35200479/HANDOVER.51.md)
+[HANDOVER (52).md](https://github.com/user-attachments/files/35212891/HANDOVER.52.md)
 # ContractorPOS — Build Handover
 
 Last updated: 2026-11-20 · Current version: **ContractorPOS v1.22**
@@ -410,3 +410,13 @@ Same rules, numbers and wording as MultiPOS v1.15 (SECURITY-HANDOVER.md). Code i
 - For turnkey jobs or when the crew needs different/extra parts. Not charged to the customer, doesn't change the quote or stock.
 - Stored in `job_crew_materials` (saved with `PUT …/crews/:cid/packet` as `parts`, replaces the list); job GET returns `crew.parts`.
 - Crew page (`c.html`): **🧰 Parts to bring** table at the top with tap-to-tick boxes (only on their phone, for loading the truck); prints with the page. The crew email lists the parts in the text.
+
+## 34. Plan levels: Basic, Standard, Advanced (ContractorPOS v1.23)
+- `businesses.plan` = `basic | standard | advanced`. Businesses that existed before v1.23 were set to **advanced** (nothing taken away); new businesses start on **basic**. The platform admin picks the plan in **Businesses → Plan** (dropdown per row and on the New business form). Changing plans never deletes anything; it only hides buttons and blocks new use.
+- **Everyone (Basic):** job board with the standard columns, tickets, customers, products, files/photos, Send/Print, crews + crew packet + crew parts list, the register (cash, card, split), receipts, invoices, sales tax report. Owner + 2 logins (3 total), 1 location, 1 register.
+- **Standard adds:** custom columns/buttons/colors (`workflow`), crew up-charge / cost plus (`crew_billing`), charge accounts + statements + customer payments (`charge_accounts`), gift cards, quotes at the register (`register_quotes`), PO #/job site/pickup-delivery/fuel on sales (`sale_extras`), cash & checks / bank deposits (`deposits`), several registers. Up to 10 logins, 1 location.
+- **Advanced adds:** several locations (`multi_location`), unlimited logins.
+- **Add-ons on any plan** (same admin buttons as before): Rentals, QuickBooks, Claude, **GC**. The GC add-on now includes the Bid Builder **and** sub money tracking (💵 Sub: bids, change orders, payments to subs, sub files, Subcontractors totals on the ticket).
+- Code: `features.js` holds the plan table (`FEATURES`, `LIMITS`). `feats.needs(key)` blocks a route, `feats.check(req,key)` blocks part of a request, `feats.limit(req,what,count)` caps logins/registers/locations. Messages: "X is part of the Standard plan. Ask ContractorPOS to upgrade your plan." / "…is part of the GC add-on. Ask ContractorPOS to turn it on."
+- `/api/me` returns `can` (each feature true/false, `plan`, `plan_name`, `limits`). Screens hide what the plan doesn't include: Manage (Deposits menu, Cash & checks report, charge-account fields, Take payment / Print statement), checkout (PO/job/pickup chips, fee chip, Quote chip, Charge and Gift card buttons), job board (⚙ Workflow setup, column ⚙, crew billing choices, 💵 Sub). Manage → Settings shows owners a **Your plan** box listing what's included.
+- To add a future tool to a plan: add a key to `FEATURES` in features.js with its lowest plan, gate the route with `feats.needs('key')`, hide its button with `me.can.key`.
