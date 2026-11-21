@@ -31,6 +31,8 @@
   .qa b { display: block; margin-bottom: 4px; }
   .bar { max-width: 720px; margin: 0 auto 10px; display: flex; justify-content: flex-end; }
   .bar button { background: #1d1d1b; color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .parts .box { display: inline-block; width: 18px; height: 18px; border: 2px solid #777; border-radius: 4px; vertical-align: middle; }
+  .parts tr.got td { color: #999; text-decoration: line-through; } .parts tr.got .box { background: #1f8f4e; border-color: #1f8f4e; }
   .foot { text-align: center; color: #888; font-size: 13px; margin-top: 22px; }
   .err { max-width: 520px; margin: 15vh auto; background: #fff; border-radius: 12px; padding: 26px; text-align: center; }
   .printphotos { display: none; }
@@ -66,7 +68,9 @@ const fileUrl = (f) => `/api/public/crew/${t}/files/${f.id}`;
     ${p.files.length ? `<h3>Plans, PDFs &amp; pictures (${p.files.length})</h3><div class="files">${pdfs.concat(photos).map((f) => `<a href="${fileUrl(f)}" target="_blank" rel="noopener">${f.kind === 'photo' ? `<img src="${fileUrl(f)}" alt="" loading="lazy">` : '<div class="pdf">📄</div>'}<span>${esc(f.name)}</span></a>`).join('')}</div>
       ${pdfs.length ? `<div class="printphotos"><div style="font-size:13px;color:#555">PDFs (open the link to view): ${pdfs.map((f) => esc(f.name)).join(', ')}</div></div>` : ''}
       <div class="printphotos">${photos.map((f) => `<img src="${fileUrl(f)}" alt="">`).join('')}</div>` : ''}
-    ${p.materials.length ? `<h3>Material list</h3><table><thead><tr><th>Item</th><th style="text-align:right">Qty</th></tr></thead><tbody>
+    ${p.parts.length ? `<h3>🧰 Parts to bring (${p.parts.length})</h3><table class="parts"><thead><tr><th style="width:34px"></th><th>Part</th><th style="text-align:right">Qty</th></tr></thead><tbody>
+      ${p.parts.map((m) => `<tr><td><span class="box"></span></td><td>${esc(m.name)}${m.note ? `<small>${esc(m.note)}</small>` : ''}</td><td class="q">${m.qty}${m.unit ? ' ' + esc(m.unit) : ''}</td></tr>`).join('')}</tbody></table>` : ''}
+    ${p.materials.length ? `<h3>${p.parts.length ? 'Job material list' : 'Material list'}</h3><table><thead><tr><th>Item</th><th style="text-align:right">Qty</th></tr></thead><tbody>
       ${p.materials.map((m) => `<tr><td>${esc(m.name)}</td><td class="q">${m.qty}</td></tr>`).join('')}</tbody></table>` : ''}
     ${p.estimates.map((e) => `<h3>Material estimate: ${esc(e.name)}</h3>${e.summary ? `<div class="muted" style="color:#555;font-size:14px;margin-bottom:6px">${esc(e.summary)}</div>` : ''}
       <table><thead><tr><th>Item</th><th style="text-align:right">Qty</th></tr></thead><tbody>${e.materials.map((m) => `<tr><td>${esc(m.name)}${m.notes ? `<small>${esc(m.notes)}</small>` : ''}</td><td class="q">${esc(m.qty)} ${esc(m.unit || '')}</td></tr>`).join('')}</tbody></table>`).join('')}
@@ -74,6 +78,8 @@ const fileUrl = (f) => `/api/public/crew/${t}/files/${f.id}`;
     <div class="foot">Sent by ${esc(p.business_name)} · Questions? Call the office.</div>
   </div>`;
   document.getElementById('bar').hidden = false;
+  // Tap a part to tick it off while loading the truck (only on this phone).
+  document.querySelectorAll('.parts tbody tr').forEach((tr) => { tr.style.cursor = 'pointer'; tr.onclick = () => tr.classList.toggle('got'); });
   history.replaceState(null, '', location.pathname + location.hash);
 })();
 </script>
