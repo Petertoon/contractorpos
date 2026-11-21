@@ -1,7 +1,7 @@
-[HANDOVER (43).md](https://github.com/user-attachments/files/35123804/HANDOVER.43.md)
+[HANDOVER (48).md](https://github.com/user-attachments/files/35198281/HANDOVER.48.md)
 # ContractorPOS — Build Handover
 
-Last updated: 2026-11-19 · Current version: **ContractorPOS v1.20**
+Last updated: 2026-11-20 · Current version: **ContractorPOS v1.21**
 
 **ContractorPOS is a separate product from MultiPOS** (the store POS): its own GitHub repo, Render web service and database.
 Changes to one never affect the other. It started as a copy of MultiPOS v1.10, so sections 1–9 describe that shared foundation
@@ -398,3 +398,9 @@ Same rules, numbers and wording as MultiPOS v1.15 (SECURITY-HANDOVER.md). Code i
 ## 31. Customer page buttons always shown (ContractorPOS v1.20)
 - Manage → Customers → a customer: **Take payment**, **Print statement**, **Edit** always show at the top right. If the customer has no charge account, Take payment / Print statement ask "Turn it on now?" (owners and managers) and then carry on; cashiers are told to ask an owner/manager.
 - Manage top menu: links no longer break onto two lines ("Refunds owed") or overlap (`#nav` is a wrapping flex row, links `nowrap`).
+
+## 32. Crew packet: send a crew the plans, notes and material list (ContractorPOS v1.21)
+- Each crew row has **📤 Send**. The window has: **Notes for the crew** (+ "⚠ important", shown in red), **What to include** (material list from ticket items + bid products, no prices; tick any job file: PDFs, pictures, Claude material estimates and notes; the crew's own files are ticked to start), **📄 Attach PDF / 📷 Add picture** (tagged to the crew, ticked automatically), the crew's cell and email, then **🟢 WhatsApp · 💬 Text · ✉️ Email · 👁 Preview · 📋 Copy link · 🔄 New link**.
+- The crew gets a private link **/c#token** (`public/c.html`): business, job #, job name, customer name, job site with a map link, start date, phase, their part, the notes, files (pictures shown, PDFs open), material list and estimates. **No prices or money.** 🖨 Print / save as PDF prints notes, list and pictures.
+- Server: `PUT /api/jobs/:id/crews/:cid/packet` (saves notes/important/files/materials/phone/email; `new_link` replaces the token), `…/packet/sent` (logs WhatsApp/text), `…/packet/email` (Resend). Public: `GET /api/public/crew/:token`, `GET /api/public/crew/:token/files/:fid` (only files picked for that crew; others 404). Every send is logged in the job history.
+- Columns on `job_crews`: `email, packet_token, packet_note, packet_important, packet_files INT[], packet_materials, packet_sent_at`.
