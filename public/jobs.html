@@ -22,6 +22,10 @@
   button.dk { background: #262a32; color: var(--jink); border: 1px solid var(--jline); }
   button.dk:hover { background: #30353f; }
   #clock { color: var(--jmuted); font-size: 14px; white-space: nowrap; }
+  .schedinfo .sd { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 1px 7px; border-radius: 5px; margin: 0 2px 3px 0; background: #182a3f; color: #9cc8ff; }
+  .schedinfo .sd-working { background: #1f3a24; color: #8fe3a5; } .schedinfo .sd-tentative { background: #3a2a1a; color: #f5b98a; } .schedinfo .sd-problem { background: #6e1e1c; color: #ffd2cf; }
+  html[data-theme=ranch] .schedinfo .sd { background: #cfe2fb; color: #12385f; } html[data-theme=ranch] .schedinfo .sd-working { background: #c9efd3; color: #154d27; }
+  html[data-theme=ranch] .schedinfo .sd-tentative { background: #fbd9c4; color: #6b3413; } html[data-theme=ranch] .schedinfo .sd-problem { background: #e5534b; color: #fff; }
   .counts { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 14px 0; }
   .counts span { border: 1px solid var(--c, var(--jline)); color: var(--jink); border-radius: 7px; padding: 3px 9px; font-size: 13px; font-weight: 700; background: #1b1e24; }
 
@@ -437,6 +441,7 @@
   <div class="brand"><span>🏗</span><span id="bizName">Job Board</span><small>Job Board</small></div>
   <button class="primary" id="newJob">+ New job</button>
   <button class="dk gcbtn" id="gcBoardBtn" hidden>🏗 Bid Builder</button>
+  <a href="/schedule" id="calLink" class="callink" hidden>📅 Crew Calendar</a>
   <input id="search" placeholder="Search job #, name, customer…" autocomplete="off">
   <select id="viewSel" aria-label="Which jobs">
     <option value="">All jobs</option><option value="high">High priority</option><option value="owed">Balance owed</option>
@@ -738,6 +743,19 @@ async function refreshTicket() {
   cur = j; files = f;
   renderTicket();
 }
+// Days this job is on the crew calendar: upcoming first, grouped by crew.
+function schedHtml(j) {
+  if (!calOn()) return '';
+  const list = j.schedule || [];
+  const t = new Date(); const today = new Date(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate())).toISOString().slice(0, 10);
+  const up = list.filter((e) => e.day >= today), past = list.length - up.length;
+  const f = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
+  const by = new Map(); for (const e of up) { if (!by.has(e.crew_name)) by.set(e.crew_name, []); by.get(e.crew_name).push(e); }
+  return `<h3 style="margin-top:16px">Crew calendar</h3>
+    <div class="info schedinfo">${[...by].map(([n, es]) => `<div><b>${esc(n)}</b>${es.slice(0, 8).map((e) => `<span class="sd sd-${e.status}" title="${esc(e.note || '')}">${f(e.day)}</span>`).join(' ')}${es.length > 8 ? ` +${es.length - 8} more` : ''}</div>`).join('')
+      || `<div class="muted">No crew days coming up${past ? ` (${past} past day${past === 1 ? '' : 's'})` : ''}.</div>`}
+      <div><a href="/schedule${up.length ? '#' + up[0].day : ''}">📅 Open the crew calendar</a></div></div>`;
+}
 function renderTicket() {
   const j = cur, c = j.column || { name: '', color: '#444', buttons: [] };
   const locked = j.is_closed;
@@ -838,6 +856,7 @@ function renderTicket() {
     <h3>Payments (${j.payments.filter((p) => !p.voided).length})</h3>
     <div class="plist">${j.payments.map((p) => `<div class="${p.voided ? 'v' : ''}"><span>${shortDate(p.created_at)} · ${METHOD[p.method]}${p.check_number ? ' #' + esc(p.check_number) : ''}${p.note ? ` · <span class="muted">${esc(p.note)}</span>` : ''}${p.voided ? ' (void)' : ''}</span>
       <span>${usd(p.amount_cents)}${isMgr && !p.voided && !p.deposit_id && !locked ? ` <a href="#" data-void="${p.id}" style="font-size:12px">void</a>` : ''}</span></div>`).join('') || '<div class="muted">No payments yet</div>'}</div>
+    ${schedHtml(j)}
     <h3 style="margin-top:16px">Job details</h3>
     <div class="info">
       ${j.description ? `<div>${esc(j.description).replace(/\n/g, '<br>')}</div>` : ''}
@@ -1513,6 +1532,7 @@ function crewPacket(cid, how) {
 // One screen: a row per sub (scope, their amount, your markup %), totals, and New Bid / Open / Save / Print.
 // Company, phone, what's included and the sub's bid PDF/pictures are behind ✎ on each row.
 const gcOn = () => !!(me && me.business && me.business.gc_enabled);
+const calOn = () => !!(me && me.business && me.business.calendar_enabled);
 const canF = (k) => !me || !me.can || me.can[k] !== false;
 let gcIdx = null; // crew being edited from the Bid Builder (for re-showing it after a file upload)
 let bb = null;
@@ -2235,6 +2255,7 @@ function tick() { $('#clock').textContent = new Date().toLocaleString([], { week
   $('#rentalBtn').hidden = !rentalsOn;
   $('#aiBtn').hidden = !aiOn();
   $('#gcBoardBtn').hidden = !gcOn();
+  $('#calLink').hidden = !calOn();
   $('#setupBtn').hidden = !isMgr || !canF('workflow'); $('#manageLink').hidden = !isMgr;
   tick(); setInterval(tick, 30000);
   await loadBoard();
