@@ -1,4 +1,4 @@
-[HANDOVER (54).md](https://github.com/user-attachments/files/35217591/HANDOVER.54.md)
+[HANDOVER (55).md](https://github.com/user-attachments/files/35218598/HANDOVER.55.md)
 # ContractorPOS — Build Handover
 
 Last updated: 2026-11-20 · Current version: **ContractorPOS v1.22**
@@ -432,3 +432,10 @@ Same rules, numbers and wording as MultiPOS v1.15 (SECURITY-HANDOVER.md). Code i
 - API: `GET /api/schedule?from&to`, `GET /api/schedule/jobs?q`, `GET /api/schedule/job/:id`, crews `POST/PUT/DELETE /api/schedule/crews[/:id]`, `PUT /api/schedule/crews/order`, `POST /api/schedule/crews/:id/email`, entries `POST /api/schedule/entries` (days[]), `PUT/DELETE /api/schedule/entries/:id`, `POST /api/schedule/share {from,to,shared,crew_id?}`, public `GET /api/public/schedule/:token`.
 - **v1.25: it's an add-on** like Rentals/QuickBooks/Claude/GC, on any plan (needs the job board). `businesses.calendar_enabled` (default off). Platform admin: **Businesses → 📅 Calendar on/off**. `me.can.calendar`; every `/api/schedule…` route uses `feats.needs('calendar')`. Off = no 📅 button on the board, no Manage link, no Crew calendar section on tickets, the page says it's an add-on, and crews' phone links stop working (turning it back on brings everything back; nothing is deleted). Owners see it in Settings → Your plan → Add-ons.
 - Businesses list: add-on buttons wrap in two rows, and the page is wider so Open / Turn off are never cut off.
+- **v1.25.1:** job board has a second sideways scrollbar above the columns (`#topScroll`), kept in step with the bottom one; it only shows when the columns are wider than the screen. Both bars are thicker and themed (lime/green on hover).
+
+## 36. Skip phases: Start in… and ⏩ Move to… (ContractorPOS v1.26)
+- **New job → Start in** (owners/managers, boards with 3+ columns): pick any phase except the last (Closed). Starting past the first column needs **"Why does it skip ahead?"** (required, `skip_note`). History: "Job created in In Progress (started ahead, skipped Quoting, Scheduled · Note: …)". Cashiers don't see it; the server refuses it for them (403).
+- **Job ticket → ⏩ Move to…** (owners/managers): list of every phase with "↩ back", "next", "⏩ skips N". Moving back needs a reason (same as ‹ Move back, sets the ↩ back note on the card). **Skipping phases needs a note**; one step ahead doesn't. Closing rules still apply (nothing owed). History: "Moved from Quoting to Payment · skipped Scheduled, In Progress, Completed · Note: …".
+- Dragging a card and "Move to next ›" still go one column at a time.
+- Server: `POST /api/jobs` accepts `start_column_id` + `skip_note`; `POST /api/jobs/:id/jump {column_id, reason}`; `moveJobTo()` in jobs.js does every move (one step or jump).
