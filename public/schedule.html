@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crew Calendar</title>
+<script>try { document.documentElement.dataset.theme = localStorage.getItem('cp_theme') || 'dark'; } catch (e) { /* private mode */ }</script>
+<link rel="stylesheet" href="/style.css">
+<style>
+  /* Status colors (Ranch / light). Dark versions further down. */
+  :root {
+    --s-scheduled: #cfe2fb; --t-scheduled: #12385f; --b-scheduled: #8db8ec;
+    --s-working: #c9efd3; --t-working: #154d27; --b-working: #86cf9b;
+    --s-tentative: #fbd9c4; --t-tentative: #6b3413; --b-tentative: #eba982;
+    --s-problem: #e5534b; --t-problem: #fff; --b-problem: #b9302a;
+    --s-off: #f6b800; --t-off: #3d2a00; --b-off: #c99700;
+    --cline: #d8cdb6; --cpanel: #fffdf8; --chead: #f3ead6; --today: #2f5a2a; --wkend: #f7f1e4;
+  }
+  body.cp { min-height: 100vh; }
+  .topbar .brand small { font-size: 14px; font-weight: 600; opacity: .75; }
+  .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px 0; }
+  .tools button { padding: 8px 13px; }
+  .tools .range { font-size: 19px; font-weight: 800; min-width: 220px; }
+  .tools select { width: auto; padding: 7px 10px; }
+  .tools label.check { margin: 0; font-size: 14px; }
+  .tools .spacer { flex: 1; }
+  .legend { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 16px 0; font-size: 13px; }
+  .legend span { padding: 3px 10px; border-radius: 99px; font-weight: 700; border: 1px solid; }
+  .st-scheduled { background: var(--s-scheduled); color: var(--t-scheduled); border-color: var(--b-scheduled) !important; }
+  .st-working { background: var(--s-working); color: var(--t-working); border-color: var(--b-working) !important; }
+  .st-tentative { background: var(--s-tentative); color: var(--t-tentative); border-color: var(--b-tentative) !important; }
+  .st-problem { background: var(--s-problem); color: var(--t-problem); border-color: var(--b-problem) !important; }
+  .st-off { background: var(--s-off); color: var(--t-off); border-color: var(--b-off) !important; }
+
+  #weeks { padding: 10px 16px 30px; }
+  .week { margin-bottom: 16px; overflow-x: auto; border-radius: 10px; border: 1px solid var(--cline); background: var(--cpanel); }
+  table.cal { border-collapse: collapse; width: 100%; min-width: 900px; table-layout: fixed; }
+  table.cal th, table.cal td { border-right: 1px solid var(--cline); border-bottom: 1px solid var(--cline); vertical-align: top; }
+  table.cal th:last-child, table.cal td:last-child { border-right: 0; }
+  table.cal col.who { width: 150px; }
+  table.cal thead th { background: var(--chead); padding: 6px 8px; text-align: left; font-size: 17px; white-space: nowrap; position: relative; }
+  table.cal thead th .dn { font-size: 26px; font-weight: 900; margin-right: 6px; }
+  table.cal thead th.today { box-shadow: inset 0 -4px 0 var(--today); }
+  table.cal thead th.today .dn { color: var(--today); }
+  table.cal thead th .offbtn { position: absolute; right: 4px; top: 6px; background: transparent; padding: 2px 6px; font-size: 13px; opacity: 0; color: inherit; }
+  table.cal thead th:hover .offbtn, table.cal thead th .offbtn:focus { opacity: .8; }
+  table.cal thead th.wk { font-size: 13px; font-weight: 700; color: var(--muted); }
+  table.cal td.who { padding: 6px 8px; font-weight: 700; position: sticky; left: 0; background: var(--cpanel); z-index: 1; }
+  table.cal td.who small { display: block; font-weight: 600; font-size: 11.5px; color: var(--muted); }
+  .kind { font-size: 10.5px; font-weight: 800; padding: 1px 6px; border-radius: 4px; margin-left: 4px; vertical-align: 2px; background: #e1d6bd; color: #5a4a2c; }
+  table.cal td.cell { padding: 3px; height: 34px; cursor: cell; }
+  table.cal td.cell:hover { background: rgba(127,127,127,.08); }
+  table.cal td.cell.drop { outline: 2px dashed var(--today); outline-offset: -3px; }
+  table.cal td.cell.dayoff, table.cal td.cell.dayoff:hover { background: repeating-linear-gradient(135deg, rgba(246,184,0,.22) 0 8px, rgba(246,184,0,.1) 8px 16px); }
+  table.cal tr.allrow td.who { color: var(--muted); font-size: 13px; }
+  table.cal tr.allrow td.cell { height: auto; min-height: 0; }
+  .chip { display: block; border: 1px solid; border-radius: 5px; padding: 3px 6px; margin: 1px 0 3px; font-size: 13.5px; font-weight: 600; line-height: 1.25;
+    cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: none; }
+  .chip:hover { filter: brightness(1.05); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+  .chip.dragging { opacity: .4; }
+  .chip b { font-weight: 800; }
+  .chip .nt { float: right; margin-left: 4px; }
+  .chip.closed { opacity: .7; text-decoration: line-through; }
+  .chip .ph { margin-right: 3px; }
+  .legend .crewsee { background: transparent; border-color: var(--cline); color: var(--muted); font-weight: 600; }
+  table.cal thead th.wk .wkbtns { display: flex; gap: 3px; margin-top: 4px; }
+  table.cal thead th.wk .wkbtns button { padding: 2px 6px; font-size: 11.5px; font-weight: 700; }
+  .seebox { display: flex; gap: 8px; align-items: flex-start; margin-top: 14px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 8px; cursor: pointer; font-weight: 600; }
+  .seebox:has(input:checked) { border-color: var(--today); }
+  .seebox input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; }
+  .seebox small { display: block; font-weight: 500; color: var(--muted); }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+  .hint { color: var(--muted); font-size: 13px; padding: 4px 16px 0; }
+
+  /* dialogs */
+  .modal { max-width: 520px; }
+  .modal textarea { width: 100%; min-height: 64px; padding: 10px 12px; border: 1px solid #cfd4cd; border-radius: 8px; font: inherit; }
+  .stpick { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+  .stpick label { margin: 0; display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 8px; border: 2px solid; cursor: pointer; font-size: 14px; }
+  .stpick label:has(input:checked) { box-shadow: 0 0 0 3px rgba(0,0,0,.25); }
+  .stpick input { width: auto; margin: 0; }
+  .jobpick { border: 1px solid var(--line); border-radius: 8px; max-height: 210px; overflow: auto; margin-top: 6px; }
+  .jobpick button { display: block; width: 100%; text-align: left; background: transparent; border-radius: 0; padding: 8px 10px; border-bottom: 1px solid var(--line); font-weight: 500; }
+  .jobpick button:hover { background: rgba(127,127,127,.12); }
+  .jobpick button small { display: block; color: var(--muted); font-size: 12.5px; }
+  .jobpick .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+  .picked { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 2px solid var(--today); border-radius: 8px; margin-top: 4px; }
+  .picked div { flex: 1; } .picked small { display: block; color: var(--muted); }
+  .picked button { padding: 6px 10px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .repeat { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+  .repeat > div { flex: 1; min-width: 150px; }
+  .repeat label.check { margin: 0 0 10px; font-size: 14px; }
+  .modal .actions { flex-wrap: wrap; }
+  .modal .actions .left { margin-right: auto; }
+  .crewlist { margin-top: 10px; }
+  .crewrow { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+  .crewrow.hid { opacity: .55; }
+  .crewrow .top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .crewrow .top b { flex: 1; font-size: 16px; }
+  .crewrow .top button { padding: 5px 9px; font-size: 13px; }
+  .crewrow .link { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+  .crewrow .link button { padding: 6px 10px; font-size: 13px; }
+  .crewrow .link small { flex-basis: 100%; color: var(--muted); }
+  .switch { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 700; margin: 0; cursor: pointer; }
+  .switch input { width: auto; margin: 0; }
+  .modal.wide { max-width: 640px; }
+
+  /* Dark look */
+  @media screen {
+    html[data-theme=dark] body.cp {
+      --s-scheduled: #182a3f; --t-scheduled: #9cc8ff; --b-scheduled: #2f5f93;
+      --s-working: #1f3a24; --t-working: #8fe3a5; --b-working: #2f7a45;
+      --s-tentative: #3a2a1a; --t-tentative: #f5b98a; --b-tentative: #8a5a32;
+      --s-problem: #6e1e1c; --t-problem: #ffd2cf; --b-problem: #ef5350;
+      --s-off: #4a3810; --t-off: #f0d27a; --b-off: #b08a1e;
+      --cline: #2e323b; --cpanel: #1b1e24; --chead: #191b20; --today: #7cc04a; --wkend: #1d2027;
+    }
+    html[data-theme=dark] body.cp table.cal thead th { color: var(--gold); }
+    html[data-theme=dark] body.cp table.cal thead th.today .dn { color: var(--lime); }
+    html[data-theme=dark] body.cp .kind { background: #2a2e36; color: #c9ced6; }
+    html[data-theme=dark] body.cp table.cal td.cell.dayoff { background: repeating-linear-gradient(135deg, rgba(240,210,122,.12) 0 8px, rgba(240,210,122,.05) 8px 16px); }
+  }
+  html[data-theme=ranch] body.cp table.cal thead th { color: var(--burg); }
+
+  @media print {
+    @page { size: landscape; margin: 10mm; }
+    .topbar, .tools, .legend, .hint, #toast, .offbtn, .wkbtns, #backupBar, #topBtn { display: none !important; }
+    html, body.cp { background: #fff !important; color: #000; }
+    .week, table.cal td.who, table.cal td.cell { background: #fff !important; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    #weeks { padding: 0; }
+    .week { break-inside: avoid; border-color: #999; overflow: visible; }
+    table.cal { min-width: 0; }
+    table.cal th, table.cal td { border-color: #999; }
+    table.cal thead th { background: #eee !important; color: #000 !important; }
+    table.cal td.who { position: static; background: #fff; }
+    .chip { white-space: normal; font-size: 11px; }
+    .printhead { display: block !important; font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+  }
+  .printhead { display: none; }
+  @media (max-width: 700px) { .tools .range { min-width: 0; font-size: 16px; flex-basis: 100%; } table.cal col.who { width: 110px; } }
+</style>
+</head>
+<body class="cp">
+<div class="topbar">
+  <div class="brand">📅 <span id="bizName">Crew Calendar</span> <small>Crew Calendar</small></div>
+  <div class="spacer"></div>
+  <a href="/jobs">Job Board</a>
+  <a href="/checkout">Checkout</a>
+  <a href="/admin" id="manageLink" hidden>Manage</a>
+  <button class="link" onclick="logout()">Log out</button>
+</div>
+<div class="tools">
+  <button id="prev" title="Back">◀</button>
+  <button id="todayBtn">Today</button>
+  <button id="next" title="Forward">▶</button>
+  <div class="range" id="range"></div>
+  <select id="weeksSel" aria-label="How many weeks">
+    <option value="1">1 week</option><option value="2">2 weeks</option><option value="4">4 weeks</option><option value="6">6 weeks</option>
+  </select>
+  <label class="check"><input type="checkbox" id="sunChk"> Sundays</label>
+  <div class="spacer"></div>
+  <button id="crewsBtn" hidden>👥 Crews</button>
+  <button id="printBtn">🖨 Print</button>
+</div>
+<div class="legend" id="legend"></div>
+<div class="hint" id="hint">Click a day to put a crew on a job. Drag a block to move it; hold Ctrl while dropping to copy it. Click a date to mark a day off for everyone. New blocks are office only until you tick 📱.</div>
+<div id="weeks"></div>
+
+<div class="modal-back" id="dlg"><form class="modal" id="dlgForm" autocomplete="off"></form></div>
+
+<script src="/app.js"></script>
+<script>
+let me, isMgr = false, data = { crews: [], entries: [], statuses: [] };
+let start;               // Monday of the first week shown (YYYY-MM-DD)
+let weeks = 2, showSun = false;
+const NAMES = { scheduled: 'Scheduled', working: 'On track', tentative: 'Tentative', problem: 'Problem / urgent', off: 'Off / holiday' };
+const CREW_STATUSES = ['scheduled', 'working', 'tentative', 'problem', 'off'];
+
+// ---------- dates (YYYY-MM-DD strings, worked out in UTC so time zones never shift a day) ----------
+const D = (s) => new Date(s + 'T00:00:00Z');
+const iso = (d) => d.toISOString().slice(0, 10);
+const addDays = (s, n) => { const d = D(s); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
+const todayStr = () => { const d = new Date(); return iso(new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))); };
+const monday = (s) => { const d = D(s); const w = (d.getUTCDay() + 6) % 7; return addDays(s, -w); };
+const fmt = (s, o) => D(s).toLocaleDateString('en-US', { timeZone: 'UTC', ...o });
+const dayName = (s) => fmt(s, { weekday: 'long' });
+const longDay = (s) => fmt(s, { weekday: 'short', month: 'short', day: 'numeric' });
+const daysOfWeek = (mon) => Array.from({ length: showSun ? 7 : 6 }, (_, i) => addDays(mon, i));
+
+try { weeks = Number(localStorage.getItem('cp_cal_weeks')) || 2; showSun = localStorage.getItem('cp_cal_sun') === '1'; } catch (e) { /* ok */ }
+
+// ---------- load + draw ----------
+async function load() {
+  const to = addDays(start, weeks * 7 - 1);
+  data = await api(`/api/schedule?from=${start}&to=${to}`);
+  draw();
+}
+function crewsShown() {
+  const used = new Set(data.entries.map((e) => e.crew_id));
+  return data.crews.filter((c) => c.active || used.has(c.id));
+}
+function chipText(e) {
+  if (e.job_id) return `<b>${esc(e.job_name || 'Job')}</b>${e.customer_name ? ' · ' + esc(e.customer_name) : ''}`;
+  return `<b>${esc(e.label || '')}</b>`;
+}
+function chipTitle(e, crew) {
+  const parts = [crew ? crew.name : 'Everyone', longDay(e.day), NAMES[e.status]];
+  if (e.job_id) parts.push(`Job #${e.job_number} ${e.job_name}`, e.job_address || '');
+  else parts.push(e.label || '');
+  if (e.note) parts.push('Note: ' + e.note);
+  parts.push(e.shared ? '📱 Crew can see this' : '🔒 Office only');
+  return parts.filter(Boolean).join('\n');
+}
+function chip(e, crew) {
+  return `<div class="chip st-${e.status}${e.closed_at ? ' closed' : ''}" draggable="true" data-e="${e.id}" title="${esc(chipTitle(e, crew))}">${e.note ? '<span class="nt">📝</span>' : ''}${e.shared && crew ? '<span class="ph">📱</span>' : ''}${e.status === 'problem' ? '⚠ ' : ''}${chipText(e)}</div>`;
+}
+function draw() {
+  const end = addDays(start, weeks * 7 - 1);
+  $('#range').textContent = `${fmt(start, { month: 'short', day: 'numeric' })} – ${fmt(end, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  $('#legend').innerHTML = CREW_STATUSES.map((s) => `<span class="st-${s}">${NAMES[s]}</span>`).join('') +
+    '<span class="crewsee">📱 = crew can see it on their phone · no 📱 = office only</span>';
+  const crews = crewsShown();
+  if (!data.crews.length) {
+    $('#weeks').innerHTML = `<div class="empty">No crews yet. ${isMgr ? 'Click <b>👥 Crews</b> to add your crew leads and subs (Frankie, Peter, a sub company…).' : 'Ask an owner or manager to add the crews.'}</div>`;
+    return;
+  }
+  const by = new Map(); // "crew|day" -> entries
+  for (const e of data.entries) { const k = `${e.crew_id ?? 'all'}|${e.day}`; if (!by.has(k)) by.set(k, []); by.get(k).push(e); }
+  const today = todayStr();
+  let html = `<div class="printhead">${esc(me.business.name)} · Crew Calendar · ${esc($('#range').textContent)}</div>`;
+  for (let w = 0; w < weeks; w++) {
+    const days = daysOfWeek(addDays(start, w * 7));
+    html += `<div class="week"><table class="cal"><colgroup><col class="who">${days.map(() => '<col>').join('')}</colgroup><thead><tr>
+      <th class="wk">Week of ${fmt(days[0], { month: 'short', day: 'numeric' })}<div class="wkbtns">
+        <button type="button" data-wkshow="${days[0]}" title="Let crews see every block this week">📱 Show</button>
+        <button type="button" data-wkhide="${days[0]}" title="Make every block this week office only">🔒 Hide</button></div></th>
+      ${days.map((d) => `<th class="${d === today ? 'today' : ''}" data-day="${d}"><span class="dn">${fmt(d, { day: 'numeric' })}</span>${dayName(d)}<button type="button" class="offbtn" data-off="${d}" title="Mark a day off for everyone">＋ day off</button></th>`).join('')}
+    </tr></thead><tbody>`;
+    const anyOff = days.some((d) => by.has(`all|${d}`));
+    if (anyOff) {
+      html += `<tr class="allrow"><td class="who">Everyone</td>${days.map((d) => `<td class="cell" data-crew="" data-day="${d}">${(by.get(`all|${d}`) || []).map((e) => chip(e, null)).join('')}</td>`).join('')}</tr>`;
+    }
+    for (const c of crews) {
+      html += `<tr><td class="who">${esc(c.name)}${c.kind === 'sub' ? '<span class="kind">SUB</span>' : ''}${c.link_on ? ' <span title="Has a phone link">📱</span>' : ''}${c.active ? '' : '<small>hidden</small>'}</td>
+        ${days.map((d) => `<td class="cell${by.has(`all|${d}`) ? ' dayoff' : ''}" data-crew="${c.id}" data-day="${d}">${(by.get(`${c.id}|${d}`) || []).map((e) => chip(e, c)).join('')}</td>`).join('')}</tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+  $('#weeks').innerHTML = html;
+}
+
+// ---------- click: add / edit ----------
+$('#weeks').addEventListener('click', (ev) => {
+  const wk = ev.target.closest('[data-wkshow], [data-wkhide]');
+  if (wk) return shareWeek(wk.dataset.wkshow || wk.dataset.wkhide, wk.dataset.wkshow !== undefined);
+  const off = ev.target.closest('[data-off]');
+  if (off) return dayOffDialog(null, off.dataset.off);
+  const ch = ev.target.closest('.chip');
+  if (ch) { const e = data.entries.find((x) => x.id === Number(ch.dataset.e)); if (e) (e.crew_id == null ? dayOffDialog(e) : entryDialog(e)); return; }
+  const td = ev.target.closest('td.cell');
+  if (td && td.dataset.crew) entryDialog(null, Number(td.dataset.crew), td.dataset.day);
+  else if (td) dayOffDialog(null, td.dataset.day);
+});
+
+// ---------- drag to move (Ctrl = copy) ----------
+let dragId = null;
+$('#weeks').addEventListener('dragstart', (ev) => {
+  const ch = ev.target.closest('.chip'); if (!ch) return;
+  dragId = Number(ch.dataset.e); ch.classList.add('dragging');
+  ev.dataTransfer.effectAllowed = 'copyMove'; ev.dataTransfer.setData('text/plain', String(dragId));
+});
+$('#weeks').addEventListener('dragend', () => { dragId = null; $$('.dragging, .drop').forEach((x) => x.classList.remove('dragging', 'drop')); });
+$('#weeks').addEventListener('dragover', (ev) => {
+  const td = ev.target.closest('td.cell'); if (!td || dragId == null) return;
+  const e = data.entries.find((x) => x.id === dragId);
+  if (!e || (e.crew_id == null) !== !td.dataset.crew) return;   // days off stay in the Everyone row
+  ev.preventDefault(); ev.dataTransfer.dropEffect = ev.ctrlKey || ev.altKey ? 'copy' : 'move';
+  $$('.drop').forEach((x) => x !== td && x.classList.remove('drop')); td.classList.add('drop');
+});
+$('#weeks').addEventListener('drop', async (ev) => {
+  const td = ev.target.closest('td.cell'); if (!td || dragId == null) return;
+  ev.preventDefault();
+  const e = data.entries.find((x) => x.id === dragId); dragId = null;
+  if (!e) return;
+  const crew = td.dataset.crew ? Number(td.dataset.crew) : null, d = td.dataset.day;
+  try {
+    if (ev.ctrlKey || ev.altKey) {
+      await api('/api/schedule/entries', { crew_id: crew, days: [d], job_id: e.job_id, label: e.label, status: e.status, note: e.note, shared: crew === e.crew_id ? e.shared : false });
+      toast('Copied');
+    } else {
+      if (crew === e.crew_id && d === e.day) return;
+      const r = await api(`/api/schedule/entries/${e.id}`, { crew_id: crew, day: d }, 'PUT');
+      toast(r.unshared ? 'Moved. It is office only now; click it and tick 📱 when the crew should see it.' : 'Moved');
+    }
+    await load();
+  } catch (err) { toast(err.message, 'bad'); }
+});
+
+// ---------- dialogs ----------
+function openDlg(html, wide) {
+  const f = $('#dlgForm'); f.className = 'modal' + (wide ? ' wide' : ''); f.innerHTML = html;
+  $('#dlg').classList.add('open');
+  setTimeout(() => { const x = f.querySelector('[data-focus]'); if (x) x.focus(); }, 30);
+  return f;
+}
+function closeDlg() { $('#dlg').classList.remove('open'); $('#dlgForm').innerHTML = ''; $('#dlgForm').onsubmit = null; $('#dlgForm').onclick = null; $('#dlgForm').oninput = null; }
+$('#dlg').addEventListener('mousedown', (e) => { if (e.target.id === 'dlg') closeDlg(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#dlg').classList.contains('open')) closeDlg(); });
+
+// The days from `from` through `to`, leaving out Sundays (and Saturdays) when asked.
+function dayRange(from, to, skipSun, skipSat) {
+  if (!to || to < from) return [from];
+  const out = [];
+  for (let d = from; d <= to && out.length < 62; d = addDays(d, 1)) {
+    const w = D(d).getUTCDay();
+    if ((skipSun && w === 0) || (skipSat && w === 6)) continue;
+    out.push(d);
+  }
+  return out.length ? out : [from];
+}
+const repeatHtml = (from, title) => `
+  <label>${title}</label>
+  <div class="repeat">
+    <div><input type="date" name="thru" min="${from}" value=""><small style="color:var(--muted)">Leave empty for just this day</small></div>
+    <div><label class="check"><input type="checkbox" name="skipSun" checked> Skip Sundays</label><label class="check"><input type="checkbox" name="skipSat"> Skip Saturdays</label></div>
+  </div>`;
+
+function jobPickedHtml(j) {
+  return `<div class="picked"><div><b>#${j.job_number} ${esc(j.name || j.job_name || '')}</b><small>${esc([j.customer_name, j.job_address].filter(Boolean).join(' · ') || 'No address on the job')}</small></div>
+    <button type="button" data-unpick>Change</button></div>`;
+}
+async function searchJobs(f, q) {
+  const list = await api('/api/schedule/jobs?q=' + encodeURIComponent(q || ''));
+  const box = f.querySelector('.jobpick');
+  if (!box) return;
+  box.innerHTML = list.length ? list.map((j) => `<button type="button" data-job='${esc(JSON.stringify(j))}'>
+      <span class="dot" style="background:${esc(j.column_color || '#999')}"></span><b>#${j.job_number} ${esc(j.name)}</b>${j.closed_at ? ' <i>(closed)</i>' : ''}
+      <small>${esc([j.customer_name, j.job_address, j.column_name].filter(Boolean).join(' · '))}</small></button>`).join('')
+    : '<div style="padding:10px;color:var(--muted)">No jobs match. Type what they are doing below instead.</div>';
+}
+
+function entryDialog(e, crewId, d) {
+  const crew = data.crews.find((c) => c.id === (e ? e.crew_id : crewId));
+  const day = e ? e.day : d;
+  let job = e && e.job_id ? { id: e.job_id, job_number: e.job_number, name: e.job_name, customer_name: e.customer_name, job_address: e.job_address } : null;
+  const st = e ? e.status : 'scheduled';
+  const f = openDlg(`
+    <h2>${e ? 'Change' : 'Put on the calendar'}</h2>
+    <div style="color:var(--muted);margin-bottom:4px"><b style="color:inherit">${esc(crew ? crew.name : '')}</b> · ${longDay(day)}</div>
+    ${e ? `<div class="row2"><div><label>Crew</label><select name="crew">${crewsShown().map((c) => `<option value="${c.id}" ${c.id === crew.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
+      <div><label>Day</label><input type="date" name="day" value="${day}" required></div></div>` : ''}
+    <label>Job</label>
+    <div id="jobArea">${job ? jobPickedHtml(job) : `<input name="q" placeholder="Search job #, name, customer, address…" data-focus><div class="jobpick"></div>`}</div>
+    <label>…or type what they're doing (if it's not a job on the board)</label>
+    <input name="label" maxlength="80" placeholder="Shop day, pick up materials, training…" value="${esc(e && !e.job_id ? e.label || '' : '')}">
+    <label>Status</label>
+    <div class="stpick">${CREW_STATUSES.map((s) => `<label class="st-${s}"><input type="radio" name="status" value="${s}" ${s === st ? 'checked' : ''}> ${NAMES[s]}</label>`).join('')}</div>
+    <label>Note for this day</label>
+    <textarea name="note" maxlength="500" placeholder="Bring the lift, gate code 1234, customer wants them there by 7…">${esc(e ? e.note || '' : '')}</textarea>
+    <label class="seebox"><input type="checkbox" name="shared" ${e && e.shared ? 'checked' : ''}>
+      <span>📱 Crew can see this on their phone<small>${crew && crew.link_on ? `Off = office only. ${esc(crew.name)} won't see it until you turn this on.` : `${esc(crew ? crew.name : 'This crew')} has no phone link yet (👥 Crews to turn one on). Leave off for office only.`}</small></span></label>
+    ${repeatHtml(day, e ? 'Copy to more days (through)' : 'More than one day? Through')}
+    <div class="actions">
+      ${e ? '<button type="button" class="danger left" data-del>Delete</button>' : ''}
+      ${e && e.job_id ? `<a href="/jobs#job-${e.job_id}" class="left" style="align-self:center">Open job ticket</a>` : ''}
+      <button type="button" data-close>Cancel</button><button class="primary">Save</button>
+    </div>`);
+  if (!job) searchJobs(f, '');
+  let t;
+  f.oninput = (ev) => { if (ev.target.name === 'q') { clearTimeout(t); t = setTimeout(() => searchJobs(f, ev.target.value).catch(() => {}), 200); } };
+  f.onclick = async (ev) => {
+    const pick = ev.target.closest('[data-job]');
+    if (pick) { job = JSON.parse(pick.dataset.job); $('#jobArea').innerHTML = jobPickedHtml(job); f.label.value = ''; return; }
+    if (ev.target.closest('[data-unpick]')) { job = null; $('#jobArea').innerHTML = '<input name="q" placeholder="Search job #, name, customer, address…"><div class="jobpick"></div>'; f.q.focus(); searchJobs(f, ''); return; }
+    if (ev.target.closest('[data-close]')) return closeDlg();
+    if (ev.target.closest('[data-del]')) {
+      if (!confirm('Take this off the calendar?')) return;
+      try { await api(`/api/schedule/entries/${e.id}`, null, 'DELETE'); closeDlg(); toast('Removed'); await load(); } catch (err) { toast(err.message, 'bad'); }
+    }
+  };
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const label = f.label.value.trim();
+    if (!job && !label) return toast('Pick a job or type what they are doing', 'bad');
+    const body = { job_id: job ? job.id : null, label: job ? null : label, status: f.status.value, note: f.note.value.trim(), shared: f.shared.checked };
+    try {
+      if (e) {
+        const newDay = f.day.value || day;
+        await api(`/api/schedule/entries/${e.id}`, { ...body, crew_id: Number(f.crew.value), day: newDay }, 'PUT');
+        if (f.thru.value) {
+          const more = dayRange(addDays(newDay, 1), f.thru.value, f.skipSun.checked, f.skipSat.checked).filter((x) => x > newDay);
+          if (more.length) await api('/api/schedule/entries', { ...body, crew_id: Number(f.crew.value), days: more });
+        }
+      } else {
+        await api('/api/schedule/entries', { ...body, crew_id: crew.id, days: dayRange(day, f.thru.value, f.skipSun.checked, f.skipSat.checked) });
+      }
+      closeDlg(); toast('Saved'); await load();
+    } catch (err) { toast(err.message, 'bad'); }
+  };
+}
+
+function dayOffDialog(e, d) {
+  const day = e ? e.day : d;
+  const f = openDlg(`
+    <h2>${e ? 'Day off' : 'Day off for everyone'}</h2>
+    <div style="color:var(--muted)">${longDay(day)} · shows across all crews</div>
+    <label>What for</label>
+    <input name="label" maxlength="80" required data-focus placeholder="Thanksgiving, rain day, company picnic…" value="${esc(e ? e.label || '' : '')}">
+    <label>Note</label>
+    <textarea name="note" maxlength="500">${esc(e ? e.note || '' : '')}</textarea>
+    <label class="seebox"><input type="checkbox" name="shared" ${!e || e.shared ? 'checked' : ''}><span>📱 Crews can see this day off on their phones</span></label>
+    ${e ? '' : repeatHtml(day, 'More than one day? Through')}
+    <div class="actions">
+      ${e ? '<button type="button" class="danger left" data-del>Delete</button>' : ''}
+      <button type="button" data-close>Cancel</button><button class="primary">Save</button>
+    </div>`);
+  f.onclick = async (ev) => {
+    if (ev.target.closest('[data-close]')) return closeDlg();
+    if (ev.target.closest('[data-del]')) {
+      try { await api(`/api/schedule/entries/${e.id}`, null, 'DELETE'); closeDlg(); toast('Removed'); await load(); } catch (err) { toast(err.message, 'bad'); }
+    }
+  };
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const body = { crew_id: null, label: f.label.value.trim(), note: f.note.value.trim(), shared: f.shared.checked };
+    try {
+      if (e) await api(`/api/schedule/entries/${e.id}`, body, 'PUT');
+      else await api('/api/schedule/entries', { ...body, days: dayRange(day, f.thru.value, f.skipSun.checked, f.skipSat.checked) });
+      closeDlg(); toast('Saved'); await load();
+    } catch (err) { toast(err.message, 'bad'); }
+  };
+}
+
+// ---------- crews (owners / managers) ----------
+function crewRow(c, i, n) {
+  return `<div class="crewrow${c.active ? '' : ' hid'}" data-c="${c.id}">
+    <div class="top"><b>${esc(c.name)}${c.kind === 'sub' ? '<span class="kind">SUB</span>' : ''}</b>
+      <button type="button" data-up ${i === 0 ? 'disabled' : ''} title="Move up">↑</button>
+      <button type="button" data-down ${i === n - 1 ? 'disabled' : ''} title="Move down">↓</button>
+      <button type="button" data-edit>✎ Edit</button>
+      <button type="button" data-hide>${c.active ? 'Hide' : 'Show'}</button>
+    </div>
+    <div class="link">
+      <label class="switch"><input type="checkbox" data-linkon ${c.link_on ? 'checked' : ''}> 📱 Phone link</label>
+      ${c.link_on ? `<button type="button" data-send="wa">🟢 WhatsApp</button><button type="button" data-send="sms">💬 Text</button>
+        <button type="button" data-send="email">✉️ Email</button><button type="button" data-send="copy">📋 Copy link</button><button type="button" data-send="view">👁 Preview</button>
+        <button type="button" data-send="new" title="Old link stops working">🔄 New link</button>` : ''}
+      <small>${c.link_on ? `They see only the blocks marked 📱 (3 weeks ahead): job, address with map, notes. No prices.${c.phone ? ' · ' + esc(c.phone) : ''}${c.email ? ' · ' + esc(c.email) : ''}` : 'Off: turn on for the crews that should see their schedule on their phone.'}</small>
+    </div></div>`;
+}
+function crewForm(c) {
+  return `<h2>${c ? 'Edit crew' : 'Add a crew'}</h2>
+    <label>Name</label><input name="name" maxlength="60" required data-focus value="${esc(c ? c.name : '')}" placeholder="Frankie, Peter H, TX Steel…">
+    <label>Who</label>
+    <div class="stpick" style="grid-template-columns:1fr 1fr">
+      <label><input type="radio" name="kind" value="own" ${!c || c.kind === 'own' ? 'checked' : ''}> Our crew</label>
+      <label><input type="radio" name="kind" value="sub" ${c && c.kind === 'sub' ? 'checked' : ''}> Subcontractor</label>
+    </div>
+    <div class="row2"><div><label>Cell phone</label><input name="phone" maxlength="30" inputmode="tel" value="${esc(c ? c.phone || '' : '')}"></div>
+      <div><label>Email</label><input name="email" type="email" maxlength="200" value="${esc(c ? c.email || '' : '')}"></div></div>
+    <label>Note</label><input name="note" maxlength="300" value="${esc(c ? c.note || '' : '')}" placeholder="Truck #, crew size…">
+    <div class="actions">${c ? '<button type="button" class="danger left" data-delcrew>Delete</button>' : ''}<button type="button" data-back>Back</button><button class="primary">Save</button></div>`;
+}
+async function crewsDialog() {
+  await load();
+  const list = data.crews;
+  const f = openDlg(`<h2>👥 Crews</h2>
+    <div style="color:var(--muted);font-size:14px">The rows on the calendar, top to bottom. Hide a crew you no longer use; their past days stay.</div>
+    <div class="crewlist">${list.map((c, i) => crewRow(c, i, list.length)).join('') || '<div class="empty" style="padding:16px">No crews yet.</div>'}</div>
+    <div class="actions"><button type="button" class="primary left" data-add>＋ Add a crew</button><button type="button" data-close>Done</button></div>`, true);
+  f.onsubmit = (ev) => ev.preventDefault();
+  f.onclick = async (ev) => {
+    const b = ev.target.closest('button, input[data-linkon]'); if (!b) return;
+    if (b.dataset.close !== undefined) { closeDlg(); return load(); }
+    if (b.dataset.add !== undefined) return crewEdit(null);
+    const row = b.closest('[data-c]'); if (!row) return;
+    const c = data.crews.find((x) => x.id === Number(row.dataset.c));
+    try {
+      if (b.dataset.edit !== undefined) return crewEdit(c);
+      if (b.dataset.hide !== undefined) { await api(`/api/schedule/crews/${c.id}`, { active: !c.active }, 'PUT'); return crewsDialog(); }
+      if (b.dataset.up !== undefined || b.dataset.down !== undefined) {
+        const ids = data.crews.map((x) => x.id); const i = ids.indexOf(c.id); const j = b.dataset.up !== undefined ? i - 1 : i + 1;
+        [ids[i], ids[j]] = [ids[j], ids[i]];
+        await api('/api/schedule/crews/order', { ids }, 'PUT'); return crewsDialog();
+      }
+      if (b.dataset.linkon !== undefined) { await api(`/api/schedule/crews/${c.id}`, { link_on: b.checked }, 'PUT'); toast(b.checked ? `Phone link on for ${c.name}` : `Phone link off. ${c.name}'s old link stops working.`); return crewsDialog(); }
+      if (b.dataset.send) return sendLink(c, b.dataset.send);
+    } catch (err) { toast(err.message, 'bad'); }
+  };
+}
+function crewEdit(c) {
+  const f = openDlg(crewForm(c));
+  f.onclick = async (ev) => {
+    if (ev.target.closest('[data-back]')) return crewsDialog();
+    if (ev.target.closest('[data-delcrew]')) {
+      if (!confirm(`Delete ${c.name}?`)) return;
+      try { await api(`/api/schedule/crews/${c.id}`, null, 'DELETE'); toast('Deleted'); crewsDialog(); } catch (err) { toast(err.message, 'bad'); }
+    }
+  };
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const body = { name: f.elements.name.value.trim(), kind: f.kind.value, phone: f.phone.value.trim(), email: f.email.value.trim(), note: f.note.value.trim() };
+    try {
+      if (c) await api(`/api/schedule/crews/${c.id}`, body, 'PUT'); else await api('/api/schedule/crews', body);
+      toast('Saved'); crewsDialog();
+    } catch (err) { toast(err.message, 'bad'); }
+  };
+}
+async function sendLink(c, how) {
+  const msg = `Hi ${c.name}, here is your schedule from ${me.business.name}. It always shows the latest: ${c.link}`;
+  if (how === 'copy') { try { await navigator.clipboard.writeText(c.link); toast('Link copied'); } catch (e) { prompt('Copy this link:', c.link); } return; }
+  if (how === 'view') { window.open(c.link, '_blank', 'noopener'); return; }
+  if (how === 'new') {
+    if (!confirm(`Make a new link for ${c.name}? The old one stops working.`)) return;
+    await api(`/api/schedule/crews/${c.id}`, { new_link: true }, 'PUT'); toast('New link made. Send it again.'); return crewsDialog();
+  }
+  if (how === 'wa' || how === 'sms') {
+    const num = prompt(`${c.name}'s cell number`, c.phone || ''); if (num == null) return;
+    if (num.trim() && num.trim() !== (c.phone || '')) await api(`/api/schedule/crews/${c.id}`, { name: c.name, kind: c.kind, phone: num.trim(), email: c.email, note: c.note }, 'PUT').catch(() => {});
+    if (how === 'wa') sendToWhatsApp(waNumber(num), msg);
+    else launchLink(`sms:${num.replace(/[^\d+]/g, '')}?&body=${encodeURIComponent(msg)}`);
+    return;
+  }
+  if (how === 'email') {
+    const to = prompt(`Email ${c.name}'s schedule link to:`, c.email || ''); if (!to) return;
+    await api(`/api/schedule/crews/${c.id}/email`, { email: to.trim() }); toast('Email sent'); return crewsDialog();
+  }
+}
+
+async function shareWeek(mon, on) {
+  const to = addDays(mon, 6);
+  const n = data.entries.filter((e) => e.day >= mon && e.day <= to && !!e.shared !== on).length;
+  if (!n) return toast(on ? 'Everything this week is already showing to crews' : 'Everything this week is already office only');
+  if (!confirm(on ? `Let crews see all ${n} office-only block${n === 1 ? '' : 's'} in the week of ${fmt(mon, { month: 'short', day: 'numeric' })}?`
+    : `Make all ${n} shared block${n === 1 ? '' : 's'} in the week of ${fmt(mon, { month: 'short', day: 'numeric' })} office only? Crews will stop seeing them.`)) return;
+  try { await api('/api/schedule/share', { from: mon, to, shared: on }); toast(on ? 'Crews can see this week' : 'This week is office only'); await load(); } catch (err) { toast(err.message, 'bad'); }
+}
+
+// ---------- tools ----------
+function go(n) { start = addDays(start, n * 7); saveHash(); load().catch((e) => toast(e.message, 'bad')); }
+function saveHash() { history.replaceState(null, '', '#' + start); }
+$('#prev').onclick = () => go(-1);
+$('#next').onclick = () => go(1);
+$('#todayBtn').onclick = () => { start = monday(todayStr()); saveHash(); load().catch((e) => toast(e.message, 'bad')); };
+$('#weeksSel').onchange = (e) => { weeks = Number(e.target.value); try { localStorage.setItem('cp_cal_weeks', weeks); } catch (x) { /* ok */ } load().catch((er) => toast(er.message, 'bad')); };
+$('#sunChk').onchange = (e) => { showSun = e.target.checked; try { localStorage.setItem('cp_cal_sun', showSun ? '1' : '0'); } catch (x) { /* ok */ } draw(); };
+$('#crewsBtn').onclick = () => crewsDialog().catch((e) => toast(e.message, 'bad'));
+$('#printBtn').onclick = () => window.print();
+
+function listen() {
+  let t;
+  const es = new EventSource('/api/jobs/events');
+  es.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'hello') return;
+    if (m.type !== 'schedule' && m.type !== 'job') return;
+    clearTimeout(t); t = setTimeout(() => { if (!$('#dlg').classList.contains('open')) load().catch(() => {}); }, 300);
+  };
+}
+
+(async () => {
+  me = await api('/api/me'); backupNag(me);
+  if (!me.business) { location.href = '/admin#businesses'; return; }
+  applyBrand(me.business);
+  $('#bizName').textContent = me.business.name;
+  topButton(me);
+  if (!me.business.jobs_enabled || !me.business.calendar_enabled) { $('#weeks').innerHTML = '<div class="empty">The Crew Calendar is an add-on that is not turned on for this business. Ask ContractorPOS to turn it on.</div>'; $('.tools').hidden = true; $('#legend').hidden = true; $('#hint').hidden = true; return; }
+  isMgr = ['admin', 'owner', 'manager'].includes(me.user.role);
+  $('#crewsBtn').hidden = !isMgr; $('#manageLink').hidden = !isMgr;
+  $('#weeksSel').value = String(weeks); $('#sunChk').checked = showSun;
+  const h = /^#(\d{4}-\d{2}-\d{2})$/.exec(location.hash);
+  start = monday(h ? h[1] : todayStr());
+  await load();
+  listen();
+})().catch((e) => toast(e.message, 'bad'));
+</script>
+</body>
+</html>
