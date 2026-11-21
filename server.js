@@ -168,7 +168,7 @@ app.post('/api/logout', wrap(async (req, res) => {
 app.get('/api/me', requireLogin, wrap(async (req, res) => {
   let business = null;
   if (req.user.business_id) {
-    const b = await pool.query('SELECT id, name, accent_color, logo_url, rentals_enabled, half_day_hours, deposit_account, qbo_enabled, jobs_enabled, ai_enabled, gc_enabled, plan, theme, time_zone, receipt_reply_email FROM businesses WHERE id = $1', [req.user.business_id]);
+    const b = await pool.query('SELECT id, name, accent_color, logo_url, rentals_enabled, half_day_hours, deposit_account, qbo_enabled, jobs_enabled, ai_enabled, gc_enabled, calendar_enabled, plan, theme, time_zone, receipt_reply_email FROM businesses WHERE id = $1', [req.user.business_id]);
     business = b.rows[0] || null;
   }
   const { id, name, email, role } = req.user;
@@ -230,6 +230,7 @@ app.put('/api/admin/businesses/:id', requireLogin, requireAdmin, wrap(async (req
   if ('jobs_enabled' in req.body) await pool.query('UPDATE businesses SET jobs_enabled = $1 WHERE id = $2', [!!req.body.jobs_enabled, req.params.id]);
   if ('ai_enabled' in req.body) await pool.query('UPDATE businesses SET ai_enabled = $1 WHERE id = $2', [!!req.body.ai_enabled, req.params.id]);
   if ('gc_enabled' in req.body) await pool.query('UPDATE businesses SET gc_enabled = $1 WHERE id = $2', [!!req.body.gc_enabled, req.params.id]);
+  if ('calendar_enabled' in req.body) await pool.query('UPDATE businesses SET calendar_enabled = $1 WHERE id = $2', [!!req.body.calendar_enabled, req.params.id]);
   if ('plan' in req.body) {
     if (!feats.PLANS.includes(req.body.plan)) fail(400, 'Choose Basic, Standard or Advanced');
     await pool.query('UPDATE businesses SET plan = $1 WHERE id = $2', [req.body.plan, req.params.id]);
@@ -1657,6 +1658,7 @@ app.post('/api/sales/:id/void', ...managers, wrap(async (req, res) => {
 // ---------- Jobs add-on: contractor job board (see jobs.js) ----------
 const jobsApi = require('./jobs')(app, { pool, wrap, fail, text, cents, requireLogin, requireBusiness, requireRole, barcodeVariants, publicOrigin, token, feats });
 require('./jobfiles')(app, { pool, wrap, fail, text, ...jobsApi });
+require('./schedule')(app, { pool, wrap, fail, text, publicOrigin, token, feats, ...jobsApi });
 
 // ---------- QuickBooks Online (see qbo.js) ----------
 require('./qbo')(app, { pool, wrap, fail, text, requireLogin, requireBusiness, requireRole, requireAdmin, publicOrigin });
