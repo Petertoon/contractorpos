@@ -325,6 +325,47 @@
   #bb .bbtotals .grand { background: #2f5a2a; color: #fff; border-radius: 6px; padding: 12px 14px; margin-top: 6px; font-size: 20px; border: 0; }
   #bb .bbtotals .grand b { font-size: 26px; } #bb .bbtotals .was { font-size: 13px; color: #7a6a50; border: 0; justify-content: flex-end; }
   #bb .bbfoot { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 64px; }
+  /* Bid Builder in the Dark look (Ranch look is the base above). Screen only. */
+  @media screen {
+  html[data-theme=dark] #bb { background: rgba(0,0,0,.65); }
+  html[data-theme=dark] #bb .bbwin { background: #1b1e24; color: #f1f2f4; box-shadow: 0 20px 60px rgba(0,0,0,.7); border: 1px solid #2a2e36; }
+  html[data-theme=dark] #bb .bbhead { background: #17191e; border-bottom-color: #2a2e36; }
+  html[data-theme=dark] #bb .bblogo small { color: #8fd16a; } html[data-theme=dark] #bb .bblogo b { color: #d9a93a; }
+  html[data-theme=dark] #bb .bbtools { background: #22262e; }
+  html[data-theme=dark] #bb .bbtools button { color: #f1f2f4; } html[data-theme=dark] #bb .bbtools button:hover { background: #2e323b; }
+  html[data-theme=dark] #bb .bbtools button.dirty { background: #7cc04a; color: #121418; }
+  html[data-theme=dark] #bb .bbmeta label { color: #d9a93a; }
+  html[data-theme=dark] #bb .bbbox { background: #16181d; border-color: #353a44; color: #f1f2f4; }
+  html[data-theme=dark] #bb .bbbox small, html[data-theme=dark] #bb .bbt td small, html[data-theme=dark] #bb .bbtotals .was { color: #9aa0aa; }
+  html[data-theme=dark] #bb .bbtablewrap { background: #1d2027; border-color: #2e323b; }
+  html[data-theme=dark] #bb .bbt th { background: #191b20; color: #d9a93a; letter-spacing: .03em; }
+  html[data-theme=dark] #bb .bbt td { border-bottom-color: #2e323b; }
+  html[data-theme=dark] #bb .bbt tbody tr:nth-child(even) td { background: #20232a; }
+  html[data-theme=dark] #bb .bbt tr.prod td { background: #1c2419 !important; }
+  html[data-theme=dark] #bb .bbt tr.sel td, html[data-theme=dark] #bb .bbt tr.prod.sel td { background: #1f2a17 !important; }
+  html[data-theme=dark] #bb .bbt td.num, html[data-theme=dark] #bb .pqty, html[data-theme=dark] #bb .bbt .cur { color: #9aa0aa; }
+  html[data-theme=dark] #bb .bbt input, html[data-theme=dark] #bb .bbset input[type=number] { background: #16181d; color: #f1f2f4; border-color: #353a44; }
+  html[data-theme=dark] #bb .bbt input::placeholder { color: #6f7580; }
+  html[data-theme=dark] #bb .bbt input:focus { outline-color: #7cc04a; }
+  html[data-theme=dark] #bb .bbt input:disabled, html[data-theme=dark] #bb .bbset input:disabled { background: #22262e; color: #6f7580; }
+  html[data-theme=dark] #bb .bbfiles a { background: #22262e; border-color: #353a44; color: #f1f2f4; }
+  html[data-theme=dark] #bb .bbfiles a:hover { background: #2a2e36; } html[data-theme=dark] #bb .bbfiles img { background: #2a2e36; }
+  html[data-theme=dark] #bb .bbt .acts button { color: #c9ced6; } html[data-theme=dark] #bb .bbt .acts button:hover { background: #2a2e36; }
+  html[data-theme=dark] #bb .bbt .acts button.del { color: #ef5350; }
+  html[data-theme=dark] #bb .bbbtns button { background: #2a2e36; color: #f1f2f4; border-color: #353a44; }
+  html[data-theme=dark] #bb .bbbtns .bbadd { background: #7cc04a; color: #121418; border-color: #7cc04a; }
+  html[data-theme=dark] #bb .bbbtns .bbprod { background: #1f2a17; color: #8fd16a; border-color: #7cc04a; }
+  html[data-theme=dark] #bb .bbset { background: #1d2027; border-color: #2e323b; }
+  html[data-theme=dark] #bb .bbsethead { background: #191b20; color: #d9a93a; }
+  html[data-theme=dark] #bb .bbset label { color: #f1f2f4; }
+  html[data-theme=dark] #bb .bbset input[type=radio] { accent-color: #7cc04a; }
+  html[data-theme=dark] #bb .bbtotals { background: #1d2027; border-color: #2e323b; }
+  html[data-theme=dark] #bb .bbtotals > div { border-bottom-color: #2e323b; }
+  html[data-theme=dark] #bb .bbtotals .grand { background: #1f2a17; color: #8fd16a; border: 1px solid #7cc04a; }
+  html[data-theme=dark] #bb .bbfoot > path:nth-of-type(1), html[data-theme=dark] #bb .bbfoot g rect { fill: #262a32; }
+  html[data-theme=dark] #bb .bbfoot > path:nth-of-type(2) { fill: #30353f; }
+  html[data-theme=dark] #bb .bbfoot g { fill: #d9a93a; opacity: .6; } html[data-theme=dark] #bb .bbfoot g path[stroke] { stroke: #d9a93a; }
+  }
   @media (max-width: 800px) { #bb { padding: 0; } #bb .bbwin { border-radius: 0; } #bb .bbbottom { grid-template-columns: 1fr; } #bb .bbmeta { grid-template-columns: auto 1fr; } #bb .bblogo b { font-size: 22px; } }
 
   /* ---- Ranch look (Settings → Look of the program) ---- */
