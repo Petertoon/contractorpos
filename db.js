@@ -572,6 +572,8 @@ CREATE INDEX IF NOT EXISTS job_crew_changes_crew ON job_crew_changes(crew_id);
 ALTER TABLE job_files ADD COLUMN IF NOT EXISTS crew_id INT REFERENCES job_crews(id) ON DELETE SET NULL;
 -- General Contractor add-on (v1.10): quote built sub by sub. quote_cents = what the customer is charged for that sub inside the quote.
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS gc_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+-- Crew Calendar add-on (v1.25)
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS calendar_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE job_crews ADD COLUMN IF NOT EXISTS quote_cents INT NOT NULL DEFAULT 0;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_own_cents INT NOT NULL DEFAULT 0;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS gc_own_note TEXT;
@@ -682,6 +684,43 @@ ALTER TABLE job_files DROP CONSTRAINT IF EXISTS job_files_kind_check;
 ALTER TABLE job_files ADD CONSTRAINT job_files_kind_check CHECK (kind IN ('pdf','photo','estimate','answer'));
 ALTER TABLE job_crew_payments DROP CONSTRAINT IF EXISTS job_crew_payments_method_check;
 ALTER TABLE job_crew_payments ADD CONSTRAINT job_crew_payments_method_check CHECK (method IN ('check','cash','card','transfer','other'));
+
+-- Crew calendar (v1.24): who is on which job each day. Crews here are the people/companies you schedule
+-- (your own crew leads and subs); separate from the trade lines on a job ticket.
+CREATE TABLE IF NOT EXISTS sched_crews (
+  id SERIAL PRIMARY KEY,
+  business_id INT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'own' CHECK (kind IN ('own','sub')),
+  phone TEXT,
+  email TEXT,
+  note TEXT,
+  position INT NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  link_on BOOLEAN NOT NULL DEFAULT FALSE,
+  link_token TEXT UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS sched_crews_business ON sched_crews(business_id, position);
+-- One block on the calendar: a crew on a day (job from the board, or typed text). crew_id NULL = a day off for everyone.
+CREATE TABLE IF NOT EXISTS sched_entries (
+  id SERIAL PRIMARY KEY,
+  business_id INT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  crew_id INT REFERENCES sched_crews(id) ON DELETE CASCADE,
+  day DATE NOT NULL,
+  job_id INT REFERENCES jobs(id) ON DELETE SET NULL,
+  label TEXT,
+  status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled','working','tentative','problem','off')),
+  note TEXT,
+  position INT NOT NULL DEFAULT 0,
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS sched_entries_day ON sched_entries(business_id, day);
+CREATE INDEX IF NOT EXISTS sched_entries_job ON sched_entries(job_id);
+-- shared = the crew can see this block on their phone link. Off (office only) until you turn it on.
+ALTER TABLE sched_entries ADD COLUMN IF NOT EXISTS shared BOOLEAN NOT NULL DEFAULT FALSE;
 `;
 
 async function init() {
