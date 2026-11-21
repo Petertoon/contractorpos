@@ -168,14 +168,14 @@ app.post('/api/logout', wrap(async (req, res) => {
 app.get('/api/me', requireLogin, wrap(async (req, res) => {
   let business = null;
   if (req.user.business_id) {
-    const b = await pool.query('SELECT id, name, accent_color, logo_url, rentals_enabled, half_day_hours, deposit_account, qbo_enabled, jobs_enabled, ai_enabled, gc_enabled, theme, time_zone, receipt_reply_email FROM businesses WHERE id = $1', [req.user.business_id]);
+    const b = await pool.query('SELECT id, name, accent_color, logo_url, rentals_enabled, half_day_hours, deposit_account, qbo_enabled, jobs_enabled, ai_enabled, gc_enabled, plan, theme, time_zone, receipt_reply_email FROM businesses WHERE id = $1', [req.user.business_id]);
     business = b.rows[0] || null;
   }
   const { id, name, email, role } = req.user;
   const top = await topButton();
   res.json({ top_button: top.link_url || top.image_url ? top : null, user: { id, name, email, role, backup_email: req.user.backup_email || null,
     needs_backup: ['owner', 'admin'].includes(role) && !req.user.backup_email,
-    acting_until: req.user.acting_business_id ? req.user.acting_until : null }, business, features: { email_receipts: require('./email').configured(),
+    acting_until: req.user.acting_business_id ? req.user.acting_until : null }, business, can: business ? feats.can(business) : null, features: { email_receipts: require('./email').configured(),
     ai_estimates: !!process.env.ANTHROPIC_API_KEY && !!(business && business.ai_enabled),
     ai_key_missing: !process.env.ANTHROPIC_API_KEY } });
 }));
@@ -208,7 +208,8 @@ app.post('/api/admin/businesses', requireLogin, requireAdmin, wrap(async (req, r
     await client.query('BEGIN');
     const exists = await client.query('SELECT 1 FROM users WHERE email = $1', [ownerEmail]);
     if (exists.rowCount) fail(400, 'That owner email is already in use');
-    const b = await client.query('INSERT INTO businesses (name) VALUES ($1) RETURNING id', [name]);
+    const plan = feats.PLANS.includes(req.body.plan) ? req.body.plan : 'basic';
+    const b = await client.query('INSERT INTO businesses (name, plan) VALUES ($1,$2) RETURNING id', [name, plan]);
     const bid = b.rows[0].id;
     await client.query(
       `INSERT INTO users (business_id, name, email, password_hash, role) VALUES ($1,$2,$3,$4,'owner')`,
@@ -229,6 +230,10 @@ app.put('/api/admin/businesses/:id', requireLogin, requireAdmin, wrap(async (req
   if ('jobs_enabled' in req.body) await pool.query('UPDATE businesses SET jobs_enabled = $1 WHERE id = $2', [!!req.body.jobs_enabled, req.params.id]);
   if ('ai_enabled' in req.body) await pool.query('UPDATE businesses SET ai_enabled = $1 WHERE id = $2', [!!req.body.ai_enabled, req.params.id]);
   if ('gc_enabled' in req.body) await pool.query('UPDATE businesses SET gc_enabled = $1 WHERE id = $2', [!!req.body.gc_enabled, req.params.id]);
+  if ('plan' in req.body) {
+    if (!feats.PLANS.includes(req.body.plan)) fail(400, 'Choose Basic, Standard or Advanced');
+    await pool.query('UPDATE businesses SET plan = $1 WHERE id = $2', [req.body.plan, req.params.id]);
+  }
   res.json({ ok: true });
 }));
 
@@ -262,6 +267,8 @@ const sec = require('./security')(app, { pool, wrap, fail, text, requireLogin, r
 // Everything below is scoped to the logged-in user's business.
 const biz = [requireLogin, requireBusiness];
 const managers = [...biz, requireRole('owner', 'manager')];
+// Plan levels: what each plan includes (features.js). feats.needs('key') blocks a route; feats.limit() caps counts.
+const feats = require('./features')({ pool, fail, wrap });
 
 // ---------- business settings ----------
 app.put('/api/business', ...biz, requireRole('owner'), wrap(async (req, res) => {
@@ -304,6 +311,7 @@ function locationFields(body) {
     text(body.phone, 'Phone', { required: false, max: 40 }), tax, body.active !== false, hours ? JSON.stringify(hours) : null];
 }
 app.post('/api/locations', ...biz, requireRole('owner'), wrap(async (req, res) => {
+  await feats.limit(req, 'locations', (await pool.query('SELECT count(*)::int AS n FROM locations WHERE business_id=$1 AND active', [req.user.business_id])).rows[0].n);
   const f = locationFields(req.body);
   const client = await pool.connect();
   try {
@@ -347,6 +355,8 @@ app.post('/api/registers', ...managers, wrap(async (req, res) => {
   const loc = await pool.query('SELECT id FROM locations WHERE id=$1 AND business_id=$2',
     [req.body.location_id, req.user.business_id]);
   if (!loc.rowCount) fail(404, 'Location not found');
+  await feats.limit(req, 'registers', (await pool.query(`SELECT count(*)::int AS n FROM registers r JOIN locations l ON l.id = r.location_id
+    WHERE l.business_id=$1 AND r.active`, [req.user.business_id])).rows[0].n);
   const r = await pool.query('INSERT INTO registers (location_id, name, pair_token) VALUES ($1,$2,$3) RETURNING id',
     [req.body.location_id, text(req.body.name, 'Register name'), token(16)]);
   res.json({ id: r.rows[0].id });
@@ -667,6 +677,8 @@ app.post('/api/registers/:id/checkout', ...biz, wrap(async (req, res) => {
       cust = c.rows[0] || null;
     }
     const onAccount = payments.filter((p) => p.method === 'account').reduce((a, p) => a + p.amount, 0);
+    if (onAccount) await feats.check(req, 'charge_accounts');
+    if (payments.some((p) => p.method === 'gift_card')) await feats.check(req, 'gift_cards');
     if (onAccount) {
       if (!cust) fail(400, 'Choose a customer with a charge account first');
       if (!cust.charge_account) fail(400, `${cust.name} does not have a charge account`);
@@ -970,7 +982,7 @@ function summarizeMoney(rows) {
     cash_net: cashSales + cashAccount + cashJobs - cashRefunds,
     checks_total: checks.reduce((a, r) => a + r.amount_cents, 0), check_count: checks.length, checks };
 }
-app.get('/api/reports/money', ...managers, wrap(async (req, res) => {
+app.get('/api/reports/money', ...managers, feats.needs('deposits'), wrap(async (req, res) => {
   const range = reportRange(req);
   const rows = await moneyRows(req.user.business_id, range);
   // Day-by-day totals for the period.
@@ -984,12 +996,12 @@ app.get('/api/reports/money', ...managers, wrap(async (req, res) => {
 }));
 
 // ---------- bank deposits ----------
-app.get('/api/deposits/pending', ...managers, wrap(async (req, res) => {
+app.get('/api/deposits/pending', ...managers, feats.needs('deposits'), wrap(async (req, res) => {
   const loc = req.query.location_id ? Number(req.query.location_id) || null : null;
   const rows = await moneyRows(req.user.business_id, { loc, undepositedOnly: true });
   res.json(summarizeMoney(rows));
 }));
-app.post('/api/deposits', ...managers, wrap(async (req, res) => {
+app.post('/api/deposits', ...managers, feats.needs('deposits'), wrap(async (req, res) => {
   const loc = req.body.location_id ? Number(req.body.location_id) || null : null;
   if (loc) {
     const l = await pool.query('SELECT id FROM locations WHERE id=$1 AND business_id=$2', [loc, req.user.business_id]);
@@ -1023,14 +1035,14 @@ app.post('/api/deposits', ...managers, wrap(async (req, res) => {
     res.json({ id });
   } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
 }));
-app.get('/api/deposits', ...managers, wrap(async (req, res) => {
+app.get('/api/deposits', ...managers, feats.needs('deposits'), wrap(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT d.*, l.name AS location_name, u.name AS created_by_name FROM deposits d
        LEFT JOIN locations l ON l.id = d.location_id LEFT JOIN users u ON u.id = d.created_by
       WHERE d.business_id = $1 ORDER BY d.created_at DESC LIMIT 200`, [req.user.business_id]);
   res.json(rows);
 }));
-app.get('/api/deposits/:id', ...managers, wrap(async (req, res) => {
+app.get('/api/deposits/:id', ...managers, feats.needs('deposits'), wrap(async (req, res) => {
   const d = await pool.query(
     `SELECT d.*, l.name AS location_name, l.address AS location_address, b.name AS business_name, b.deposit_account,
             u.name AS created_by_name
@@ -1113,6 +1125,7 @@ app.get('/api/customers/:id', ...biz, wrap(async (req, res) => {
 }));
 app.post('/api/customers', ...biz, wrap(async (req, res) => {
   const f = customerFields(req.body, isManager(req.user));
+  if (f.charge_account) await feats.check(req, 'charge_accounts');
   const r = await pool.query(
     `INSERT INTO customers (business_id, name, company, phone, email, address, notes, charge_account, credit_limit_cents, active)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
@@ -1123,6 +1136,7 @@ app.put('/api/customers/:id', ...biz, wrap(async (req, res) => {
   const cur = await pool.query('SELECT * FROM customers WHERE id=$1 AND business_id=$2', [req.params.id, req.user.business_id]);
   if (!cur.rows[0]) fail(404, 'Customer not found');
   const f = customerFields(req.body, isManager(req.user), cur.rows[0]);
+  if (f.charge_account && !cur.rows[0].charge_account) await feats.check(req, 'charge_accounts');
   await pool.query(
     `UPDATE customers SET name=$1, company=$2, phone=$3, email=$4, address=$5, notes=$6, charge_account=$7,
        credit_limit_cents=$8, active=$9 WHERE id=$10`,
@@ -1130,7 +1144,7 @@ app.put('/api/customers/:id', ...biz, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 // A payment toward a charge account balance (cash, check, card or other).
-app.post('/api/customers/:id/payments', ...biz, wrap(async (req, res) => {
+app.post('/api/customers/:id/payments', ...biz, feats.needs('charge_accounts'), wrap(async (req, res) => {
   const c = await pool.query('SELECT id FROM customers WHERE id=$1 AND business_id=$2', [req.params.id, req.user.business_id]);
   if (!c.rows[0]) fail(404, 'Customer not found');
   const method = ['cash', 'check', 'card', 'other'].includes(req.body.method) ? req.body.method : fail(400, 'Choose how they paid');
@@ -1193,6 +1207,8 @@ app.put('/api/registers/:id/sale-info', ...biz, wrap(async (req, res) => {
     invoice_note: text(b.invoice_note, 'Invoice note', { required: false, max: 1000 }) || null,
   };
   if ((info.job_lat == null) !== (info.job_lng == null)) fail(400, 'GPS needs both latitude and longitude');
+  if (info.po_number || info.job_address || info.fulfillment) await feats.check(req, 'sale_extras');
+  if (info.quote_id) await feats.check(req, 'register_quotes');
   await pool.query('UPDATE registers SET sale_info=$1 WHERE id=$2', [JSON.stringify(info), req.params.id]);
   const view = await saleInfoView(info, req.user.business_id);
   broadcast(req.params.id, { type: 'sale-info', info: view });
@@ -1201,7 +1217,7 @@ app.put('/api/registers/:id/sale-info', ...biz, wrap(async (req, res) => {
 
 // ---------- quotes ----------
 // Saves the register's current cart + details as a quote, then clears the register.
-app.post('/api/registers/:id/quote', ...biz, wrap(async (req, res) => {
+app.post('/api/registers/:id/quote', ...biz, feats.needs('register_quotes'), wrap(async (req, res) => {
   const reg = await getRegister(req.params.id, req.user.business_id);
   if (!reg.cart.length) fail(400, 'Add items before saving a quote');
   const info = reg.sale_info || {};
@@ -1223,7 +1239,7 @@ app.post('/api/registers/:id/quote', ...biz, wrap(async (req, res) => {
   broadcast(reg.id, { type: 'sale-info', info: {} });
   res.json({ quote_id: q.rows[0].id });
 }));
-app.get('/api/quotes', ...biz, wrap(async (req, res) => {
+app.get('/api/quotes', ...biz, feats.needs('register_quotes'), wrap(async (req, res) => {
   const q = (req.query.q || '').toString().trim();
   const status = ['open', 'sold', 'canceled'].includes(req.query.status) ? req.query.status : 'open';
   const params = [req.user.business_id, status];
@@ -1243,7 +1259,7 @@ app.get('/api/quotes', ...biz, wrap(async (req, res) => {
        FROM quotes q LEFT JOIN users u ON u.id = q.created_by WHERE ${where} ORDER BY q.created_at DESC LIMIT 200`, params);
   res.json(rows);
 }));
-app.get('/api/quotes/:id', ...biz, wrap(async (req, res) => {
+app.get('/api/quotes/:id', ...biz, feats.needs('register_quotes'), wrap(async (req, res) => {
   const q = await pool.query(
     `SELECT q.*, b.name AS business_name, b.logo_url, l.name AS location_name, l.address AS location_address, l.phone AS location_phone,
             u.name AS created_by_name, (q.valid_until < CURRENT_DATE) AS expired
@@ -1253,7 +1269,7 @@ app.get('/api/quotes/:id', ...biz, wrap(async (req, res) => {
   res.json(q.rows[0]);
 }));
 // Puts a quote's items and details on a register so it can be rung up at the quoted prices.
-app.post('/api/quotes/:id/load', ...biz, wrap(async (req, res) => {
+app.post('/api/quotes/:id/load', ...biz, feats.needs('register_quotes'), wrap(async (req, res) => {
   const q = await pool.query('SELECT * FROM quotes WHERE id=$1 AND business_id=$2', [req.params.id, req.user.business_id]);
   const quote = q.rows[0] || fail(404, 'Quote not found');
   if (quote.status !== 'open') fail(400, `This quote is already ${quote.status === 'sold' ? 'sold' : 'canceled'}`);
@@ -1277,7 +1293,7 @@ app.post('/api/quotes/:id/load', ...biz, wrap(async (req, res) => {
   broadcast(reg.id, { type: 'sale-info', info: view });
   res.json({ cart, totals, sale_info: view, tax_changed: Number(reg.tax_rate) !== Number(quote.tax_rate) });
 }));
-app.post('/api/quotes/:id/cancel', ...biz, wrap(async (req, res) => {
+app.post('/api/quotes/:id/cancel', ...biz, feats.needs('register_quotes'), wrap(async (req, res) => {
   const r = await pool.query(`UPDATE quotes SET status='canceled' WHERE id=$1 AND business_id=$2 AND status='open'`,
     [req.params.id, req.user.business_id]);
   if (!r.rowCount) fail(400, 'Quote not found or not open');
@@ -1311,6 +1327,7 @@ app.post('/api/rentals/:id/return', ...biz, wrap(async (req, res) => {
   const refundAmt = optCents(req.body.refund_cents, 'Refund') || 0;
   if (late && refundAmt) fail(400, 'Use either a late charge or a refund, not both');
   const method = refundAmt ? (['cash', 'gift_card', 'check'].includes(req.body.refund_method) ? req.body.refund_method : fail(400, 'Choose how to refund')) : null;
+  if (method === 'gift_card') await feats.check(req, 'gift_cards');
   const note = text(req.body.note, 'Note', { required: false, max: 300 }) || null;
   const address = text(req.body.mailing_address, 'Mailing address', { required: false, max: 300 }) || null;
   if (method === 'check' && !address) fail(400, 'Enter the mailing address for the check');
@@ -1391,7 +1408,7 @@ app.post('/api/refunds/:id/paid', ...managers, wrap(async (req, res) => {
 }));
 
 // ---------- gift cards ----------
-app.get('/api/gift-cards/:code', ...biz, wrap(async (req, res) => {
+app.get('/api/gift-cards/:code', ...biz, feats.needs('gift_cards'), wrap(async (req, res) => {
   const code = normalizeGiftCode(req.params.code) || fail(404, 'Gift card not found');
   const g = await pool.query(
     `SELECT g.code, g.initial_cents, g.balance_cents, g.customer_name, g.created_at, b.name AS business_name
@@ -1483,6 +1500,8 @@ function allowedRole(req, role) {
 app.post('/api/users', ...managers, wrap(async (req, res) => {
   const role = allowedRole(req, req.body.role);
   await sec.noBackdoor(req, 'add logins');
+  const activeUsers = async () => (await pool.query('SELECT count(*)::int AS n FROM users WHERE business_id=$1 AND active', [req.user.business_id])).rows[0].n;
+  await feats.limit(req, 'users', await activeUsers());
   const password = text(req.body.password, 'Password');
   if (password.length < 8) fail(400, 'Password must be at least 8 characters');
   const r = await pool.query(
@@ -1506,6 +1525,10 @@ app.put('/api/users/:id', ...managers, wrap(async (req, res) => {
     if (role !== rows[0].role || (req.body.active === false) !== !cur.active) await sec.noBackdoor(req, "change or turn off the owner's login");
   }
   if (req.body.password) await sec.noBackdoor(req, 'change passwords');
+  if (req.body.active === true) {
+    const was = (await pool.query('SELECT active FROM users WHERE id=$1', [req.params.id])).rows[0];
+    if (was && !was.active) await feats.limit(req, 'users', (await pool.query('SELECT count(*)::int AS n FROM users WHERE business_id=$1 AND active', [req.user.business_id])).rows[0].n);
+  }
   await pool.query('UPDATE users SET name=$1, role=$2, active=$3 WHERE id=$4',
     [text(req.body.name, 'Name'), role, req.body.active !== false, req.params.id]);
   if (req.body.password) {
@@ -1632,7 +1655,7 @@ app.post('/api/sales/:id/void', ...managers, wrap(async (req, res) => {
 }));
 
 // ---------- Jobs add-on: contractor job board (see jobs.js) ----------
-const jobsApi = require('./jobs')(app, { pool, wrap, fail, text, cents, requireLogin, requireBusiness, requireRole, barcodeVariants, publicOrigin, token });
+const jobsApi = require('./jobs')(app, { pool, wrap, fail, text, cents, requireLogin, requireBusiness, requireRole, barcodeVariants, publicOrigin, token, feats });
 require('./jobfiles')(app, { pool, wrap, fail, text, ...jobsApi });
 
 // ---------- QuickBooks Online (see qbo.js) ----------
@@ -1646,7 +1669,7 @@ app.put('/api/sales/:id/note', ...biz, wrap(async (req, res) => {
 }));
 
 // Customer statement for a date range (dates are the business's local days).
-app.get('/api/customers/:id/statement', ...biz, wrap(async (req, res) => {
+app.get('/api/customers/:id/statement', ...biz, feats.needs('charge_accounts'), wrap(async (req, res) => {
   const day = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : null);
   const from = day(req.query.from), to = day(req.query.to);
   if (!from || !to) fail(400, 'Pick a start and end date');
